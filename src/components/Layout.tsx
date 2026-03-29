@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useAuthStore } from '@/stores/authStore';
+import { NotificationBell } from '@/features/notifications/NotificationBell';
+import { GlobalSearch } from '@/features/search/GlobalSearch';
 
 interface LayoutProps {
   children: ReactNode;
@@ -33,7 +35,10 @@ export function Layout({ children, tabs, activeTab, onTabChange }: LayoutProps) 
           </div>
         </div>
 
-        <div className="relative">
+        <div className="flex items-center gap-2">
+          <GlobalSearch />
+          <NotificationBell />
+          <div className="relative">
           <button
             onClick={() => setShowMenu(!showMenu)}
             className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors cursor-pointer"
@@ -57,6 +62,7 @@ export function Layout({ children, tabs, activeTab, onTabChange }: LayoutProps) 
               </div>
             </>
           )}
+          </div>
         </div>
       </header>
 
