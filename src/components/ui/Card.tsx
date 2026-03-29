@@ -15,6 +15,7 @@ export function Card({ children, padding = true, hover = false, className = '', 
         ${hover ? 'hover:shadow-md hover:border-gray-300 transition-all cursor-pointer' : ''}
         ${className}
       `}
+      {...(hover ? { role: 'region' } : {})}
       {...props}
     >
       {children}

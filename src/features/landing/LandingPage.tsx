@@ -106,7 +106,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       `}</style>
 
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-gray-950/80 backdrop-blur-lg border-b border-gray-200/50 dark:border-gray-800/50">
+      <nav aria-label="Navigazione principale" className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-gray-950/80 backdrop-blur-lg border-b border-gray-200/50 dark:border-gray-800/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
@@ -140,7 +140,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 sm:pt-40 sm:pb-32 bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 dark:from-blue-800 dark:via-blue-900 dark:to-gray-950 overflow-hidden">
         {/* Background decorations */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none" role="img" aria-label="Decorazione sfondo">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl" />
           <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-400/5 rounded-full" />
@@ -158,12 +158,14 @@ export function LandingPage({ onEnter }: LandingPageProps) {
               <div className="mt-10 flex flex-col sm:flex-row gap-4 animate-fade-in-up-delay-2">
                 <button
                   onClick={onEnter}
+                  aria-label="Inizia la prova gratuita di OfficinAI"
                   className="px-8 py-4 bg-white text-blue-700 font-bold text-lg rounded-2xl hover:bg-blue-50 active:bg-blue-100 transition-all shadow-lg hover:shadow-xl cursor-pointer"
                 >
                   Inizia gratis
                 </button>
                 <button
                   onClick={onEnter}
+                  aria-label="Guarda la demo di OfficinAI"
                   className="px-8 py-4 border-2 border-white/40 text-white font-bold text-lg rounded-2xl hover:bg-white/10 active:bg-white/20 transition-all cursor-pointer"
                 >
                   Guarda la demo
@@ -175,7 +177,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
             </div>
 
             {/* Floating mockup */}
-            <div className="hidden lg:flex justify-center animate-fade-in-up-delay-2">
+            <div className="hidden lg:flex justify-center animate-fade-in-up-delay-2" role="img" aria-label="Anteprima dell'interfaccia OfficinAI">
               <div className="relative animate-float">
                 <div className="w-80 h-[440px] bg-white/10 backdrop-blur-sm rounded-3xl border border-white/20 p-6 shadow-2xl">
                   <div className="flex items-center gap-2 mb-4">
@@ -376,9 +378,9 @@ export function LandingPage({ onEnter }: LandingPageProps) {
                 key={i}
                 className="landing-card bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700"
               >
-                <div className="flex gap-1 mb-4">
+                <div className="flex gap-1 mb-4" role="img" aria-label="Valutazione 5 stelle">
                   {[...Array(5)].map((_, j) => (
-                    <svg key={j} className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                    <svg key={j} className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>
                   ))}
@@ -403,7 +405,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
 
       {/* CTA Section */}
       <section className="py-20 sm:py-28 bg-gradient-to-br from-blue-700 to-blue-900 dark:from-blue-900 dark:to-gray-950 relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 pointer-events-none" role="img" aria-label="Decorazione sfondo">
           <div className="absolute -top-20 -right-20 w-60 h-60 bg-blue-500/20 rounded-full blur-3xl" />
           <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-indigo-500/20 rounded-full blur-3xl" />
         </div>
@@ -416,6 +418,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           </p>
           <button
             onClick={onEnter}
+            aria-label="Inizia gratis ora - prova gratuita 14 giorni"
             className="px-10 py-4 bg-white text-blue-700 font-bold text-lg rounded-2xl hover:bg-blue-50 active:bg-blue-100 transition-all shadow-lg hover:shadow-xl cursor-pointer"
           >
             Inizia gratis ora
@@ -424,7 +427,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       </section>
 
       {/* Footer */}
-      <footer className="py-16 bg-gray-900 dark:bg-gray-950 border-t border-gray-800">
+      <footer role="contentinfo" className="py-16 bg-gray-900 dark:bg-gray-950 border-t border-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-10 mb-12">
             {/* Brand */}

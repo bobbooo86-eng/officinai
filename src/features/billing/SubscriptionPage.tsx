@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react';
 import { Button, Card, Badge } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import {
+  STRIPE_PRICES,
+  createCheckoutSession,
+  createPortalSession,
+  type PianoId,
+  type Periodo,
+} from '@/lib/stripe';
 
 // --- Types ---
 
@@ -34,7 +41,8 @@ interface Pagamento {
 interface PianoDef {
   id: Piano;
   nome: string;
-  prezzo: number;
+  prezzoMensile: number;
+  prezzoAnnuale: number;
   consigliato?: boolean;
   funzionalita: string[];
 }
@@ -43,7 +51,8 @@ const PIANI: PianoDef[] = [
   {
     id: 'starter',
     nome: 'Starter',
-    prezzo: 49,
+    prezzoMensile: 49,
+    prezzoAnnuale: 470, // ~39.17/mo => 20% discount
     funzionalita: [
       'Fino a 2 utenti',
       '50 appuntamenti/mese',
@@ -54,7 +63,8 @@ const PIANI: PianoDef[] = [
   {
     id: 'professional',
     nome: 'Professional',
-    prezzo: 99,
+    prezzoMensile: 99,
+    prezzoAnnuale: 950, // ~79.17/mo => 20% discount
     consigliato: true,
     funzionalita: [
       'Fino a 5 utenti',
@@ -68,7 +78,8 @@ const PIANI: PianoDef[] = [
   {
     id: 'enterprise',
     nome: 'Enterprise',
-    prezzo: 199,
+    prezzoMensile: 199,
+    prezzoAnnuale: 1910, // ~159.17/mo => 20% discount
     funzionalita: [
       'Utenti illimitati',
       'Tutto Professional +',
@@ -151,13 +162,25 @@ function StarIcon() {
   );
 }
 
+function ExternalLinkIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+    </svg>
+  );
+}
+
 // --- Component ---
 
 export function SubscriptionPage() {
-  const { officina } = useAuthStore();
+  const { officina, sessionUser } = useAuthStore();
   const [abbonamento, setAbbonamento] = useState<Abbonamento | null>(null);
   const [pagamenti, setPagamenti] = useState<Pagamento[]>([]);
   const [loading, setLoading] = useState(true);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [periodo, setPeriodo] = useState<Periodo>('monthly');
+  const [errore, setErrore] = useState<string | null>(null);
 
   useEffect(() => {
     if (!officina) return;
@@ -199,13 +222,65 @@ export function SubscriptionPage() {
   const pianoAttuale: Piano = (abbonamento?.piano as Piano) || (officina?.piano as Piano) || 'professional';
   const statoAttuale: StatoAbbonamento = abbonamento?.stato || 'attivo';
 
-  const handleUpgrade = (piano: Piano) => {
+  // --- Stripe checkout ---
+  const handleSelectPlan = async (piano: PianoId) => {
     if (piano === pianoAttuale) return;
-    alert(`L'integrazione con Stripe per il piano ${piano} sarà disponibile a breve. Contattaci per aggiornare il tuo piano.`);
+    setErrore(null);
+    setCheckoutLoading(piano);
+
+    try {
+      const priceId = STRIPE_PRICES[piano][periodo];
+      const email = sessionUser?.email || officina?.email || '';
+
+      if (!email || !officina?.id) {
+        setErrore('Dati utente mancanti. Effettua nuovamente il login.');
+        setCheckoutLoading(null);
+        return;
+      }
+
+      const sessionUrl = await createCheckoutSession(
+        priceId,
+        officina.id,
+        email,
+      );
+
+      // Redirect to Stripe Checkout
+      window.location.href = sessionUrl;
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Errore durante la creazione della sessione di pagamento.';
+      setErrore(message);
+      setCheckoutLoading(null);
+    }
   };
 
-  const handleUpdatePayment = () => {
-    alert('L\'integrazione con Stripe Billing Portal sarà disponibile a breve. Contattaci per aggiornare il metodo di pagamento.');
+  // --- Stripe Customer Portal ---
+  const handleManageSubscription = async () => {
+    if (!abbonamento?.stripe_customer_id) {
+      setErrore(
+        'Nessun abbonamento Stripe collegato. Contatta il supporto per assistenza.',
+      );
+      return;
+    }
+
+    setErrore(null);
+    setPortalLoading(true);
+
+    try {
+      const portalUrl = await createPortalSession(
+        abbonamento.stripe_customer_id,
+      );
+      window.location.href = portalUrl;
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Errore nell'apertura del portale di gestione.";
+      setErrore(message);
+      setPortalLoading(false);
+    }
   };
 
   if (loading) {
@@ -233,6 +308,28 @@ export function SubscriptionPage() {
         <p className="text-sm text-gray-500 mt-0.5">Gestisci il tuo piano e la fatturazione</p>
       </div>
 
+      {/* Error banner */}
+      {errore && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+          <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+          <div className="flex-1">
+            <p className="text-sm text-red-800 font-medium">Errore</p>
+            <p className="text-sm text-red-700 mt-0.5">{errore}</p>
+          </div>
+          <button
+            className="text-red-400 hover:text-red-600 transition-colors"
+            onClick={() => setErrore(null)}
+            aria-label="Chiudi errore"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Current Plan Summary */}
       <Card className="!bg-gradient-to-br !from-blue-50 !to-indigo-50 !border-blue-200">
         <div className="flex items-start justify-between mb-3">
@@ -248,12 +345,12 @@ export function SubscriptionPage() {
         </div>
         <div className="flex items-baseline gap-1 mb-3">
           <span className="text-3xl font-extrabold text-blue-600">
-            {formatCurrency(pianoCorrenteDef?.prezzo || 99)}
+            {formatCurrency(pianoCorrenteDef?.prezzoMensile || 99)}
           </span>
           <span className="text-sm text-gray-500">/mese</span>
         </div>
         {abbonamento && (
-          <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="grid grid-cols-2 gap-3 text-xs mb-4">
             <div className="bg-white/70 rounded-xl p-2.5">
               <span className="text-gray-500 block">Inizio</span>
               <span className="font-semibold text-gray-900">{formatDate(abbonamento.data_inizio)}</span>
@@ -264,103 +361,227 @@ export function SubscriptionPage() {
             </div>
           </div>
         )}
+
+        {/* Manage subscription button */}
+        {abbonamento?.stripe_customer_id && (
+          <Button
+            variant="secondary"
+            fullWidth
+            onClick={handleManageSubscription}
+            disabled={portalLoading}
+          >
+            {portalLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Apertura portale...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <ExternalLinkIcon />
+                Gestisci abbonamento
+              </span>
+            )}
+          </Button>
+        )}
       </Card>
 
-      {/* Pricing Cards */}
+      {/* Billing Period Toggle */}
       <div>
         <h3 className="font-semibold text-gray-900 mb-3">Scegli il tuo piano</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {PIANI.map((piano) => {
-            const isAttuale = piano.id === pianoAttuale;
-            const isConsigliato = piano.consigliato;
-            const pianoIndex = PIANI.findIndex((p) => p.id === piano.id);
-            const attualeIndex = PIANI.findIndex((p) => p.id === pianoAttuale);
-            const isDowngrade = pianoIndex < attualeIndex;
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <button
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              periodo === 'monthly'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            onClick={() => setPeriodo('monthly')}
+          >
+            Mensile
+          </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+              periodo === 'yearly'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            onClick={() => setPeriodo('yearly')}
+          >
+            Annuale
+            <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+              periodo === 'yearly'
+                ? 'bg-emerald-400 text-white'
+                : 'bg-emerald-100 text-emerald-700'
+            }`}>
+              -20%
+            </span>
+          </button>
+        </div>
+      </div>
 
-            return (
-              <Card
-                key={piano.id}
-                className={`relative !p-0 overflow-hidden flex flex-col ${
-                  isConsigliato && !isAttuale
-                    ? '!border-blue-400 !border-2 shadow-md shadow-blue-100'
-                    : isAttuale
-                    ? '!border-emerald-400 !border-2 shadow-md shadow-emerald-50'
-                    : ''
-                }`}
-              >
-                {/* Recommended badge */}
-                {isConsigliato && !isAttuale && (
-                  <div className="bg-blue-600 text-white text-xs font-bold text-center py-1.5 flex items-center justify-center gap-1">
-                    <StarIcon />
-                    CONSIGLIATO
-                  </div>
-                )}
-                {/* Current plan badge */}
-                {isAttuale && (
-                  <div className="bg-emerald-600 text-white text-xs font-bold text-center py-1.5">
-                    PIANO ATTUALE
-                  </div>
-                )}
+      {/* Pricing Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {PIANI.map((piano) => {
+          const isAttuale = piano.id === pianoAttuale;
+          const isConsigliato = piano.consigliato;
+          const pianoIndex = PIANI.findIndex((p) => p.id === piano.id);
+          const attualeIndex = PIANI.findIndex((p) => p.id === pianoAttuale);
+          const isDowngrade = pianoIndex < attualeIndex;
+          const isCheckingOut = checkoutLoading === piano.id;
 
-                <div className="p-5 flex flex-col flex-1">
-                  {/* Plan name & price */}
-                  <div className="mb-4">
-                    <h4 className="text-lg font-bold text-gray-900">{piano.nome}</h4>
-                    <div className="flex items-baseline gap-1 mt-1">
-                      <span className="text-3xl font-extrabold text-gray-900">
-                        €{piano.prezzo}
-                      </span>
-                      <span className="text-sm text-gray-500">/mese</span>
+          const prezzo =
+            periodo === 'yearly'
+              ? piano.prezzoAnnuale
+              : piano.prezzoMensile;
+          const prezzoLabel =
+            periodo === 'yearly'
+              ? `${formatCurrency(piano.prezzoAnnuale)}/anno`
+              : `${formatCurrency(piano.prezzoMensile)}/mese`;
+          const prezzoMensileEffettivo =
+            periodo === 'yearly'
+              ? piano.prezzoAnnuale / 12
+              : piano.prezzoMensile;
+
+          return (
+            <Card
+              key={piano.id}
+              className={`relative !p-0 overflow-hidden flex flex-col ${
+                isConsigliato && !isAttuale
+                  ? '!border-blue-400 !border-2 shadow-md shadow-blue-100'
+                  : isAttuale
+                  ? '!border-emerald-400 !border-2 shadow-md shadow-emerald-50'
+                  : ''
+              }`}
+            >
+              {/* Recommended badge */}
+              {isConsigliato && !isAttuale && (
+                <div className="bg-blue-600 text-white text-xs font-bold text-center py-1.5 flex items-center justify-center gap-1">
+                  <StarIcon />
+                  CONSIGLIATO
+                </div>
+              )}
+              {/* Current plan badge */}
+              {isAttuale && (
+                <div className="bg-emerald-600 text-white text-xs font-bold text-center py-1.5">
+                  PIANO ATTUALE
+                </div>
+              )}
+
+              <div className="p-5 flex flex-col flex-1">
+                {/* Plan name & price */}
+                <div className="mb-4">
+                  <h4 className="text-lg font-bold text-gray-900">{piano.nome}</h4>
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-3xl font-extrabold text-gray-900">
+                      {formatCurrency(prezzoMensileEffettivo)}
+                    </span>
+                    <span className="text-sm text-gray-500">/mese</span>
+                  </div>
+                  {periodo === 'yearly' && (
+                    <div className="mt-1 space-y-0.5">
+                      <p className="text-xs text-gray-400 line-through">
+                        {formatCurrency(piano.prezzoMensile)}/mese
+                      </p>
+                      <p className="text-xs text-emerald-600 font-medium">
+                        Fatturato {formatCurrency(piano.prezzoAnnuale)}/anno
+                      </p>
                     </div>
-                  </div>
-
-                  {/* Feature list */}
-                  <ul className="space-y-2.5 mb-6 flex-1">
-                    {piano.funzionalita.map((feat) => (
-                      <li key={feat} className="flex items-start gap-2 text-sm text-gray-700">
-                        <CheckIcon />
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  {/* Action button */}
-                  {isAttuale ? (
-                    <Button variant="secondary" fullWidth disabled>
-                      Piano attuale
-                    </Button>
-                  ) : (
-                    <Button
-                      variant={isConsigliato ? 'primary' : 'secondary'}
-                      fullWidth
-                      onClick={() => handleUpgrade(piano.id)}
-                    >
-                      {isDowngrade ? 'Cambia piano' : 'Upgrade'}
-                    </Button>
                   )}
                 </div>
-              </Card>
-            );
-          })}
-        </div>
+
+                {/* Feature list */}
+                <ul className="space-y-2.5 mb-6 flex-1">
+                  {piano.funzionalita.map((feat) => (
+                    <li key={feat} className="flex items-start gap-2 text-sm text-gray-700">
+                      <CheckIcon />
+                      <span>{feat}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Action button */}
+                {isAttuale ? (
+                  <Button variant="secondary" fullWidth disabled>
+                    Piano attuale
+                  </Button>
+                ) : (
+                  <Button
+                    variant={isConsigliato ? 'primary' : 'secondary'}
+                    fullWidth
+                    onClick={() => handleSelectPlan(piano.id)}
+                    disabled={!!checkoutLoading}
+                  >
+                    {isCheckingOut ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Reindirizzamento...
+                      </span>
+                    ) : isDowngrade ? (
+                      'Cambia piano'
+                    ) : (
+                      'Upgrade'
+                    )}
+                  </Button>
+                )}
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Payment Method */}
       <Card>
         <h3 className="font-semibold text-gray-900 mb-4">Metodo di pagamento</h3>
-        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl mb-4">
-          <div className="w-10 h-10 bg-white rounded-lg border border-gray-200 flex items-center justify-center">
-            <CreditCardIcon />
+        {abbonamento?.stripe_customer_id ? (
+          <>
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl mb-4">
+              <div className="w-10 h-10 bg-white rounded-lg border border-gray-200 flex items-center justify-center">
+                <CreditCardIcon />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-gray-900">Gestito tramite Stripe</div>
+                <div className="text-xs text-gray-500">Visualizza e modifica nel portale Stripe</div>
+              </div>
+            </div>
+            <Button
+              variant="secondary"
+              fullWidth
+              onClick={handleManageSubscription}
+              disabled={portalLoading}
+            >
+              {portalLoading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Apertura portale...
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  <ExternalLinkIcon />
+                  Aggiorna metodo di pagamento
+                </span>
+              )}
+            </Button>
+          </>
+        ) : (
+          <div className="text-center py-6 bg-gray-50 rounded-xl">
+            <div className="w-10 h-10 bg-gray-100 rounded-lg mx-auto mb-2 flex items-center justify-center">
+              <CreditCardIcon />
+            </div>
+            <p className="text-sm text-gray-500">Nessun metodo di pagamento configurato</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Verrà configurato al momento del primo abbonamento
+            </p>
           </div>
-          <div className="flex-1">
-            <div className="text-sm font-semibold text-gray-900">Visa •••• 4242</div>
-            <div className="text-xs text-gray-500">Scade 12/2027</div>
-          </div>
-          <Badge color="#065f46" bg="#d1fae5">Predefinita</Badge>
-        </div>
-        <Button variant="secondary" fullWidth onClick={handleUpdatePayment}>
-          Aggiorna metodo di pagamento
-        </Button>
+        )}
       </Card>
 
       {/* Billing History */}
@@ -372,7 +593,7 @@ export function SubscriptionPage() {
         {pagamenti.length === 0 ? (
           <div className="px-5 pb-5">
             <div className="text-center py-8 bg-gray-50 rounded-xl">
-              <div className="text-3xl mb-2">🧾</div>
+              <div className="text-3xl mb-2">&#x1F9FE;</div>
               <p className="text-sm text-gray-500">Nessun pagamento registrato</p>
               <p className="text-xs text-gray-400 mt-1">I pagamenti appariranno qui dopo il primo addebito</p>
             </div>

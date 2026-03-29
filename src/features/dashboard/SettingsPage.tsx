@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Card, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -7,6 +8,7 @@ import { useThemeStore } from '@/stores/themeStore';
 export function SettingsPage() {
   const { officina, utente, logout } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
+  const { i18n } = useTranslation();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -54,6 +56,37 @@ export function SettingsPage() {
               <span className="text-xl">{opt.icon}</span>
               <span className={`text-xs font-medium ${
                 theme === opt.value
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-gray-600 dark:text-gray-400'
+              }`}>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      {/* Language selector */}
+      <Card>
+        <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Lingua</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { value: 'it', label: 'Italiano', icon: '🇮🇹' },
+            { value: 'en', label: 'English', icon: '🇬🇧' },
+          ] as const).map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => {
+                i18n.changeLanguage(opt.value);
+                localStorage.setItem('officinai_lang', opt.value);
+              }}
+              className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-all cursor-pointer ${
+                i18n.language === opt.value
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              <span className="text-xl">{opt.icon}</span>
+              <span className={`text-xs font-medium ${
+                i18n.language === opt.value
                   ? 'text-blue-600 dark:text-blue-400'
                   : 'text-gray-600 dark:text-gray-400'
               }`}>{opt.label}</span>

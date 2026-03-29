@@ -19,8 +19,15 @@ export function Layout({ children, tabs, activeTab, onTabChange }: LayoutProps) 
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      {/* Skip to content */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg focus:text-sm focus:font-semibold"
+      >
+        Vai al contenuto principale
+      </a>
       {/* Top bar */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between sticky top-0 z-50">
+      <header role="banner" className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
             <span className="text-lg">🔧</span>
@@ -67,17 +74,18 @@ export function Layout({ children, tabs, activeTab, onTabChange }: LayoutProps) 
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-auto pb-20 dark:bg-gray-900">
+      <main id="main-content" role="main" className="flex-1 overflow-auto pb-20 dark:bg-gray-900">
         {children}
       </main>
 
       {/* Bottom navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50">
+      <nav role="navigation" aria-label="Menu principale" className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50">
         <div className="flex items-center justify-around max-w-lg mx-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
+              aria-current={activeTab === tab.id ? 'page' : undefined}
               className={`flex flex-col items-center gap-0.5 py-2 px-4 min-w-[64px] transition-colors cursor-pointer ${
                 activeTab === tab.id
                   ? 'text-blue-600'

@@ -38,12 +38,15 @@ export function Button({
         inline-flex items-center justify-center gap-2 font-semibold
         transition-all duration-150 cursor-pointer
         disabled:opacity-50 disabled:cursor-not-allowed
+        focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:outline-none
         ${variants[variant]}
         ${sizes[size]}
         ${fullWidth ? 'w-full' : ''}
         ${className}
       `}
       disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      aria-disabled={disabled || loading || undefined}
       {...props}
     >
       {loading && (
