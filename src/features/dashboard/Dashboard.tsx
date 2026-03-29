@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG } from '@/lib/constants';
 import { fmtData, fmtOra } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
+import { VehicleAlerts } from './VehicleAlerts';
 import type { Appuntamento, Magazzino } from '@/types/database';
 
 export function Dashboard({ onSelectAppuntamento }: { onSelectAppuntamento: (a: Appuntamento) => void }) {
@@ -87,6 +88,9 @@ export function Dashboard({ onSelectAppuntamento }: { onSelectAppuntamento: (a: 
           </div>
         </Card>
       )}
+
+      {/* Vehicle expiry alerts */}
+      <VehicleAlerts />
 
       {/* Recent appointments */}
       <div>

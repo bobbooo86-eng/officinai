@@ -6,6 +6,7 @@ import { fmtEuro, fmtDurata, fmtDataOra } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { ChatPanel } from '@/features/chat/ChatPanel';
 import { PhotoGallery } from '@/features/photos/PhotoGallery';
+import { WhatsAppPanel } from '@/features/notifications/WhatsAppPanel';
 import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, RicambioUsato, Difetto } from '@/types/database';
 
 interface Props {
@@ -13,7 +14,7 @@ interface Props {
   onBack: () => void;
 }
 
-type Tab = 'stato' | 'preventivo' | 'foglio' | 'foto' | 'chat';
+type Tab = 'stato' | 'preventivo' | 'foglio' | 'foto' | 'chat' | 'wa';
 
 export function AppointmentDetail({ appuntamento, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('stato');
@@ -42,6 +43,7 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
     { id: 'foglio', label: 'Lavoro', icon: '🔧' },
     { id: 'foto', label: 'Foto', icon: '📸' },
     { id: 'chat', label: 'Chat', icon: '💬' },
+    { id: 'wa', label: 'WhatsApp', icon: '📱' },
   ];
 
   return (
@@ -107,6 +109,7 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
           senderType="officina"
         />
       )}
+      {tab === 'wa' && <WhatsAppPanel appuntamento={app} />}
     </div>
   );
 }

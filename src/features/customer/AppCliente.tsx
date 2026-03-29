@@ -7,12 +7,14 @@ import { fmtData, fmtOra, fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { ChatPanel } from '@/features/chat/ChatPanel';
 import { PhotoGallery } from '@/features/photos/PhotoGallery';
+import { BookingPage } from './BookingPage';
 import type { Appuntamento, Veicolo, Preventivo } from '@/types/database';
 
 const TABS = [
   { id: 'home', label: 'Home', icon: '🏠' },
+  { id: 'prenota', label: 'Prenota', icon: '📅' },
   { id: 'chat', label: 'Chat', icon: '💬' },
-  { id: 'auto', label: 'La mia auto', icon: '🚗' },
+  { id: 'auto', label: 'Auto', icon: '🚗' },
   { id: 'storico', label: 'Storico', icon: '📋' },
 ];
 
@@ -40,6 +42,7 @@ export function AppCliente() {
   return (
     <Layout tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'home' && <ClienteHome />}
+      {activeTab === 'prenota' && <BookingPage />}
       {activeTab === 'chat' && (
         appAttivoId ? (
           <ChatPanel
