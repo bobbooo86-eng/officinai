@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#1e40af"/>
+  <!-- Gear -->
+  <g transform="translate(256,256)">
+    <circle cx="0" cy="0" r="60" stroke="#f9fafb" stroke-width="24" fill="none"/>
+    <g fill="#f9fafb">
+      <rect x="-14" y="-120" width="28" height="50" rx="6"/>
+      <rect x="-14" y="70" width="28" height="50" rx="6"/>
+      <rect x="-120" y="-14" width="50" height="28" rx="6"/>
+      <rect x="70" y="-14" width="50" height="28" rx="6"/>
+      <rect x="56" y="-100" width="28" height="50" rx="6" transform="rotate(45)"/>
+      <rect x="-84" y="50" width="28" height="50" rx="6" transform="rotate(45)"/>
+      <rect x="56" y="50" width="28" height="50" rx="6" transform="rotate(-45)"/>
+      <rect x="-84" y="-100" width="28" height="50" rx="6" transform="rotate(-45)"/>
+    </g>
+  </g>
+  <!-- Wrench -->
+  <g transform="translate(256,256) rotate(-45)">
+    <rect x="-16" y="-30" width="32" height="160" rx="8" fill="#f9fafb"/>
+    <path d="M-30,-30 C-30,-65 -16,-80 0,-80 C16,-80 30,-65 30,-30 L20,-30 C20,-55 12,-65 0,-65 C-12,-65 -20,-55 -20,-30 Z" fill="#f9fafb"/>
+  </g>
+</svg>

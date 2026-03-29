@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button, Card, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { validateRequired } from '@/lib/validation';
 import type { Veicolo } from '@/types/database';
 
 export function BookingPage() {
@@ -18,6 +19,11 @@ export function BookingPage() {
   const [ora, setOra] = useState('09:00');
   const [problema, setProblema] = useState('');
   const [priorita, setPriorita] = useState('normale');
+
+  // Validation errors
+  const [errVeicolo, setErrVeicolo] = useState<string | null>(null);
+  const [errData, setErrData] = useState<string | null>(null);
+  const [errProblema, setErrProblema] = useState<string | null>(null);
 
   useEffect(() => {
     if (!cliente) return;
@@ -129,7 +135,12 @@ export function BookingPage() {
               </div>
             </button>
           ))}
-          <Button fullWidth onClick={() => setStep(2)} disabled={!selectedVeicolo}>
+          {errVeicolo && <p className="text-xs text-red-500">{errVeicolo}</p>}
+          <Button fullWidth onClick={() => {
+            if (!selectedVeicolo) { setErrVeicolo('Seleziona un veicolo'); return; }
+            setErrVeicolo(null);
+            setStep(2);
+          }} disabled={!selectedVeicolo}>
             Continua
           </Button>
         </div>
@@ -167,9 +178,14 @@ export function BookingPage() {
             </div>
           </div>
 
+          {errData && <p className="text-xs text-red-500">{errData}</p>}
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setStep(1)} fullWidth>Indietro</Button>
-            <Button onClick={() => setStep(3)} disabled={!data} fullWidth>Continua</Button>
+            <Button onClick={() => {
+              const err = validateRequired(data, 'La data');
+              setErrData(err);
+              if (!err) setStep(3);
+            }} disabled={!data} fullWidth>Continua</Button>
           </div>
         </div>
       )}
@@ -181,11 +197,13 @@ export function BookingPage() {
 
           <textarea
             value={problema}
-            onChange={(e) => setProblema(e.target.value)}
+            onChange={(e) => { setProblema(e.target.value); if (errProblema) setErrProblema(null); }}
+            onBlur={() => { if (!problema.trim()) setErrProblema('Descrivi il problema riscontrato'); else setErrProblema(null); }}
             placeholder="Es: La macchina fa un rumore strano quando freno, la spia del motore è accesa..."
-            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={`w-full px-4 py-3 rounded-xl border bg-white text-sm resize-none focus:outline-none focus:ring-2 ${errProblema ? 'border-red-400 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'}`}
             rows={4}
           />
+          {errProblema && <p className="text-xs text-red-500">{errProblema}</p>}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Priorità</label>
@@ -224,7 +242,11 @@ export function BookingPage() {
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setStep(2)} fullWidth>Indietro</Button>
             <Button
-              onClick={submit}
+              onClick={() => {
+                if (!problema.trim()) { setErrProblema('Descrivi il problema riscontrato'); return; }
+                setErrProblema(null);
+                submit();
+              }}
               loading={submitting}
               disabled={!problema.trim()}
               fullWidth

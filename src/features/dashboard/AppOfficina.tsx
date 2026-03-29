@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { Layout } from '@/components/Layout';
 import { Dashboard } from './Dashboard';
-import { SettingsPage } from './SettingsPage';
 import { AppointmentList } from '@/features/appointments/AppointmentList';
 import { AppointmentDetail } from '@/features/appointments/AppointmentDetail';
 import { CalendarView } from '@/features/appointments/CalendarView';
 import { CustomersPage } from '@/features/appointments/CustomersPage';
-import { InventoryPage } from '@/features/inventory/InventoryPage';
-import { AnalyticsPage } from './AnalyticsPage';
-import { InvoicePage } from '@/features/invoices/InvoicePage';
-import { SubscriptionPage } from '@/features/billing/SubscriptionPage';
+import { PageSkeleton } from '@/components/ui/PageSkeleton';
 import type { Appuntamento } from '@/types/database';
+
+const AnalyticsPage = lazy(() => import('./AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
+const InvoicePage = lazy(() => import('@/features/invoices/InvoicePage').then(m => ({ default: m.InvoicePage })));
+const SubscriptionPage = lazy(() => import('@/features/billing/SubscriptionPage').then(m => ({ default: m.SubscriptionPage })));
+const InventoryPage = lazy(() => import('@/features/inventory/InventoryPage').then(m => ({ default: m.InventoryPage })));
+const SettingsPage = lazy(() => import('./SettingsPage').then(m => ({ default: m.SettingsPage })));
 
 const TABS = [
   { id: 'home', label: 'Home', icon: '🏠' },
@@ -126,7 +128,7 @@ export function AppOfficina() {
           >
             ← Indietro
           </button>
-          <InventoryPage />
+          <Suspense fallback={<PageSkeleton />}><InventoryPage /></Suspense>
         </div>
       )}
       {activeTab === 'altro' && subPage === 'analytics' && (
@@ -137,7 +139,7 @@ export function AppOfficina() {
           >
             ← Indietro
           </button>
-          <AnalyticsPage />
+          <Suspense fallback={<PageSkeleton />}><AnalyticsPage /></Suspense>
         </div>
       )}
       {activeTab === 'altro' && subPage === 'fatture' && (
@@ -148,7 +150,7 @@ export function AppOfficina() {
           >
             ← Indietro
           </button>
-          <InvoicePage />
+          <Suspense fallback={<PageSkeleton />}><InvoicePage /></Suspense>
         </div>
       )}
       {activeTab === 'altro' && subPage === 'abbonamento' && (
@@ -159,7 +161,7 @@ export function AppOfficina() {
           >
             ← Indietro
           </button>
-          <SubscriptionPage />
+          <Suspense fallback={<PageSkeleton />}><SubscriptionPage /></Suspense>
         </div>
       )}
       {activeTab === 'altro' && subPage === 'impostazioni' && (
@@ -170,7 +172,7 @@ export function AppOfficina() {
           >
             ← Indietro
           </button>
-          <SettingsPage />
+          <Suspense fallback={<PageSkeleton />}><SettingsPage /></Suspense>
         </div>
       )}
     </Layout>

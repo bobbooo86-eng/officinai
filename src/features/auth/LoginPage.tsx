@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button, Input } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
+import { validateEmail, validatePassword, useFormValidation } from '@/lib/validation';
 
 export function LoginPage() {
   const [tipo, setTipo] = useState<'officina' | 'cliente' | null>(null);
@@ -11,9 +12,17 @@ export function LoginPage() {
 
   const { loginOfficina, loginCliente } = useAuthStore();
 
+  const validators = useMemo(() => ({
+    email: (v: string) => validateEmail(v),
+    password: (v: string) => validatePassword(v),
+  }), []);
+
+  const { errors: fieldErrors, validate, validateAll, isValid, clearErrors } = useFormValidation(validators);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tipo || !email) return;
+    if (!tipo) return;
+    if (!validateAll({ email, password })) return;
 
     setLoading(true);
     setError('');
@@ -86,7 +95,7 @@ export function LoginPage() {
             <>
               <div className="flex items-center gap-3 mb-6">
                 <button
-                  onClick={() => { setTipo(null); setError(''); setEmail(''); setPassword(''); }}
+                  onClick={() => { setTipo(null); setError(''); setEmail(''); setPassword(''); clearErrors(); }}
                   className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
                 >
                   <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -105,6 +114,8 @@ export function LoginPage() {
                   placeholder="tuaemail@esempio.it"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => validate('email', email)}
+                  error={fieldErrors.email ?? undefined}
                   required
                   autoFocus
                 />
@@ -115,6 +126,8 @@ export function LoginPage() {
                   placeholder="La tua password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onBlur={() => validate('password', password)}
+                  error={fieldErrors.password ?? undefined}
                 />
 
                 {error && (
@@ -123,7 +136,7 @@ export function LoginPage() {
                   </div>
                 )}
 
-                <Button type="submit" fullWidth loading={loading} size="lg">
+                <Button type="submit" fullWidth loading={loading} size="lg" disabled={!isValid}>
                   Accedi
                 </Button>
               </form>

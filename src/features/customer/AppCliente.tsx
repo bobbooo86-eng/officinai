@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Layout } from '@/components/Layout';
 import { Card, Badge, Loader } from '@/components/ui';
+import { PageSkeleton } from '@/components/ui/PageSkeleton';
 import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG, STATI_ORDINE } from '@/lib/constants';
 import { fmtData, fmtOra, fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { ChatPanel } from '@/features/chat/ChatPanel';
 import { PhotoGallery } from '@/features/photos/PhotoGallery';
-import { BookingPage } from './BookingPage';
+
+const BookingPage = lazy(() => import('./BookingPage').then(m => ({ default: m.BookingPage })));
 import type { Appuntamento, Veicolo, Preventivo } from '@/types/database';
 
 const TABS = [
@@ -42,7 +44,7 @@ export function AppCliente() {
   return (
     <Layout tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'home' && <ClienteHome />}
-      {activeTab === 'prenota' && <BookingPage />}
+      {activeTab === 'prenota' && <Suspense fallback={<PageSkeleton />}><BookingPage /></Suspense>}
       {activeTab === 'chat' && (
         appAttivoId ? (
           <ChatPanel
