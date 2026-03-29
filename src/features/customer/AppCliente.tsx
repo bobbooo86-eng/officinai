@@ -5,20 +5,55 @@ import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG, STATI_ORDINE } from '@/lib/constants';
 import { fmtData, fmtOra, fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
+import { ChatPanel } from '@/features/chat/ChatPanel';
+import { PhotoGallery } from '@/features/photos/PhotoGallery';
 import type { Appuntamento, Veicolo, Preventivo } from '@/types/database';
 
 const TABS = [
   { id: 'home', label: 'Home', icon: '🏠' },
+  { id: 'chat', label: 'Chat', icon: '💬' },
   { id: 'auto', label: 'La mia auto', icon: '🚗' },
   { id: 'storico', label: 'Storico', icon: '📋' },
 ];
 
 export function AppCliente() {
   const [activeTab, setActiveTab] = useState('home');
+  const { cliente } = useAuthStore();
+  const [appAttivoId, setAppAttivoId] = useState<string | null>(null);
+
+  // Fetch active appointment ID for chat/photos
+  useEffect(() => {
+    if (!cliente) return;
+    const fetch = async () => {
+      const { data } = await supabase
+        .from('appuntamenti')
+        .select('id')
+        .eq('cliente_id', cliente.id)
+        .neq('stato', 'pronto')
+        .order('data_ora', { ascending: false })
+        .limit(1);
+      if (data && data.length > 0) setAppAttivoId(data[0].id);
+    };
+    fetch();
+  }, [cliente]);
 
   return (
     <Layout tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'home' && <ClienteHome />}
+      {activeTab === 'chat' && (
+        appAttivoId ? (
+          <ChatPanel
+            appuntamentoId={appAttivoId}
+            senderName={cliente?.nome || 'Cliente'}
+            senderType="cliente"
+          />
+        ) : (
+          <div className="p-4 text-center py-16">
+            <div className="text-4xl mb-3">💬</div>
+            <p className="text-sm text-gray-500">Nessun intervento attivo per chattare</p>
+          </div>
+        )
+      )}
       {activeTab === 'auto' && <ClienteAuto />}
       {activeTab === 'storico' && <ClienteStorico />}
     </Layout>
@@ -189,6 +224,14 @@ function ClienteHome() {
         <Card className="!p-3 bg-emerald-50 border-emerald-200">
           <div className="text-sm font-semibold text-emerald-800">✅ Preventivo accettato — {fmtEuro(preventivo.totale)}</div>
         </Card>
+      )}
+
+      {/* Foto del lavoro */}
+      {appAttivo && (
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900 mb-2">📸 Foto del lavoro</h3>
+          <PhotoGallery appuntamentoId={appAttivo.id} readOnly />
+        </div>
       )}
     </div>
   );

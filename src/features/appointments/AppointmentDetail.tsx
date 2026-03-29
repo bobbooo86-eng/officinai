@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG, STATI_ORDINE } from '@/lib/constants';
 import { fmtEuro, fmtDurata, fmtDataOra } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
+import { ChatPanel } from '@/features/chat/ChatPanel';
+import { PhotoGallery } from '@/features/photos/PhotoGallery';
 import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, RicambioUsato, Difetto } from '@/types/database';
 
 interface Props {
@@ -11,7 +13,7 @@ interface Props {
   onBack: () => void;
 }
 
-type Tab = 'stato' | 'preventivo' | 'foglio';
+type Tab = 'stato' | 'preventivo' | 'foglio' | 'foto' | 'chat';
 
 export function AppointmentDetail({ appuntamento, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('stato');
@@ -32,10 +34,14 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [appuntamento.id]);
 
+  const { utente } = useAuthStore();
+
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: 'stato', label: 'Stato', icon: '📋' },
     { id: 'preventivo', label: 'Preventivo', icon: '💰' },
-    { id: 'foglio', label: 'Foglio Lavoro', icon: '🔧' },
+    { id: 'foglio', label: 'Lavoro', icon: '🔧' },
+    { id: 'foto', label: 'Foto', icon: '📸' },
+    { id: 'chat', label: 'Chat', icon: '💬' },
   ];
 
   return (
@@ -93,6 +99,14 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
       {tab === 'stato' && <TabStato app={app} />}
       {tab === 'preventivo' && <TabPreventivo appuntamentoId={app.id} />}
       {tab === 'foglio' && <TabFoglioLavoro appuntamentoId={app.id} />}
+      {tab === 'foto' && <PhotoGallery appuntamentoId={app.id} />}
+      {tab === 'chat' && (
+        <ChatPanel
+          appuntamentoId={app.id}
+          senderName={utente?.nome || 'Officina'}
+          senderType="officina"
+        />
+      )}
     </div>
   );
 }
