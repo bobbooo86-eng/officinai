@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Button, Card, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { useThemeStore } from '@/stores/themeStore';
 
 export function SettingsPage() {
   const { officina, utente, logout } = useAuthStore();
+  const { theme, setTheme } = useThemeStore();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -29,7 +31,36 @@ export function SettingsPage() {
 
   return (
     <div className="p-4 space-y-4">
-      <h2 className="text-lg font-bold text-gray-900">Impostazioni</h2>
+      <h2 className="text-lg font-bold text-gray-900 dark:text-white">Impostazioni</h2>
+
+      {/* Theme selector */}
+      <Card>
+        <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Tema</h3>
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            { value: 'light' as const, label: 'Chiaro', icon: '☀️' },
+            { value: 'dark' as const, label: 'Scuro', icon: '🌙' },
+            { value: 'system' as const, label: 'Sistema', icon: '💻' },
+          ]).map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setTheme(opt.value)}
+              className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-all cursor-pointer ${
+                theme === opt.value
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              <span className="text-xl">{opt.icon}</span>
+              <span className={`text-xs font-medium ${
+                theme === opt.value
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-gray-600 dark:text-gray-400'
+              }`}>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      </Card>
 
       {/* Success message */}
       {saved && (
@@ -40,7 +71,7 @@ export function SettingsPage() {
 
       {/* Officina info */}
       <Card>
-        <h3 className="font-semibold text-gray-900 mb-3">Dati officina</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Dati officina</h3>
         <div className="space-y-3">
           <Input label="Nome officina" value={nome} onChange={(e) => setNome(e.target.value)} />
           <Input label="Indirizzo" value={indirizzo} onChange={(e) => setIndirizzo(e.target.value)} />
@@ -57,7 +88,7 @@ export function SettingsPage() {
 
       {/* User info */}
       <Card>
-        <h3 className="font-semibold text-gray-900 mb-3">Il tuo profilo</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Il tuo profilo</h3>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between py-1.5 border-b border-gray-100">
             <span className="text-gray-500">Nome</span>
@@ -80,7 +111,7 @@ export function SettingsPage() {
 
       {/* Subscription */}
       <Card>
-        <h3 className="font-semibold text-gray-900 mb-3">Abbonamento</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Abbonamento</h3>
         <div className="bg-blue-50 rounded-xl p-4 text-center mb-3">
           <div className="text-2xl font-bold text-blue-600">Pro</div>
           <div className="text-sm text-gray-600">€99/mese • 5 tecnici</div>

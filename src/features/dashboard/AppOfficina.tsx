@@ -9,6 +9,7 @@ import { CustomersPage } from '@/features/appointments/CustomersPage';
 import { InventoryPage } from '@/features/inventory/InventoryPage';
 import { AnalyticsPage } from './AnalyticsPage';
 import { InvoicePage } from '@/features/invoices/InvoicePage';
+import { SubscriptionPage } from '@/features/billing/SubscriptionPage';
 import type { Appuntamento } from '@/types/database';
 
 const TABS = [
@@ -22,7 +23,7 @@ const TABS = [
 export function AppOfficina() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedApp, setSelectedApp] = useState<Appuntamento | null>(null);
-  const [subPage, setSubPage] = useState<'magazzino' | 'analytics' | 'fatture' | 'impostazioni' | null>(null);
+  const [subPage, setSubPage] = useState<'magazzino' | 'analytics' | 'fatture' | 'abbonamento' | 'impostazioni' | null>(null);
 
   const handleSelectApp = (app: Appuntamento) => {
     setSelectedApp(app);
@@ -90,6 +91,19 @@ export function AppOfficina() {
             </svg>
           </button>
           <button
+            onClick={() => setSubPage('abbonamento')}
+            className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-xl">💳</div>
+            <div className="text-left">
+              <div className="font-semibold text-sm text-gray-900">Abbonamento</div>
+              <div className="text-xs text-gray-500">Piano, pagamenti, fatturazione</div>
+            </div>
+            <svg className="w-5 h-5 text-gray-400 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          <button
             onClick={() => setSubPage('impostazioni')}
             className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
           >
@@ -135,6 +149,17 @@ export function AppOfficina() {
             ← Indietro
           </button>
           <InvoicePage />
+        </div>
+      )}
+      {activeTab === 'altro' && subPage === 'abbonamento' && (
+        <div>
+          <button
+            onClick={() => setSubPage(null)}
+            className="flex items-center gap-1 px-4 pt-4 text-sm text-blue-600 hover:underline cursor-pointer"
+          >
+            ← Indietro
+          </button>
+          <SubscriptionPage />
         </div>
       )}
       {activeTab === 'altro' && subPage === 'impostazioni' && (

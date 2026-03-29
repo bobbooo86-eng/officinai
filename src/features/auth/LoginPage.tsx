@@ -29,54 +29,54 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg">
             <span className="text-3xl">🔧</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">OfficinAI</h1>
-          <p className="text-gray-500 mt-1">Gestione intelligente della tua officina</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">OfficinAI</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">Gestione intelligente della tua officina</p>
         </div>
 
         {/* Selection or Login Form */}
-        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 p-8">
           {!tipo ? (
             <>
-              <h2 className="text-lg font-semibold text-gray-900 text-center mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white text-center mb-6">
                 Come vuoi accedere?
               </h2>
               <div className="space-y-3">
                 <button
                   onClick={() => setTipo('officina')}
-                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all group cursor-pointer"
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-200 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group cursor-pointer"
                 >
                   <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl group-hover:bg-blue-200 transition-colors">
                     🏭
                   </div>
                   <div className="text-left">
-                    <div className="font-semibold text-gray-900">Officina</div>
-                    <div className="text-sm text-gray-500">Titolare, meccanico o reception</div>
+                    <div className="font-semibold text-gray-900 dark:text-white">Officina</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">Titolare, meccanico o reception</div>
                   </div>
                 </button>
 
                 <button
                   onClick={() => setTipo('cliente')}
-                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 transition-all group cursor-pointer"
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-200 dark:border-gray-600 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all group cursor-pointer"
                 >
                   <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-2xl group-hover:bg-emerald-200 transition-colors">
                     🚗
                   </div>
                   <div className="text-left">
-                    <div className="font-semibold text-gray-900">Cliente</div>
-                    <div className="text-sm text-gray-500">Controlla lo stato della tua auto</div>
+                    <div className="font-semibold text-gray-900 dark:text-white">Cliente</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">Controlla lo stato della tua auto</div>
                   </div>
                 </button>
               </div>
 
               {/* Demo accounts */}
-              <div className="mt-6 pt-6 border-t border-gray-100">
+              <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
                 <p className="text-xs text-gray-400 text-center">
                   Demo: luigi@autofix.it / marco.ferretti@email.it
                 </p>
@@ -93,7 +93,7 @@ export function LoginPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                   {tipo === 'officina' ? '🏭 Accesso Officina' : '🚗 Accesso Cliente'}
                 </h2>
               </div>
@@ -129,7 +129,7 @@ export function LoginPage() {
               </form>
 
               {/* Quick demo access */}
-              <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 space-y-2">
                 <p className="text-xs text-gray-400 text-center mb-2">Accesso rapido demo</p>
                 {tipo === 'officina' ? (
                   <div className="flex gap-2 flex-wrap justify-center">
@@ -142,7 +142,7 @@ export function LoginPage() {
                         key={demo.email}
                         type="button"
                         onClick={() => { setEmail(demo.email); setPassword('demo123'); }}
-                        className="px-3 py-1 text-xs bg-gray-100 hover:bg-blue-100 text-gray-600 hover:text-blue-700 rounded-lg transition-colors cursor-pointer"
+                        className="px-3 py-1 text-xs bg-gray-100 dark:bg-gray-700 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-gray-600 dark:text-gray-300 hover:text-blue-700 dark:hover:text-blue-400 rounded-lg transition-colors cursor-pointer"
                       >
                         {demo.label}
                       </button>
@@ -159,7 +159,7 @@ export function LoginPage() {
                         key={demo.email}
                         type="button"
                         onClick={() => { setEmail(demo.email); setPassword('demo123'); }}
-                        className="px-3 py-1 text-xs bg-gray-100 hover:bg-emerald-100 text-gray-600 hover:text-emerald-700 rounded-lg transition-colors cursor-pointer"
+                        className="px-3 py-1 text-xs bg-gray-100 dark:bg-gray-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-gray-600 dark:text-gray-300 hover:text-emerald-700 dark:hover:text-emerald-400 rounded-lg transition-colors cursor-pointer"
                       >
                         {demo.label}
                       </button>
