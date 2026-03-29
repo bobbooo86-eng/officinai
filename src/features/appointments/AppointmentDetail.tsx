@@ -7,6 +7,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { ChatPanel } from '@/features/chat/ChatPanel';
 import { PhotoGallery } from '@/features/photos/PhotoGallery';
 import { WhatsAppPanel } from '@/features/notifications/WhatsAppPanel';
+import { AIDiagnostics } from '@/features/ai/AIDiagnostics';
+import { PDFExport } from '@/features/estimates/PDFExport';
 import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, RicambioUsato, Difetto } from '@/types/database';
 
 interface Props {
@@ -14,7 +16,7 @@ interface Props {
   onBack: () => void;
 }
 
-type Tab = 'stato' | 'preventivo' | 'foglio' | 'foto' | 'chat' | 'wa';
+type Tab = 'stato' | 'preventivo' | 'foglio' | 'foto' | 'chat' | 'wa' | 'ai';
 
 export function AppointmentDetail({ appuntamento, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('stato');
@@ -44,6 +46,7 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
     { id: 'foto', label: 'Foto', icon: '📸' },
     { id: 'chat', label: 'Chat', icon: '💬' },
     { id: 'wa', label: 'WhatsApp', icon: '📱' },
+    { id: 'ai', label: 'AI', icon: '🤖' },
   ];
 
   return (
@@ -99,7 +102,7 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
 
       {/* Tab content */}
       {tab === 'stato' && <TabStato app={app} />}
-      {tab === 'preventivo' && <TabPreventivo appuntamentoId={app.id} />}
+      {tab === 'preventivo' && <TabPreventivo appuntamentoId={app.id} appuntamento={app} />}
       {tab === 'foglio' && <TabFoglioLavoro appuntamentoId={app.id} />}
       {tab === 'foto' && <PhotoGallery appuntamentoId={app.id} />}
       {tab === 'chat' && (
@@ -110,6 +113,7 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
         />
       )}
       {tab === 'wa' && <WhatsAppPanel appuntamento={app} />}
+      {tab === 'ai' && <AIDiagnostics appuntamento={app} />}
     </div>
   );
 }
@@ -165,7 +169,7 @@ function TabStato({ app }: { app: Appuntamento }) {
 }
 
 // ==================== TAB PREVENTIVO ====================
-function TabPreventivo({ appuntamentoId }: { appuntamentoId: string }) {
+function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: string; appuntamento: Appuntamento }) {
   const [preventivo, setPreventivo] = useState<Preventivo | null>(null);
   const [righe, setRighe] = useState<PreventivoRiga[]>([]);
   const [loading, setLoading] = useState(true);
@@ -322,6 +326,11 @@ function TabPreventivo({ appuntamentoId }: { appuntamentoId: string }) {
           Invia al cliente
         </Button>
       </div>
+
+      {/* PDF Export */}
+      {preventivo && righe.length > 0 && (
+        <PDFExport appuntamento={appuntamento} preventivo={{ ...preventivo, righe, subtotale, iva, totale }} />
+      )}
     </div>
   );
 }
