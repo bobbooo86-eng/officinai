@@ -205,3 +205,19 @@ export interface CasoAI {
   condiviso: boolean;
   created_at?: string;
 }
+
+export interface ScansioneOBD {
+  id: string;
+  officina_id: string;
+  cliente_id: string;
+  veicolo_id: string;
+  codici: string[];
+  km_scansione?: number;
+  nota_cliente?: string;
+  letto: boolean;
+  gestito: boolean;
+  created_at: string;
+  // Relations (joined)
+  clienti?: Cliente;
+  veicoli?: Veicolo;
+}

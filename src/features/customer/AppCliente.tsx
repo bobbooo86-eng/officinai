@@ -11,33 +11,42 @@ import { ChatPanel } from '@/features/chat/ChatPanel';
 import { PhotoGallery } from '@/features/photos/PhotoGallery';
 
 const BookingPage = lazy(() => import('./BookingPage').then(m => ({ default: m.BookingPage })));
+const OBDScanPage = lazy(() => import('./OBDScanPage').then(m => ({ default: m.OBDScanPage })));
 import type { Appuntamento, Veicolo, Preventivo } from '@/types/database';
 
 const TABS = [
   { id: 'home', label: 'Home', icon: '🏠' },
   { id: 'prenota', label: 'Richiedi', icon: '📅' },
+  { id: 'obd', label: 'OBD', icon: '🔌' },
   { id: 'chat', label: 'Chat', icon: '💬' },
   { id: 'auto', label: 'Auto', icon: '🚗' },
-  { id: 'storico', label: 'Storico', icon: '📋' },
 ];
 
 export function AppCliente() {
   const [activeTab, setActiveTab] = useState('home');
   const { cliente } = useAuthStore();
   const [appAttivoId, setAppAttivoId] = useState<string | null>(null);
+  const [veicoliCliente, setVeicoliCliente] = useState<Veicolo[]>([]);
 
-  // Fetch active appointment ID for chat/photos
+  // Fetch active appointment ID for chat/photos + vehicles for OBD
   useEffect(() => {
     if (!cliente) return;
     const fetch = async () => {
-      const { data } = await supabase
-        .from('appuntamenti')
-        .select('id')
-        .eq('cliente_id', cliente.id)
-        .neq('stato', 'pronto')
-        .order('data_ora', { ascending: false })
-        .limit(1);
-      if (data && data.length > 0) setAppAttivoId(data[0].id);
+      const [{ data: apps }, { data: veic }] = await Promise.all([
+        supabase
+          .from('appuntamenti')
+          .select('id')
+          .eq('cliente_id', cliente.id)
+          .neq('stato', 'pronto')
+          .order('data_ora', { ascending: false })
+          .limit(1),
+        supabase
+          .from('veicoli')
+          .select('*')
+          .eq('cliente_id', cliente.id),
+      ]);
+      if (apps && apps.length > 0) setAppAttivoId(apps[0].id);
+      setVeicoliCliente(veic || []);
     };
     fetch();
   }, [cliente]);
@@ -46,6 +55,11 @@ export function AppCliente() {
     <Layout tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'home' && <ClienteHome />}
       {activeTab === 'prenota' && <Suspense fallback={<PageSkeleton />}><BookingPage /></Suspense>}
+      {activeTab === 'obd' && (
+        <Suspense fallback={<PageSkeleton />}>
+          <OBDScanPage veicoli={veicoliCliente} />
+        </Suspense>
+      )}
       {activeTab === 'chat' && (
         appAttivoId ? (
           <ChatPanel
@@ -61,7 +75,6 @@ export function AppCliente() {
         )
       )}
       {activeTab === 'auto' && <ClienteAuto />}
-      {activeTab === 'storico' && <ClienteStorico />}
     </Layout>
   );
 }

@@ -11,12 +11,13 @@ export function Dashboard({ onSelectAppuntamento }: { onSelectAppuntamento: (a: 
   const { officina } = useAuthStore();
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [alertMagazzino, setAlertMagazzino] = useState<Magazzino[]>([]);
+  const [obdCount, setObdCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
     if (!officina) return;
 
-    const [{ data: apps }, { data: magazzino }] = await Promise.all([
+    const [{ data: apps }, { data: magazzino }, { count: obdPending }] = await Promise.all([
       supabase
         .from('appuntamenti')
         .select('*, clienti(nome,tel), veicoli(marca,modello,targa,km)')
@@ -26,10 +27,16 @@ export function Dashboard({ onSelectAppuntamento }: { onSelectAppuntamento: (a: 
         .from('magazzino')
         .select('*')
         .eq('officina_id', officina.id),
+      supabase
+        .from('scansioni_obd')
+        .select('*', { count: 'exact', head: true })
+        .eq('officina_id', officina.id)
+        .eq('gestito', false),
     ]);
 
     setAppuntamenti(apps || []);
     setAlertMagazzino((magazzino || []).filter((m) => m.quantita <= m.quantita_minima));
+    setObdCount(obdPending || 0);
     setLoading(false);
   };
 
@@ -114,6 +121,23 @@ export function Dashboard({ onSelectAppuntamento }: { onSelectAppuntamento: (a: 
                 {m.nome}: {m.quantita}/{m.quantita_minima}
               </Badge>
             ))}
+          </div>
+        </Card>
+      )}
+
+      {/* OBD scan alerts */}
+      {obdCount > 0 && (
+        <Card className="!p-3 bg-orange-50 !border-orange-200">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🔌</span>
+            <div>
+              <div className="text-xs font-semibold text-orange-700">
+                {obdCount} scansione{obdCount > 1 ? 'i' : ''} OBD da gestire
+              </div>
+              <div className="text-[10px] text-orange-600">
+                Vai su Altro → Scansioni OBD per vedere i codici
+              </div>
+            </div>
           </div>
         </Card>
       )}
