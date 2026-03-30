@@ -8,6 +8,7 @@ export const STATO_CONFIG: Record<AppuntamentoStato, { label: string; color: str
   in_lavorazione: { label: 'In Lavorazione', color: '#3b82f6', bg: '#dbeafe', icon: '🔧' },
   attesa_ricambi: { label: 'Attesa Ricambi', color: '#ef4444', bg: '#fee2e2', icon: '📦' },
   pronto: { label: 'Pronto', color: '#10b981', bg: '#d1fae5', icon: '✅' },
+  annullato: { label: 'Annullato', color: '#6b7280', bg: '#f3f4f6', icon: '🚫' },
 };
 
 export const STATI_ORDINE: AppuntamentoStato[] = [

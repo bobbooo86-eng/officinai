@@ -101,20 +101,43 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
 
       {/* "Auto arrivata in officina" button — visible only when prenotato */}
       {app.stato === 'prenotato' && (
-        <button
-          onClick={handleAutoArrivata}
-          disabled={arrivando}
-          className="w-full p-4 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 transition-all cursor-pointer disabled:opacity-50 shadow-lg"
-        >
-          <div className="flex items-center justify-center gap-3">
-            <span className="text-2xl">🚗</span>
-            <div className="text-left">
-              <div className="font-bold text-sm">{arrivando ? 'Registrazione...' : 'Auto arrivata in officina'}</div>
-              <div className="text-[11px] text-blue-200">Registra l'ingresso e avvia l'accettazione</div>
+        <div className="space-y-2">
+          <button
+            onClick={handleAutoArrivata}
+            disabled={arrivando}
+            className="w-full p-4 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 transition-all cursor-pointer disabled:opacity-50 shadow-lg"
+          >
+            <div className="flex items-center justify-center gap-3">
+              <span className="text-2xl">🚗</span>
+              <div className="text-left">
+                <div className="font-bold text-sm">{arrivando ? 'Registrazione...' : 'Auto arrivata in officina'}</div>
+                <div className="text-[11px] text-blue-200">Registra l'ingresso e avvia l'accettazione</div>
+              </div>
+              <span className="text-xl ml-auto">→</span>
             </div>
-            <span className="text-xl ml-auto">→</span>
+          </button>
+        </div>
+      )}
+
+      {/* Indicator: auto in officina */}
+      {autoInOfficina && app.stato !== 'pronto' && app.stato !== 'annullato' && (
+        <Card className="!p-2 bg-emerald-50 border-emerald-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">🏭</span>
+              <span className="text-xs font-semibold text-emerald-800">Auto in officina</span>
+            </div>
+            <button
+              onClick={async () => {
+                if (!confirm('Riportare a "Prenotato"? (annulla ingresso in officina)')) return;
+                await supabase.from('appuntamenti').update({ stato: 'prenotato' }).eq('id', app.id);
+              }}
+              className="text-[10px] text-amber-700 bg-amber-100 hover:bg-amber-200 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+            >
+              ↩ Annulla ingresso
+            </button>
           </div>
-        </button>
+        </Card>
       )}
 
       {/* Tab navigation */}
@@ -307,6 +330,45 @@ function TabStato({ app }: { app: Appuntamento }) {
     );
   }
 
+  const annullaAppuntamento = async () => {
+    if (!confirm('Sei sicuro di voler annullare questo appuntamento?')) return;
+    setUpdating(true);
+    await supabase
+      .from('appuntamenti')
+      .update({ stato: 'annullato' })
+      .eq('id', app.id);
+    setUpdating(false);
+  };
+
+  const riportaAPrenotato = async () => {
+    if (!confirm('Riportare l\'appuntamento a "Prenotato"?')) return;
+    setUpdating(true);
+    await supabase
+      .from('appuntamenti')
+      .update({ stato: 'prenotato' })
+      .eq('id', app.id);
+    setUpdating(false);
+  };
+
+  // Annullato view
+  if (app.stato === 'annullato') {
+    return (
+      <div className="space-y-3">
+        <Card className="!p-4 bg-gray-50 border-gray-300 text-center">
+          <div className="text-3xl mb-2">🚫</div>
+          <div className="text-sm font-bold text-gray-700">Appuntamento annullato</div>
+        </Card>
+        <button
+          onClick={() => cambiaStato('prenotato')}
+          disabled={updating}
+          className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors cursor-pointer disabled:opacity-50"
+        >
+          ↩ Ripristina appuntamento
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <p className="text-xs text-gray-500 mb-1">Cambia stato:</p>
@@ -340,6 +402,31 @@ function TabStato({ app }: { app: Appuntamento }) {
           </button>
         );
       })}
+
+      {/* Undo / Back actions */}
+      <div className="pt-3 border-t border-gray-200 space-y-2">
+        {/* Riporta a prenotato (undo "auto in officina") */}
+        {(app.stato === 'in_diagnosi' || app.stato === 'in_lavorazione') && (
+          <button
+            onClick={riportaAPrenotato}
+            disabled={updating}
+            className="w-full py-2.5 rounded-xl border-2 border-amber-300 bg-amber-50 text-amber-800 text-xs font-semibold hover:bg-amber-100 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            ↩ Riporta a Prenotato (annulla ingresso)
+          </button>
+        )}
+
+        {/* Annulla appuntamento — sempre disponibile tranne se già pronto */}
+        {app.stato !== 'pronto' && (
+          <button
+            onClick={annullaAppuntamento}
+            disabled={updating}
+            className="w-full py-2.5 rounded-xl border-2 border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            🚫 Annulla appuntamento
+          </button>
+        )}
+      </div>
     </div>
   );
 }
