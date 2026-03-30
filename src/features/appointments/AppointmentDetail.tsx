@@ -22,6 +22,7 @@ type Tab = 'accettazione' | 'stato' | 'preventivo' | 'foglio' | 'foto' | 'chat' 
 export function AppointmentDetail({ appuntamento, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('stato');
   const [app, setApp] = useState(appuntamento);
+  const [arrivando, setArrivando] = useState(false);
 
   // Realtime updates
   useEffect(() => {
@@ -40,8 +41,21 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
 
   const { utente } = useAuthStore();
 
-  const tabs: { id: Tab; label: string; icon: string }[] = [
-    { id: 'accettazione', label: 'Accettaz.', icon: '📝' },
+  // Auto è "in officina" se stato è oltre prenotato (in_diagnosi, in_lavorazione, ecc.)
+  const autoInOfficina = app.stato !== 'richiesta' && app.stato !== 'prenotato';
+
+  const handleAutoArrivata = async () => {
+    setArrivando(true);
+    await supabase
+      .from('appuntamenti')
+      .update({ stato: 'in_diagnosi' })
+      .eq('id', app.id);
+    setArrivando(false);
+    setTab('accettazione');
+  };
+
+  const tabs: { id: Tab; label: string; icon: string; disabled?: boolean }[] = [
+    { id: 'accettazione', label: 'Accettaz.', icon: '📝', disabled: !autoInOfficina },
     { id: 'stato', label: 'Stato', icon: '📋' },
     { id: 'preventivo', label: 'Preventivo', icon: '💰' },
     { id: 'foglio', label: 'Lavoro', icon: '🔧' },
@@ -85,16 +99,37 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
         )}
       </Card>
 
+      {/* "Auto arrivata in officina" button — visible only when prenotato */}
+      {app.stato === 'prenotato' && (
+        <button
+          onClick={handleAutoArrivata}
+          disabled={arrivando}
+          className="w-full p-4 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 transition-all cursor-pointer disabled:opacity-50 shadow-lg"
+        >
+          <div className="flex items-center justify-center gap-3">
+            <span className="text-2xl">🚗</span>
+            <div className="text-left">
+              <div className="font-bold text-sm">{arrivando ? 'Registrazione...' : 'Auto arrivata in officina'}</div>
+              <div className="text-[11px] text-blue-200">Registra l'ingresso e avvia l'accettazione</div>
+            </div>
+            <span className="text-xl ml-auto">→</span>
+          </div>
+        </button>
+      )}
+
       {/* Tab navigation */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto">
         {tabs.map((t) => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-              tab === t.id
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+            onClick={() => !t.disabled && setTab(t.id)}
+            disabled={t.disabled}
+            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+              t.disabled
+                ? 'text-gray-300 cursor-not-allowed'
+                : tab === t.id
+                  ? 'bg-white text-blue-600 shadow-sm cursor-pointer'
+                  : 'text-gray-500 hover:text-gray-700 cursor-pointer'
             }`}
           >
             {t.icon} {t.label}
@@ -103,12 +138,21 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
       </div>
 
       {/* Tab content */}
-      {tab === 'accettazione' && (
+      {tab === 'accettazione' && autoInOfficina && (
         <AccettazioneVeicolo
           appuntamentoId={app.id}
           veicolo={app.veicoli}
           clienteNome={app.clienti?.nome}
         />
+      )}
+      {tab === 'accettazione' && !autoInOfficina && (
+        <Card className="!p-6 text-center">
+          <div className="text-4xl mb-3">🔒</div>
+          <div className="text-sm font-semibold text-gray-700">Accettazione non disponibile</div>
+          <div className="text-xs text-gray-400 mt-1">
+            Clicca "Auto arrivata in officina" per avviare l'accettazione
+          </div>
+        </Card>
       )}
       {tab === 'stato' && <TabStato app={app} />}
       {tab === 'preventivo' && <TabPreventivo appuntamentoId={app.id} appuntamento={app} />}
