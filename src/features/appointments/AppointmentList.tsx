@@ -6,11 +6,11 @@ import { fmtData, fmtOra } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import type { Appuntamento } from '@/types/database';
 
-export function AppointmentList({ onSelect }: { onSelect: (a: Appuntamento) => void }) {
+export function AppointmentList({ onSelect, initialFiltro }: { onSelect: (a: Appuntamento) => void; initialFiltro?: string }) {
   const { officina } = useAuthStore();
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState<string>('tutti');
+  const [filtro, setFiltro] = useState<string>(initialFiltro || 'tutti');
 
   const fetchData = async () => {
     if (!officina) return;
@@ -44,10 +44,14 @@ export function AppointmentList({ onSelect }: { onSelect: (a: Appuntamento) => v
 
   if (loading) return <Loader text="Caricamento agenda..." />;
 
+  const oggi = new Date().toISOString().slice(0, 10);
   const richieste = appuntamenti.filter((a) => a.stato === 'richiesta');
-  const filtered = filtro === 'tutti'
-    ? appuntamenti
-    : appuntamenti.filter((a) => a.stato === filtro);
+  const filtered = (() => {
+    if (filtro === 'tutti') return appuntamenti;
+    if (filtro === 'oggi') return appuntamenti.filter((a) => a.data_ora?.startsWith(oggi));
+    if (filtro === 'in_corso') return appuntamenti.filter((a) => a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi');
+    return appuntamenti.filter((a) => a.stato === filtro);
+  })();
 
   return (
     <div className="p-4 space-y-3">

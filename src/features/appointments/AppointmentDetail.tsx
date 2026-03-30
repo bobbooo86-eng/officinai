@@ -9,6 +9,7 @@ import { PhotoGallery } from '@/features/photos/PhotoGallery';
 import { WhatsAppPanel } from '@/features/notifications/WhatsAppPanel';
 import { AIDiagnostics } from '@/features/ai/AIDiagnostics';
 import { PDFExport } from '@/features/estimates/PDFExport';
+import { AccettazioneVeicolo } from './AccettazioneVeicolo';
 import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, RicambioUsato, Difetto } from '@/types/database';
 
 interface Props {
@@ -16,7 +17,7 @@ interface Props {
   onBack: () => void;
 }
 
-type Tab = 'stato' | 'preventivo' | 'foglio' | 'foto' | 'chat' | 'wa' | 'ai';
+type Tab = 'accettazione' | 'stato' | 'preventivo' | 'foglio' | 'foto' | 'chat' | 'wa' | 'ai';
 
 export function AppointmentDetail({ appuntamento, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('stato');
@@ -40,6 +41,7 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
   const { utente } = useAuthStore();
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
+    { id: 'accettazione', label: 'Accettaz.', icon: '📝' },
     { id: 'stato', label: 'Stato', icon: '📋' },
     { id: 'preventivo', label: 'Preventivo', icon: '💰' },
     { id: 'foglio', label: 'Lavoro', icon: '🔧' },
@@ -101,6 +103,13 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
       </div>
 
       {/* Tab content */}
+      {tab === 'accettazione' && (
+        <AccettazioneVeicolo
+          appuntamentoId={app.id}
+          veicolo={app.veicoli}
+          clienteNome={app.clienti?.nome}
+        />
+      )}
       {tab === 'stato' && <TabStato app={app} />}
       {tab === 'preventivo' && <TabPreventivo appuntamentoId={app.id} appuntamento={app} />}
       {tab === 'foglio' && <TabFoglioLavoro appuntamentoId={app.id} />}

@@ -27,6 +27,7 @@ export function AppOfficina() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedApp, setSelectedApp] = useState<Appuntamento | null>(null);
   const [subPage, setSubPage] = useState<'magazzino' | 'analytics' | 'fatture' | 'abbonamento' | 'impostazioni' | 'obd' | null>(null);
+  const [agendaFiltro, setAgendaFiltro] = useState<string | undefined>(undefined);
 
   const handleSelectApp = (app: Appuntamento) => {
     setSelectedApp(app);
@@ -47,8 +48,16 @@ export function AppOfficina() {
 
   return (
     <Layout tabs={TABS} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSubPage(null); }}>
-      {activeTab === 'home' && <Dashboard onSelectAppuntamento={handleSelectApp} />}
-      {activeTab === 'agenda' && <AppointmentList onSelect={handleSelectApp} />}
+      {activeTab === 'home' && (
+        <Dashboard
+          onSelectAppuntamento={handleSelectApp}
+          onNavigateToAgenda={(filtro) => {
+            setAgendaFiltro(filtro);
+            setActiveTab('agenda');
+          }}
+        />
+      )}
+      {activeTab === 'agenda' && <AppointmentList onSelect={handleSelectApp} initialFiltro={agendaFiltro} />}
       {activeTab === 'calendario' && <CalendarView onSelect={handleSelectApp} />}
       {activeTab === 'clienti' && <CustomersPage />}
       {activeTab === 'altro' && !subPage && (

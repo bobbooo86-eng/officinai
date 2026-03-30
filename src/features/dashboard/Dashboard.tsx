@@ -7,7 +7,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { VehicleAlerts } from './VehicleAlerts';
 import type { Appuntamento, Magazzino } from '@/types/database';
 
-export function Dashboard({ onSelectAppuntamento }: { onSelectAppuntamento: (a: Appuntamento) => void }) {
+interface DashboardProps {
+  onSelectAppuntamento: (a: Appuntamento) => void;
+  onNavigateToAgenda?: (filtro?: string) => void;
+}
+
+export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda }: DashboardProps) {
   const { officina } = useAuthStore();
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [alertMagazzino, setAlertMagazzino] = useState<Magazzino[]>([]);
@@ -89,24 +94,32 @@ export function Dashboard({ onSelectAppuntamento }: { onSelectAppuntamento: (a: 
         </Card>
       )}
 
-      {/* KPIs */}
+      {/* KPIs — clickable */}
       <div className="grid grid-cols-4 gap-2">
-        <Card className="text-center !p-3">
-          <div className="text-xl font-bold text-purple-600">{richieste.length}</div>
-          <div className="text-[10px] text-gray-500 mt-0.5">Richieste</div>
-        </Card>
-        <Card className="text-center !p-3">
-          <div className="text-xl font-bold text-blue-600">{appOggi.length}</div>
-          <div className="text-[10px] text-gray-500 mt-0.5">Oggi</div>
-        </Card>
-        <Card className="text-center !p-3">
-          <div className="text-xl font-bold text-amber-500">{inCorso.length}</div>
-          <div className="text-[10px] text-gray-500 mt-0.5">In Corso</div>
-        </Card>
-        <Card className="text-center !p-3">
-          <div className="text-xl font-bold text-emerald-500">{pronti.length}</div>
-          <div className="text-[10px] text-gray-500 mt-0.5">Pronti</div>
-        </Card>
+        <button onClick={() => onNavigateToAgenda?.('richiesta')} className="text-left cursor-pointer">
+          <Card hover className="text-center !p-3">
+            <div className="text-xl font-bold text-purple-600">{richieste.length}</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">Richieste</div>
+          </Card>
+        </button>
+        <button onClick={() => onNavigateToAgenda?.('oggi')} className="text-left cursor-pointer">
+          <Card hover className="text-center !p-3">
+            <div className="text-xl font-bold text-blue-600">{appOggi.length}</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">Oggi</div>
+          </Card>
+        </button>
+        <button onClick={() => onNavigateToAgenda?.('in_corso')} className="text-left cursor-pointer">
+          <Card hover className="text-center !p-3">
+            <div className="text-xl font-bold text-amber-500">{inCorso.length}</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">In Corso</div>
+          </Card>
+        </button>
+        <button onClick={() => onNavigateToAgenda?.('pronto')} className="text-left cursor-pointer">
+          <Card hover className="text-center !p-3">
+            <div className="text-xl font-bold text-emerald-500">{pronti.length}</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">Pronti</div>
+          </Card>
+        </button>
       </div>
 
       {/* Alerts */}

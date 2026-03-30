@@ -206,6 +206,19 @@ export interface CasoAI {
   created_at?: string;
 }
 
+export interface Accettazione {
+  id: string;
+  appuntamento_id: string;
+  km_ingresso: number;
+  livello_carburante: number;
+  danni: { x: number; y: number; tipo: string; nota: string }[];
+  checklist: Record<string, boolean>;
+  oggetti_personali: string;
+  note_accettazione: string;
+  firma_cliente: string | null;
+  created_at: string;
+}
+
 export interface ScansioneOBD {
   id: string;
   officina_id: string;

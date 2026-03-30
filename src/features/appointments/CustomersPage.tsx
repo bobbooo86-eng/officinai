@@ -123,44 +123,99 @@ export function CustomersPage() {
 // ==================== ADD CLIENTE FORM ====================
 function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: Cliente) => void }) {
   const { officina } = useAuthStore();
+  // Cliente fields
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [tel, setTel] = useState('');
+  const [codiceFiscale, setCodiceFiscale] = useState('');
+  const [indirizzo, setIndirizzo] = useState('');
   const [note, setNote] = useState('');
+  // Veicolo fields
+  const [targa, setTarga] = useState('');
+  const [marca, setMarca] = useState('');
+  const [modello, setModello] = useState('');
+  const [anno, setAnno] = useState(new Date().getFullYear().toString());
+  const [km, setKm] = useState('');
+  const [carburante, setCarburante] = useState('benzina');
+  const [cilindrata, setCilindrata] = useState('');
+  const [telaio, setTelaio] = useState('');
+  const [colore, setColore] = useState('');
+
   const [saving, setSaving] = useState(false);
   const [errNome, setErrNome] = useState<string | null>(null);
+
+  const carburanti = ['benzina', 'diesel', 'gpl', 'metano', 'ibrido', 'elettrico'];
 
   const submit = async () => {
     if (!nome.trim()) { setErrNome('Il nome è obbligatorio'); return; }
     if (!officina) return;
 
     setSaving(true);
-    const { data, error } = await supabase
+
+    // Insert cliente
+    const { data: cliente, error } = await supabase
       .from('clienti')
       .insert({
         officina_id: officina.id,
         nome: nome.trim(),
         email: email.trim() || null,
         tel: tel.trim() || null,
-        note: note.trim() || null,
+        note: [
+          codiceFiscale.trim() ? `CF: ${codiceFiscale.trim()}` : '',
+          indirizzo.trim() ? `Indirizzo: ${indirizzo.trim()}` : '',
+          note.trim(),
+        ].filter(Boolean).join(' | ') || null,
       })
       .select()
       .single();
 
+    // Insert veicolo if targa provided
+    if (cliente && !error && targa.trim()) {
+      await supabase.from('veicoli').insert({
+        cliente_id: cliente.id,
+        marca: marca.trim() || 'N/D',
+        modello: modello.trim() || 'N/D',
+        targa: targa.trim().toUpperCase(),
+        anno: parseInt(anno) || new Date().getFullYear(),
+        km: parseInt(km) || 0,
+        carburante,
+        note: [
+          cilindrata ? `Cilindrata: ${cilindrata}` : '',
+          telaio ? `Telaio: ${telaio}` : '',
+          colore ? `Colore: ${colore}` : '',
+        ].filter(Boolean).join(' | ') || null,
+      });
+    }
+
     setSaving(false);
-    if (data && !error) onSaved(data);
+    if (cliente && !error) onSaved(cliente);
   };
 
+  const BackBtn = () => (
+    <button onClick={onBack} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer">
+      <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+      </svg>
+    </button>
+  );
+
+  const SectionTitle = ({ icon, title }: { icon: string; title: string }) => (
+    <div className="flex items-center gap-2 pt-2">
+      <span className="text-lg">{icon}</span>
+      <h3 className="text-sm font-bold text-gray-800">{title}</h3>
+      <div className="flex-1 h-px bg-gray-200" />
+    </div>
+  );
+
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-3 pb-8">
       <div className="flex items-center gap-3">
-        <button onClick={onBack} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer">
-          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
+        <BackBtn />
         <h2 className="text-lg font-bold text-gray-900">Nuovo cliente</h2>
       </div>
+
+      {/* ---- Dati cliente ---- */}
+      <SectionTitle icon="👤" title="Dati cliente" />
 
       <Input
         label="Nome e cognome *"
@@ -170,35 +225,135 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
         placeholder="Es: Mario Rossi"
       />
 
-      <Input
-        label="Email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="mario.rossi@email.com"
-      />
-
-      <Input
-        label="Telefono"
-        type="tel"
-        value={tel}
-        onChange={(e) => setTel(e.target.value)}
-        placeholder="+39 333 1234567"
-      />
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Note aggiuntive sul cliente..."
-          className="w-full px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-          rows={3}
+      <div className="grid grid-cols-2 gap-3">
+        <Input
+          label="Telefono"
+          type="tel"
+          value={tel}
+          onChange={(e) => setTel(e.target.value)}
+          placeholder="+39 333 1234567"
+        />
+        <Input
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="mario@email.com"
         />
       </div>
 
+      <div className="grid grid-cols-2 gap-3">
+        <Input
+          label="Codice Fiscale"
+          value={codiceFiscale}
+          onChange={(e) => setCodiceFiscale(e.target.value.toUpperCase())}
+          placeholder="RSSMRA80A01H501Z"
+        />
+        <Input
+          label="Indirizzo"
+          value={indirizzo}
+          onChange={(e) => setIndirizzo(e.target.value)}
+          placeholder="Via Roma 1, Milano"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Note cliente</label>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Note aggiuntive..."
+          className="w-full px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows={2}
+        />
+      </div>
+
+      {/* ---- Dati veicolo ---- */}
+      <SectionTitle icon="🚗" title="Veicolo (opzionale)" />
+
+      <Input
+        label="Targa"
+        value={targa}
+        onChange={(e) => setTarga(e.target.value.toUpperCase())}
+        placeholder="AB123CD"
+      />
+
+      <div className="grid grid-cols-2 gap-3">
+        <Input
+          label="Marca"
+          value={marca}
+          onChange={(e) => setMarca(e.target.value)}
+          placeholder="Fiat"
+        />
+        <Input
+          label="Modello"
+          value={modello}
+          onChange={(e) => setModello(e.target.value)}
+          placeholder="Panda"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Input
+          label="Anno"
+          type="number"
+          value={anno}
+          onChange={(e) => setAnno(e.target.value)}
+          min="1980"
+          max={new Date().getFullYear().toString()}
+        />
+        <Input
+          label="Chilometri"
+          type="number"
+          value={km}
+          onChange={(e) => setKm(e.target.value)}
+          placeholder="50000"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Input
+          label="Cilindrata (cc)"
+          value={cilindrata}
+          onChange={(e) => setCilindrata(e.target.value)}
+          placeholder="1200"
+        />
+        <Input
+          label="Colore"
+          value={colore}
+          onChange={(e) => setColore(e.target.value)}
+          placeholder="Rosso"
+        />
+      </div>
+
+      <Input
+        label="Numero telaio (VIN)"
+        value={telaio}
+        onChange={(e) => setTelaio(e.target.value.toUpperCase())}
+        placeholder="ZFA31200002345678"
+      />
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Carburante</label>
+        <div className="grid grid-cols-3 gap-1.5">
+          {carburanti.map((c) => (
+            <button
+              key={c}
+              onClick={() => setCarburante(c)}
+              className={`py-2 rounded-lg text-xs font-medium capitalize transition-colors cursor-pointer ${
+                carburante === c
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <Button fullWidth onClick={submit} loading={saving} disabled={!nome.trim()}>
-        Salva cliente
+        Salva cliente{targa.trim() ? ' e veicolo' : ''}
       </Button>
     </div>
   );
