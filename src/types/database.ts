@@ -3,6 +3,7 @@
 // ============================================
 
 export type AppuntamentoStato =
+  | 'richiesta'
   | 'prenotato'
   | 'in_diagnosi'
   | 'in_lavorazione'
@@ -86,6 +87,8 @@ export interface Appuntamento {
   problema: string;
   operazioni?: string;
   codici_obd?: string;
+  data_proposta?: string;
+  nota_officina?: string;
   created_at?: string;
   // Relations (joined)
   clienti?: Cliente;

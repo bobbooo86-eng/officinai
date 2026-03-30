@@ -121,6 +121,10 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
 // ==================== TAB STATO ====================
 function TabStato({ app }: { app: Appuntamento }) {
   const [updating, setUpdating] = useState(false);
+  const [showProposta, setShowProposta] = useState(false);
+  const [propostaData, setPropostaData] = useState('');
+  const [propostaOra, setPropostaOra] = useState('09:00');
+  const [propostaNota, setPropostaNota] = useState('');
 
   const cambiaStato = async (nuovoStato: string) => {
     setUpdating(true);
@@ -131,10 +135,129 @@ function TabStato({ app }: { app: Appuntamento }) {
     setUpdating(false);
   };
 
+  const accettaRichiesta = async () => {
+    setUpdating(true);
+    await supabase
+      .from('appuntamenti')
+      .update({ stato: 'prenotato' })
+      .eq('id', app.id);
+    setUpdating(false);
+  };
+
+  const inviaControproposta = async () => {
+    if (!propostaData) return;
+    setUpdating(true);
+    await supabase
+      .from('appuntamenti')
+      .update({
+        data_proposta: `${propostaData}T${propostaOra}:00`,
+        nota_officina: propostaNota.trim() || null,
+      })
+      .eq('id', app.id);
+    setUpdating(false);
+    setShowProposta(false);
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const orari = [
+    '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+    '11:00', '11:30', '14:00', '14:30', '15:00', '15:30',
+    '16:00', '16:30', '17:00', '17:30',
+  ];
+
+  // Show request approval UI when stato is 'richiesta'
+  if (app.stato === 'richiesta') {
+    return (
+      <div className="space-y-3">
+        <Card className="!p-4 bg-purple-50 border-purple-200">
+          <div className="text-sm font-semibold text-purple-900 mb-1">🔔 Richiesta di prenotazione</div>
+          <div className="text-xs text-purple-700">
+            Il cliente richiede un appuntamento per il <strong>{fmtDataOra(app.data_ora)}</strong>
+          </div>
+          <div className="text-xs text-gray-600 mt-1">
+            Problema: {app.problema}
+          </div>
+        </Card>
+
+        <div className="flex gap-2">
+          <button
+            onClick={accettaRichiesta}
+            disabled={updating}
+            className="flex-1 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            ✓ Accetta prenotazione
+          </button>
+          <button
+            onClick={() => setShowProposta(!showProposta)}
+            className="flex-1 py-3 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition-colors cursor-pointer"
+          >
+            📅 Proponi altra data
+          </button>
+        </div>
+
+        {showProposta && (
+          <Card className="!p-4 space-y-3">
+            <div className="text-sm font-medium text-gray-900">Proponi data alternativa</div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Data</label>
+              <input
+                type="date"
+                value={propostaData}
+                min={today}
+                onChange={(e) => setPropostaData(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Orario</label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {orari.map((o) => (
+                  <button
+                    key={o}
+                    onClick={() => setPropostaOra(o)}
+                    className={`py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                      propostaOra === o
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Nota (opzionale)</label>
+              <textarea
+                value={propostaNota}
+                onChange={(e) => setPropostaNota(e.target.value)}
+                placeholder="Es: Il tecnico è disponibile solo nel pomeriggio..."
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={2}
+              />
+            </div>
+
+            <button
+              onClick={inviaControproposta}
+              disabled={!propostaData || updating}
+              className="w-full py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Invia proposta al cliente
+            </button>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <p className="text-xs text-gray-500 mb-1">Cambia stato:</p>
-      {STATI_ORDINE.map((stato) => {
+      {STATI_ORDINE.filter(s => s !== 'richiesta').map((stato) => {
         const cfg = STATO_CONFIG[stato];
         const isActive = app.stato === stato;
         return (

@@ -5,6 +5,7 @@ import { PageSkeleton } from '@/components/ui/PageSkeleton';
 import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG, STATI_ORDINE } from '@/lib/constants';
 import { fmtData, fmtOra, fmtEuro } from '@/lib/format';
+import { Button } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
 import { ChatPanel } from '@/features/chat/ChatPanel';
 import { PhotoGallery } from '@/features/photos/PhotoGallery';
@@ -14,7 +15,7 @@ import type { Appuntamento, Veicolo, Preventivo } from '@/types/database';
 
 const TABS = [
   { id: 'home', label: 'Home', icon: '🏠' },
-  { id: 'prenota', label: 'Prenota', icon: '📅' },
+  { id: 'prenota', label: 'Richiedi', icon: '📅' },
   { id: 'chat', label: 'Chat', icon: '💬' },
   { id: 'auto', label: 'Auto', icon: '🚗' },
   { id: 'storico', label: 'Storico', icon: '📋' },
@@ -126,9 +127,26 @@ function ClienteHome() {
   const statoIdx = STATI_ORDINE.indexOf(appAttivo.stato);
   const progress = ((statoIdx + 1) / STATI_ORDINE.length) * 100;
 
+  const accettaProposta = async () => {
+    if (!appAttivo.data_proposta) return;
+    await supabase
+      .from('appuntamenti')
+      .update({ data_ora: appAttivo.data_proposta, stato: 'prenotato', data_proposta: null, nota_officina: null })
+      .eq('id', appAttivo.id);
+  };
+
+  const rifiutaProposta = async () => {
+    await supabase
+      .from('appuntamenti')
+      .update({ data_proposta: null, nota_officina: null })
+      .eq('id', appAttivo.id);
+  };
+
   return (
     <div className="p-4 space-y-4">
-      <h2 className="text-lg font-bold text-gray-900">Il tuo intervento</h2>
+      <h2 className="text-lg font-bold text-gray-900">
+        {appAttivo.stato === 'richiesta' ? 'La tua richiesta' : 'Il tuo intervento'}
+      </h2>
 
       {/* Vehicle */}
       <Card className="!p-3">
@@ -139,45 +157,97 @@ function ClienteHome() {
         <div className="text-xs text-gray-500">{appAttivo.veicoli?.targa}</div>
       </Card>
 
-      {/* Progress */}
-      <Card className="!p-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-gray-500">Stato</span>
-          <Badge color={STATO_CONFIG[appAttivo.stato].color} bg={STATO_CONFIG[appAttivo.stato].bg}>
-            {STATO_CONFIG[appAttivo.stato].icon} {STATO_CONFIG[appAttivo.stato].label}
-          </Badge>
-        </div>
-
-        {/* Progress bar */}
-        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-3">
-          <div
-            className="h-full bg-blue-600 rounded-full transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        {/* Steps */}
-        <div className="flex justify-between">
-          {STATI_ORDINE.map((stato, i) => {
-            const cfg = STATO_CONFIG[stato];
-            const done = i <= statoIdx;
-            const active = i === statoIdx;
-            return (
-              <div key={stato} className="flex flex-col items-center">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${
-                  active ? 'bg-blue-600 text-white ring-2 ring-blue-200' :
-                  done ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'
-                }`}>
-                  {done ? '✓' : i + 1}
-                </div>
-                <span className={`text-[9px] mt-1 ${active ? 'text-blue-600 font-semibold' : 'text-gray-400'}`}>
-                  {cfg.label.split(' ')[0]}
-                </span>
+      {/* Pending request banner */}
+      {appAttivo.stato === 'richiesta' && !appAttivo.data_proposta && (
+        <Card className="!p-4 bg-purple-50 border-purple-200">
+          <div className="flex items-center gap-3">
+            <div className="text-3xl">🔔</div>
+            <div>
+              <div className="text-sm font-semibold text-purple-900">Richiesta in attesa</div>
+              <div className="text-xs text-purple-700 mt-0.5">
+                L'officina sta valutando la tua richiesta per il {fmtData(appAttivo.data_ora)} alle {fmtOra(appAttivo.data_ora)}
               </div>
-            );
-          })}
-        </div>
-      </Card>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Counter-proposal from officina */}
+      {appAttivo.stato === 'richiesta' && appAttivo.data_proposta && (
+        <Card className="!p-4 bg-amber-50 border-amber-200">
+          <div className="text-sm font-semibold text-amber-900 mb-2">📅 L'officina propone una data alternativa</div>
+          {appAttivo.nota_officina && (
+            <div className="text-xs text-amber-800 mb-2 italic">"{appAttivo.nota_officina}"</div>
+          )}
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex-1 bg-white rounded-lg p-2 text-center border border-amber-200">
+              <div className="text-xs text-gray-400">Richiesto</div>
+              <div className="text-sm font-semibold text-gray-500 line-through">
+                {fmtData(appAttivo.data_ora)} {fmtOra(appAttivo.data_ora)}
+              </div>
+            </div>
+            <div className="text-gray-400">→</div>
+            <div className="flex-1 bg-white rounded-lg p-2 text-center border border-amber-300">
+              <div className="text-xs text-amber-600">Proposta</div>
+              <div className="text-sm font-bold text-amber-900">
+                {fmtData(appAttivo.data_proposta)} {fmtOra(appAttivo.data_proposta)}
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="success" fullWidth onClick={accettaProposta}>
+              Accetto la proposta
+            </Button>
+            <Button variant="secondary" fullWidth onClick={rifiutaProposta}>
+              No, grazie
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Progress — only show when not in richiesta */}
+      {appAttivo.stato !== 'richiesta' && (
+        <Card className="!p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-gray-500">Stato</span>
+            <Badge color={STATO_CONFIG[appAttivo.stato].color} bg={STATO_CONFIG[appAttivo.stato].bg}>
+              {STATO_CONFIG[appAttivo.stato].icon} {STATO_CONFIG[appAttivo.stato].label}
+            </Badge>
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-3">
+            <div
+              className="h-full bg-blue-600 rounded-full transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+
+          {/* Steps — skip 'richiesta' in progress display */}
+          <div className="flex justify-between">
+            {STATI_ORDINE.filter(s => s !== 'richiesta').map((stato, i) => {
+              const cfg = STATO_CONFIG[stato];
+              const realIdx = STATI_ORDINE.indexOf(appAttivo.stato);
+              const stIdx = STATI_ORDINE.indexOf(stato);
+              const done = stIdx <= realIdx;
+              const active = stato === appAttivo.stato;
+              return (
+                <div key={stato} className="flex flex-col items-center">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${
+                    active ? 'bg-blue-600 text-white ring-2 ring-blue-200' :
+                    done ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'
+                  }`}>
+                    {done ? '✓' : i + 1}
+                  </div>
+                  <span className={`text-[9px] mt-1 ${active ? 'text-blue-600 font-semibold' : 'text-gray-400'}`}>
+                    {cfg.label.split(' ')[0]}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* Problem */}
       <Card className="!p-3">

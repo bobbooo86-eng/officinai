@@ -51,25 +51,54 @@ export function Dashboard({ onSelectAppuntamento }: { onSelectAppuntamento: (a: 
 
   const oggi = new Date().toISOString().slice(0, 10);
   const appOggi = appuntamenti.filter((a) => a.data_ora?.startsWith(oggi));
+  const richieste = appuntamenti.filter((a) => a.stato === 'richiesta');
   const inCorso = appuntamenti.filter((a) => a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi');
   const pronti = appuntamenti.filter((a) => a.stato === 'pronto');
   const recenti = appuntamenti.slice(0, 8);
 
   return (
     <div className="p-4 space-y-4">
+      {/* Pending requests alert */}
+      {richieste.length > 0 && (
+        <Card className="!p-3 bg-purple-50 !border-purple-200">
+          <div className="text-xs font-semibold text-purple-700 mb-1">
+            🔔 Nuove richieste ({richieste.length})
+          </div>
+          <div className="space-y-1.5">
+            {richieste.slice(0, 3).map((r) => (
+              <button
+                key={r.id}
+                onClick={() => onSelectAppuntamento(r)}
+                className="w-full flex items-center justify-between text-left p-2 bg-white rounded-lg border border-purple-100 hover:border-purple-300 transition-colors cursor-pointer"
+              >
+                <div>
+                  <div className="text-xs font-medium text-gray-900">{r.clienti?.nome}</div>
+                  <div className="text-[10px] text-gray-500">{r.veicoli?.marca} {r.veicoli?.modello} — {r.problema?.slice(0, 40)}</div>
+                </div>
+                <div className="text-[10px] text-purple-600 font-medium">{fmtData(r.data_ora)} {fmtOra(r.data_ora)}</div>
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="text-center !p-4">
-          <div className="text-2xl font-bold text-blue-600">{appOggi.length}</div>
-          <div className="text-[11px] text-gray-500 mt-0.5">Oggi</div>
+      <div className="grid grid-cols-4 gap-2">
+        <Card className="text-center !p-3">
+          <div className="text-xl font-bold text-purple-600">{richieste.length}</div>
+          <div className="text-[10px] text-gray-500 mt-0.5">Richieste</div>
         </Card>
-        <Card className="text-center !p-4">
-          <div className="text-2xl font-bold text-amber-500">{inCorso.length}</div>
-          <div className="text-[11px] text-gray-500 mt-0.5">In Corso</div>
+        <Card className="text-center !p-3">
+          <div className="text-xl font-bold text-blue-600">{appOggi.length}</div>
+          <div className="text-[10px] text-gray-500 mt-0.5">Oggi</div>
         </Card>
-        <Card className="text-center !p-4">
-          <div className="text-2xl font-bold text-emerald-500">{pronti.length}</div>
-          <div className="text-[11px] text-gray-500 mt-0.5">Pronti</div>
+        <Card className="text-center !p-3">
+          <div className="text-xl font-bold text-amber-500">{inCorso.length}</div>
+          <div className="text-[10px] text-gray-500 mt-0.5">In Corso</div>
+        </Card>
+        <Card className="text-center !p-3">
+          <div className="text-xl font-bold text-emerald-500">{pronti.length}</div>
+          <div className="text-[10px] text-gray-500 mt-0.5">Pronti</div>
         </Card>
       </div>
 

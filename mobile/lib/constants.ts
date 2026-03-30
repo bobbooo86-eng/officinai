@@ -1,5 +1,6 @@
 // ---- Appointment States ----
 export type AppuntamentoStato =
+  | 'richiesta'
   | 'prenotato'
   | 'in_diagnosi'
   | 'in_lavorazione'
@@ -10,6 +11,7 @@ export const STATO_CONFIG: Record<
   AppuntamentoStato,
   { label: string; color: string; bg: string; icon: string }
 > = {
+  richiesta: { label: 'Richiesta', color: '#8b5cf6', bg: '#ede9fe', icon: '🔔' },
   prenotato: { label: 'Prenotato', color: '#6b7280', bg: '#f3f4f6', icon: '📅' },
   in_diagnosi: { label: 'In Diagnosi', color: '#f59e0b', bg: '#fef3c7', icon: '🔍' },
   in_lavorazione: { label: 'In Lavorazione', color: '#3b82f6', bg: '#dbeafe', icon: '🔧' },
@@ -18,6 +20,7 @@ export const STATO_CONFIG: Record<
 };
 
 export const STATI_ORDINE: AppuntamentoStato[] = [
+  'richiesta',
   'prenotato',
   'in_diagnosi',
   'in_lavorazione',

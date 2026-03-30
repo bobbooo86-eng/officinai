@@ -61,7 +61,7 @@ export function BookingPage() {
       cliente_id: cliente.id,
       veicolo_id: selectedVeicolo,
       data_ora: `${data}T${ora}:00`,
-      stato: 'prenotato',
+      stato: 'richiesta',
       priorita,
       problema: problema.trim(),
     });
@@ -75,18 +75,18 @@ export function BookingPage() {
   if (success) {
     return (
       <div className="p-4 text-center py-16">
-        <div className="text-5xl mb-4">✅</div>
-        <h2 className="text-xl font-bold text-gray-900">Prenotazione confermata!</h2>
+        <div className="text-5xl mb-4">📩</div>
+        <h2 className="text-xl font-bold text-gray-900">Richiesta inviata!</h2>
         <p className="text-sm text-gray-500 mt-2">
-          Appuntamento per il {data} alle {ora}
+          Richiesta per il {data} alle {ora}
         </p>
-        <p className="text-xs text-gray-400 mt-1">Riceverai una conferma dall'officina</p>
+        <p className="text-xs text-gray-400 mt-1">L'officina valuterà la tua richiesta e ti confermerà l'appuntamento</p>
         <Button
           variant="secondary"
           className="mt-6"
           onClick={() => { setSuccess(false); setStep(1); setProblema(''); setData(''); }}
         >
-          Prenota un altro appuntamento
+          Invia un'altra richiesta
         </Button>
       </div>
     );
@@ -94,7 +94,7 @@ export function BookingPage() {
 
   return (
     <div className="p-4 space-y-4">
-      <h2 className="text-lg font-bold text-gray-900">Prenota appuntamento</h2>
+      <h2 className="text-lg font-bold text-gray-900">Richiedi appuntamento</h2>
 
       {/* Progress steps */}
       <div className="flex items-center justify-between mb-2">
@@ -251,7 +251,7 @@ export function BookingPage() {
               disabled={!problema.trim()}
               fullWidth
             >
-              Conferma prenotazione
+              Invia richiesta
             </Button>
           </div>
         </div>
