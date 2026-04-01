@@ -250,6 +250,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
   const [annual, setAnnual] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -287,6 +288,30 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         .gradient-text { background:linear-gradient(135deg, #1a56db 0%, #7c3aed 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
         .hero-glow { background:radial-gradient(ellipse 80% 50% at 50% -20%, rgba(26,86,219,0.3), transparent); }
       `}</style>
+
+      {/* ── VIDEO DEMO MODAL ── */}
+      {showDemo && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setShowDemo(false)}>
+          <div className="relative w-full max-w-4xl mx-4" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setShowDemo(false)}
+              className="absolute -top-12 right-0 text-white text-lg font-bold hover:text-gray-300 transition-colors cursor-pointer flex items-center gap-2"
+            >
+              Chiudi ✕
+            </button>
+            <div className="relative w-full rounded-2xl overflow-hidden shadow-2xl bg-gray-900" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                className="absolute inset-0 w-full h-full"
+                src="https://www.youtube.com/embed/DEMO_VIDEO_ID?autoplay=1&rel=0"
+                title="OfficinAI Demo"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+            <p className="text-center text-gray-400 text-sm mt-4">OfficinAI — La tua officina gestita dall'AI</p>
+          </div>
+        </div>
+      )}
 
       {/* ── NAVBAR ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-gray-950/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-800/60">
@@ -384,7 +409,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
                 <span className="ml-2 group-hover:translate-x-1 inline-block transition-transform">→</span>
               </button>
               <button
-                onClick={onEnter}
+                onClick={() => setShowDemo(true)}
                 className="px-8 py-4 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white font-bold text-lg rounded-2xl hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-95 transition-all cursor-pointer"
               >
                 🎬 Guarda la demo (2 min)
