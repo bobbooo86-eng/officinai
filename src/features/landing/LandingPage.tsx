@@ -311,6 +311,15 @@ export function LandingPage({ onEnter }: LandingPageProps) {
     },
   ];
 
+  // Auto-advance demo slides every 4 seconds
+  useEffect(() => {
+    if (!showDemo) return;
+    const timer = setInterval(() => {
+      setDemoSlide((prev) => (prev < demoSlides.length - 1 ? prev + 1 : 0));
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [showDemo, demoSlide]);
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -347,6 +356,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         .gradient-text { background:linear-gradient(135deg, #1a56db 0%, #7c3aed 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
         .hero-glow { background:radial-gradient(ellipse 80% 50% at 50% -20%, rgba(26,86,219,0.3), transparent); }
         @keyframes barGrow { from { width:0% } to { width:var(--bar-width) } }
+        @keyframes progressBar { from { width:0% } to { width:100% } }
       `}</style>
 
       {/* ── INTERACTIVE DEMO MODAL ── */}
@@ -375,8 +385,16 @@ export function LandingPage({ onEnter }: LandingPageProps) {
                 </div>
                 <span className="text-white/50 text-xs">{demoSlide + 1}/{demoSlides.length}</span>
               </div>
-              {/* Content */}
-              <div className="px-6 sm:px-10 py-8 sm:py-10">
+              {/* Progress bar auto-advance */}
+              <div className="h-0.5 bg-white/10">
+                <div
+                  key={`progress-${demoSlide}`}
+                  className="h-full bg-white/50"
+                  style={{ width: '0%', animation: 'progressBar 4s linear forwards' }}
+                />
+              </div>
+              {/* Content — key forces re-mount on slide change so animations replay */}
+              <div key={demoSlide} className="px-6 sm:px-10 py-8 sm:py-10">
                 <div className="text-white/60 text-xs font-bold uppercase tracking-widest mb-2">Demo interattiva</div>
                 <h3 className="text-2xl sm:text-3xl font-extrabold text-white mb-3">{demoSlides[demoSlide].title}</h3>
                 <p className="text-white/70 text-sm mb-8 max-w-md">{demoSlides[demoSlide].desc}</p>
