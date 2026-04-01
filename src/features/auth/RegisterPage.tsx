@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { getProvinceList, getComuniByProvincia } from '@/lib/provinceItaliane';
 
 interface RegisterPageProps {
   onGoLogin: () => void;
@@ -62,12 +63,16 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
     return null;
   };
 
+  const provinceList = useMemo(() => getProvinceList(), []);
+  const comuniList = useMemo(() => getComuniByProvincia(provincia), [provincia]);
+
   const validateStep3 = () => {
     if (!nomeOfficina.trim()) return 'Inserisci il nome dell\'officina';
-    if (!pIva.trim() || pIva.length < 11) return 'Inserisci una Partita IVA valida (11 cifre)';
+    if (pIva && pIva.length !== 11) return 'La Partita IVA deve avere 11 cifre (oppure lascia vuoto)';
     if (!tipoOfficina) return 'Seleziona il tipo di officina';
     if (!indirizzo.trim()) return 'Inserisci l\'indirizzo';
-    if (!citta.trim()) return 'Inserisci la città';
+    if (!provincia) return 'Seleziona la provincia';
+    if (!citta) return 'Seleziona il comune';
     return null;
   };
 
@@ -300,14 +305,14 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Partita IVA *</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Partita IVA <span className="text-gray-400 font-normal">(opzionale)</span></label>
                 <input
                   type="text" value={pIva} onChange={e => setPIva(e.target.value.replace(/\D/g, '').slice(0, 11))}
                   placeholder="12345678901"
                   maxLength={11}
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 />
-                <p className="text-xs text-gray-400 mt-1">{pIva.length}/11 cifre</p>
+                {pIva && <p className="text-xs text-gray-400 mt-1">{pIva.length}/11 cifre</p>}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Tipo officina *</label>
@@ -315,7 +320,7 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
                   value={tipoOfficina} onChange={e => setTipoOfficina(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 >
-                  <option value="">Seleziona...</option>
+                  <option value="">Seleziona tipo...</option>
                   {tipiOfficina.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
@@ -327,33 +332,39 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 />
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">CAP</label>
-                  <input
-                    type="text" value={cap} onChange={e => setCap(e.target.value.replace(/\D/g, '').slice(0, 5))}
-                    placeholder="20100"
-                    maxLength={5}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Provincia *</label>
+                  <select
+                    value={provincia}
+                    onChange={e => { setProvincia(e.target.value); setCitta(''); setCap(''); }}
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                  />
+                  >
+                    <option value="">Seleziona provincia...</option>
+                    {provinceList.map(p => <option key={p.sigla} value={p.sigla}>{p.label}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Città *</label>
-                  <input
-                    type="text" value={citta} onChange={e => setCitta(e.target.value)}
-                    placeholder="Milano"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                  />
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Comune *</label>
+                  <select
+                    value={citta}
+                    onChange={e => setCitta(e.target.value)}
+                    disabled={!provincia}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:opacity-50"
+                  >
+                    <option value="">{provincia ? 'Seleziona comune...' : 'Prima seleziona la provincia'}</option>
+                    {comuniList.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Prov.</label>
-                  <input
-                    type="text" value={provincia} onChange={e => setProvincia(e.target.value.toUpperCase().slice(0, 2))}
-                    placeholder="MI"
-                    maxLength={2}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                  />
-                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">CAP <span className="text-gray-400 font-normal">(opzionale)</span></label>
+                <input
+                  type="text" value={cap} onChange={e => setCap(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                  placeholder="20100"
+                  maxLength={5}
+                  className="w-full px-3 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all max-w-[140px]"
+                />
               </div>
             </div>
           )}
@@ -377,8 +388,8 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
                 <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4">
                   <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Officina</div>
                   <div className="text-sm text-gray-900 dark:text-white font-medium">{nomeOfficina}</div>
-                  <div className="text-xs text-gray-500">P.IVA: {pIva} · {tipoOfficina}</div>
-                  <div className="text-xs text-gray-500">{indirizzo}, {cap} {citta} ({provincia})</div>
+                  <div className="text-xs text-gray-500">{pIva ? `P.IVA: ${pIva} · ` : ''}{tipoOfficina}</div>
+                  <div className="text-xs text-gray-500">{indirizzo}, {cap ? cap + ' ' : ''}{citta} ({provincia})</div>
                 </div>
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-xl p-4">
                   <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Il tuo piano</div>
