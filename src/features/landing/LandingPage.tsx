@@ -251,6 +251,65 @@ export function LandingPage({ onEnter }: LandingPageProps) {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
+  const [demoSlide, setDemoSlide] = useState(0);
+
+  const demoSlides = [
+    {
+      title: 'Dashboard principale',
+      desc: 'Tutto sotto controllo in un colpo d\'occhio: appuntamenti, veicoli in lavorazione, incassi e messaggi.',
+      color: 'from-blue-600 to-blue-800',
+      mockup: [
+        { label: '📅 Oggi', value: '12 appuntamenti', bar: 75 },
+        { label: '🔧 In lavorazione', value: '8 veicoli', bar: 55 },
+        { label: '✅ Completati', value: '5 oggi', bar: 40 },
+        { label: '💶 Incassato', value: '€2.340', bar: 65 },
+      ],
+    },
+    {
+      title: 'Prenota in 10 secondi',
+      desc: 'Il cliente prenota dal telefono. Tu ricevi la notifica. Zero telefonate.',
+      color: 'from-purple-600 to-purple-800',
+      mockup: [
+        { label: '👤 Mario Rossi', value: 'Fiat 500 — AB123CD', bar: 100 },
+        { label: '📅 Servizio', value: 'Tagliando completo', bar: 80 },
+        { label: '🕐 Data', value: 'Domani ore 09:00', bar: 60 },
+        { label: '✅ Stato', value: 'Confermato automaticamente', bar: 100 },
+      ],
+    },
+    {
+      title: 'AI Diagnostica OBD2',
+      desc: 'Scansione codici errore con intelligenza artificiale. Diagnosi e preventivo automatici.',
+      color: 'from-green-600 to-emerald-800',
+      mockup: [
+        { label: '⚠️ P0300', value: 'Misfiring — cilindri irregolari', bar: 90 },
+        { label: '🧠 AI Causa', value: 'Candele o bobine usurate', bar: 75 },
+        { label: '🧾 Preventivo', value: '€185 (ricambi + manodopera)', bar: 60 },
+        { label: '✍️ Cliente', value: 'Approvato con firma digitale', bar: 100 },
+      ],
+    },
+    {
+      title: 'Chat & Foto in tempo reale',
+      desc: 'Il cliente vede lo stato del veicolo, riceve foto e aggiornamenti. Zero chiamate.',
+      color: 'from-amber-500 to-orange-700',
+      mockup: [
+        { label: '📸 Foto inviate', value: '4 foto intervento', bar: 80 },
+        { label: '💬 Messaggio', value: '"Freni sostituiti, quasi pronto"', bar: 70 },
+        { label: '🔔 Notifica', value: 'Push inviata al cliente', bar: 100 },
+        { label: '⭐ Recensione', value: '5 stelle ricevute!', bar: 100 },
+      ],
+    },
+    {
+      title: 'Fattura elettronica in 1 click',
+      desc: 'Genera e invia la fattura elettronica SDI direttamente all\'Agenzia delle Entrate.',
+      color: 'from-rose-600 to-pink-800',
+      mockup: [
+        { label: '🧾 Fattura', value: 'FE-2026-00147', bar: 100 },
+        { label: '💰 Importo', value: '€185 + IVA = €225,70', bar: 80 },
+        { label: '📤 Invio SDI', value: 'Inviata automaticamente', bar: 100 },
+        { label: '✅ Esito', value: 'Consegnata — confermata', bar: 100 },
+      ],
+    },
+  ];
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -287,28 +346,98 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         .hover-lift:hover { transform:translateY(-6px); box-shadow:0 20px 48px rgba(0,0,0,0.12); }
         .gradient-text { background:linear-gradient(135deg, #1a56db 0%, #7c3aed 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
         .hero-glow { background:radial-gradient(ellipse 80% 50% at 50% -20%, rgba(26,86,219,0.3), transparent); }
+        @keyframes barGrow { from { width:0% } to { width:var(--bar-width) } }
       `}</style>
 
-      {/* ── VIDEO DEMO MODAL ── */}
+      {/* ── INTERACTIVE DEMO MODAL ── */}
       {showDemo && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setShowDemo(false)}>
-          <div className="relative w-full max-w-4xl mx-4" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm" onClick={() => { setShowDemo(false); setDemoSlide(0); }}>
+          <div className="relative w-full max-w-3xl mx-4" onClick={(e) => e.stopPropagation()}>
+            {/* Close */}
             <button
-              onClick={() => setShowDemo(false)}
-              className="absolute -top-12 right-0 text-white text-lg font-bold hover:text-gray-300 transition-colors cursor-pointer flex items-center gap-2"
+              onClick={() => { setShowDemo(false); setDemoSlide(0); }}
+              className="absolute -top-12 right-0 text-white/70 text-sm font-bold hover:text-white transition-colors cursor-pointer flex items-center gap-2 z-10"
             >
               Chiudi ✕
             </button>
-            <div className="relative w-full rounded-2xl overflow-hidden shadow-2xl bg-gray-900" style={{ paddingBottom: '56.25%' }}>
-              <iframe
-                className="absolute inset-0 w-full h-full"
-                src="https://www.youtube.com/embed/DEMO_VIDEO_ID?autoplay=1&rel=0"
-                title="OfficinAI Demo"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
+            {/* Demo screen */}
+            <div className={`rounded-2xl overflow-hidden shadow-2xl bg-gradient-to-br ${demoSlides[demoSlide].color} transition-all duration-500`}>
+              {/* Top bar */}
+              <div className="flex items-center justify-between px-6 py-4 bg-black/20">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-white/20 rounded-lg flex items-center justify-center text-sm">🔧</div>
+                  <span className="text-white font-bold text-sm">OfficinAI</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {demoSlides.map((_, i) => (
+                    <button key={i} onClick={() => setDemoSlide(i)} className={`w-2 h-2 rounded-full transition-all cursor-pointer ${i === demoSlide ? 'bg-white w-6' : 'bg-white/30 hover:bg-white/50'}`} />
+                  ))}
+                </div>
+                <span className="text-white/50 text-xs">{demoSlide + 1}/{demoSlides.length}</span>
+              </div>
+              {/* Content */}
+              <div className="px-6 sm:px-10 py-8 sm:py-10">
+                <div className="text-white/60 text-xs font-bold uppercase tracking-widest mb-2">Demo interattiva</div>
+                <h3 className="text-2xl sm:text-3xl font-extrabold text-white mb-3">{demoSlides[demoSlide].title}</h3>
+                <p className="text-white/70 text-sm mb-8 max-w-md">{demoSlides[demoSlide].desc}</p>
+                {/* Mockup cards */}
+                <div className="space-y-3">
+                  {demoSlides[demoSlide].mockup.map((item, i) => (
+                    <div
+                      key={item.label}
+                      className="bg-white/10 backdrop-blur-sm rounded-xl p-4 flex items-center gap-4"
+                      style={{
+                        opacity: 0,
+                        transform: 'translateX(-20px)',
+                        animation: `fadeInUp 0.4s ease ${i * 150}ms forwards`,
+                      }}
+                    >
+                      <span className="text-lg shrink-0">{item.label.slice(0, 2)}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white text-sm font-semibold">{item.label.slice(2).trim()}</div>
+                        <div className="text-white/60 text-xs">{item.value}</div>
+                        <div className="mt-1.5 h-1 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-white/40 rounded-full"
+                            style={{
+                              width: '0%',
+                              animation: `barGrow 0.8s ease ${i * 150 + 300}ms forwards`,
+                              ['--bar-width' as string]: `${item.bar}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Navigation */}
+              <div className="flex items-center justify-between px-6 sm:px-10 py-5 bg-black/20">
+                <button
+                  onClick={() => setDemoSlide(Math.max(0, demoSlide - 1))}
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${demoSlide === 0 ? 'text-white/20' : 'text-white bg-white/10 hover:bg-white/20'}`}
+                  disabled={demoSlide === 0}
+                >
+                  ← Indietro
+                </button>
+                <div className="text-white/40 text-xs hidden sm:block">Clicca le frecce o i punti per navigare</div>
+                {demoSlide < demoSlides.length - 1 ? (
+                  <button
+                    onClick={() => setDemoSlide(demoSlide + 1)}
+                    className="px-5 py-2 bg-white text-gray-900 rounded-xl text-sm font-bold hover:bg-gray-100 active:scale-95 transition-all cursor-pointer"
+                  >
+                    Avanti →
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setShowDemo(false); setDemoSlide(0); onEnter(); }}
+                    className="px-5 py-2 bg-white text-gray-900 rounded-xl text-sm font-bold hover:bg-gray-100 active:scale-95 transition-all cursor-pointer"
+                  >
+                    Prova gratis →
+                  </button>
+                )}
+              </div>
             </div>
-            <p className="text-center text-gray-400 text-sm mt-4">OfficinAI — La tua officina gestita dall'AI</p>
           </div>
         </div>
       )}
