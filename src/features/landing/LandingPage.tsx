@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 interface LandingPageProps {
   onEnter: () => void;
+  onLogin?: () => void;
 }
 
 const features = [
@@ -246,7 +247,7 @@ function AnimatedSection({ children, className = '', delay = 0 }: { children: Re
   );
 }
 
-export function LandingPage({ onEnter }: LandingPageProps) {
+export function LandingPage({ onEnter, onLogin }: LandingPageProps) {
   const [annual, setAnnual] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -533,7 +534,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           </div>
           {/* CTA */}
           <div className="hidden md:flex items-center gap-3">
-            <button onClick={onEnter} className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-blue-600 transition-colors cursor-pointer">
+            <button onClick={onLogin || onEnter} className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-blue-600 transition-colors cursor-pointer">
               Accedi
             </button>
             <button onClick={onEnter} className="px-5 py-2 text-sm font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 active:scale-95 transition-all shadow-sm shadow-blue-600/30 cursor-pointer">
@@ -554,7 +555,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
               <a key={href} href={href} className="block py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 transition-colors">{label}</a>
             ))}
             <div className="pt-3 flex flex-col gap-2">
-              <button onClick={onEnter} className="w-full py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer">Accedi</button>
+              <button onClick={onLogin || onEnter} className="w-full py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer">Accedi</button>
               <button onClick={onEnter} className="w-full py-2.5 text-sm font-bold bg-blue-600 text-white rounded-xl cursor-pointer">Inizia gratis →</button>
             </div>
           </div>

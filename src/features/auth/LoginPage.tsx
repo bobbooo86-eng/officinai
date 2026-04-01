@@ -3,7 +3,12 @@ import { Button, Input } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
 import { validateEmail, validatePassword, useFormValidation } from '@/lib/validation';
 
-export function LoginPage() {
+interface LoginPageProps {
+  onGoRegister?: () => void;
+  onGoLanding?: () => void;
+}
+
+export function LoginPage({ onGoRegister, onGoLanding }: LoginPageProps = {}) {
   const [tipo, setTipo] = useState<'officina' | 'cliente' | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -181,6 +186,25 @@ export function LoginPage() {
                 )}
               </div>
             </>
+          )}
+        </div>
+
+        {/* Register / Back links */}
+        <div className="text-center mt-6 space-y-2">
+          {onGoRegister && (
+            <div>
+              <span className="text-sm text-gray-500">Non hai un account? </span>
+              <button onClick={onGoRegister} className="text-sm font-semibold text-blue-600 hover:text-blue-700 cursor-pointer">
+                Registrati gratis →
+              </button>
+            </div>
+          )}
+          {onGoLanding && (
+            <div>
+              <button onClick={onGoLanding} className="text-sm text-gray-400 hover:text-gray-600 cursor-pointer">
+                ← Torna al sito
+              </button>
+            </div>
           )}
         </div>
       </div>
