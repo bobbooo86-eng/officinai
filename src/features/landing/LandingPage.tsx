@@ -309,6 +309,61 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         { label: '✅ Esito', value: 'Consegnata — confermata', bar: 100 },
       ],
     },
+    {
+      title: 'Accettazione veicolo',
+      desc: 'Il cliente arriva in officina. Registri il veicolo, lo stato, i km e firmi il foglio di accettazione — tutto digitale.',
+      color: 'from-teal-600 to-cyan-800',
+      mockup: [
+        { label: '🚗 Veicolo', value: 'BMW 320d — XY456GH — 87.320 km', bar: 100 },
+        { label: '📋 Checklist', value: 'Graffi portiera dx, livello olio OK', bar: 70 },
+        { label: '📸 Foto stato', value: '6 foto scattate (prima)', bar: 85 },
+        { label: '✍️ Firma cliente', value: 'Accettazione firmata digitalmente', bar: 100 },
+      ],
+    },
+    {
+      title: 'Gestione team e meccanici',
+      desc: 'Assegna i lavori al tuo team. Ogni meccanico vede la sua agenda e i lavori assegnati.',
+      color: 'from-indigo-600 to-violet-800',
+      mockup: [
+        { label: '👨‍🔧 Marco', value: '3 lavori oggi — Tagliando, Freni, Gomme', bar: 75 },
+        { label: '👩‍🔧 Sara', value: '2 lavori oggi — Diagnosi, Carrozzeria', bar: 50 },
+        { label: '🧑‍🔧 Luca', value: '4 lavori oggi — pieno carico', bar: 100 },
+        { label: '📊 Capacità', value: '85% — 1 slot ancora libero', bar: 85 },
+      ],
+    },
+    {
+      title: 'Storico veicolo completo',
+      desc: 'Cerca per targa: trovi tutti gli interventi, preventivi, foto e fatture di quel veicolo. Per sempre.',
+      color: 'from-sky-600 to-blue-900',
+      mockup: [
+        { label: '🔍 Targa', value: 'AB123CD — Fiat 500 (Mario Rossi)', bar: 100 },
+        { label: '📜 Interventi', value: '12 interventi dal 2023', bar: 80 },
+        { label: '🧾 Fatture', value: '€3.240 fatturato totale', bar: 65 },
+        { label: '📸 Archivio', value: '47 foto salvate', bar: 55 },
+      ],
+    },
+    {
+      title: 'Magazzino e ricambi',
+      desc: 'Gestisci le scorte dei ricambi. Allarme automatico quando un pezzo sta per finire.',
+      color: 'from-orange-600 to-red-800',
+      mockup: [
+        { label: '📦 Filtro olio', value: '23 pezzi — scorta OK', bar: 70 },
+        { label: '⚠️ Pastiglie freno', value: '2 pezzi — riordina!', bar: 10 },
+        { label: '🔧 Candele NGK', value: '15 pezzi — scorta OK', bar: 50 },
+        { label: '📉 Ordine auto', value: 'Inviato al fornitore Rhiag', bar: 100 },
+      ],
+    },
+    {
+      title: 'Analytics e report',
+      desc: 'Quanto guadagni? Quanti clienti tornano? Quanto lavora ogni meccanico? Tutto in un grafico.',
+      color: 'from-emerald-600 to-green-900',
+      mockup: [
+        { label: '💶 Fatturato mese', value: '€18.450 (+12% vs mese scorso)', bar: 88 },
+        { label: '👥 Clienti nuovi', value: '14 questo mese', bar: 60 },
+        { label: '🔁 Clienti tornati', value: '68% tasso di ritorno', bar: 68 },
+        { label: '⏱️ Tempo medio', value: '1.8h per intervento (-20%)', bar: 45 },
+      ],
+    },
   ];
 
   // Auto-advance demo slides every 4 seconds
