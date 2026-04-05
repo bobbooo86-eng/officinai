@@ -217,8 +217,13 @@ export function CalendarView({ onSelect }: CalendarViewProps) {
                             <span className="text-[10px]">{stato.icon}</span>
                           </div>
                           <div className="text-[10px] text-gray-500 mt-0.5">
-                            {app.veicoli?.marca} {app.veicoli?.modello}
+                            {app.veicoli?.marca} {app.veicoli?.modello} {app.veicoli?.targa && `• ${app.veicoli.targa}`}
                           </div>
+                          {app.problema && (
+                            <div className="text-[11px] text-gray-700 mt-1 font-medium line-clamp-2">
+                              🔧 {app.problema}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -246,13 +251,20 @@ export function CalendarView({ onSelect }: CalendarViewProps) {
                   const stato = STATO_CONFIG[app.stato];
                   return (
                     <Card key={app.id} hover className="!p-2 mb-1" onClick={() => onSelect(app)}>
-                      <div className="flex items-center gap-2">
-                        <div className="text-xs text-gray-500 w-10">{fmtOra(app.data_ora)}</div>
+                      <div className="flex items-start gap-2">
+                        <div className="text-xs text-gray-500 w-10 shrink-0 pt-0.5">{fmtOra(app.data_ora)}</div>
                         <div className="flex-1 min-w-0">
-                          <span className="text-xs font-medium text-gray-900">{app.clienti?.nome}</span>
-                          <span className="text-[10px] text-gray-400 ml-1">
-                            {app.veicoli?.marca} {app.veicoli?.modello}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-medium text-gray-900">{app.clienti?.nome}</span>
+                            <span className="text-[10px] text-gray-400">
+                              {app.veicoli?.marca} {app.veicoli?.modello}
+                            </span>
+                          </div>
+                          {app.problema && (
+                            <div className="text-[11px] text-gray-600 mt-0.5 line-clamp-1">
+                              🔧 {app.problema}
+                            </div>
+                          )}
                         </div>
                         <Badge color={stato.color} bg={stato.bg}>
                           {stato.icon}
