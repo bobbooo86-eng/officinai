@@ -20,7 +20,7 @@ const PreventiviPage = lazy(() => import('@/features/estimates/PreventiviPage').
 
 const TABS = [
   { id: 'home', label: 'Home', icon: '🏠' },
-  { id: 'agenda', label: 'Agenda', icon: '📅' },
+  { id: 'agenda', label: 'Appuntamenti', icon: '📅' },
   { id: 'preventivi', label: 'Preventivi', icon: '💰' },
   { id: 'clienti', label: 'Clienti', icon: '👥' },
   { id: 'altro', label: 'Altro', icon: '⚙️' },
