@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { useAuthStore } from '@/stores/authStore';
 import '@/stores/themeStore'; // Initialize theme on app load
 import { LoginPage } from '@/features/auth/LoginPage';
@@ -29,39 +31,49 @@ export default function App() {
     initialize();
   }, [initialize]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <Loader size="lg" text="Caricamento OfficinAI..." />
-      </div>
-    );
-  }
-
-  // If user is authenticated, show the app
-  if (userType === 'officina') {
-    if (needsOnboarding) {
-      return <OnboardingWizard onComplete={handleOnboardingComplete} />;
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+          <Loader size="lg" text="Caricamento OfficinAI..." />
+        </div>
+      );
     }
-    return <AppOfficina />;
-  }
 
-  if (userType === 'cliente') {
-    return <AppCliente />;
-  }
+    // If user is authenticated, show the app
+    if (userType === 'officina') {
+      if (needsOnboarding) {
+        return <OnboardingWizard onComplete={handleOnboardingComplete} />;
+      }
+      return <AppOfficina />;
+    }
 
-  // Not authenticated — show landing, login or register
-  if (page === 'landing') {
-    return (
-      <LandingPage
-        onEnter={() => setPage('register')}
-        onLogin={() => setPage('login')}
-      />
-    );
-  }
+    if (userType === 'cliente') {
+      return <AppCliente />;
+    }
 
-  if (page === 'register') {
-    return <RegisterPage onGoLogin={() => setPage('login')} />;
-  }
+    // Not authenticated — show landing, login or register
+    if (page === 'landing') {
+      return (
+        <LandingPage
+          onEnter={() => setPage('register')}
+          onLogin={() => setPage('login')}
+        />
+      );
+    }
 
-  return <LoginPage onGoRegister={() => setPage('register')} onGoLanding={() => setPage('landing')} />;
+    if (page === 'register') {
+      return <RegisterPage onGoLogin={() => setPage('login')} />;
+    }
+
+    return <LoginPage onGoRegister={() => setPage('register')} onGoLanding={() => setPage('landing')} />;
+  };
+
+  return (
+    <>
+      {renderContent()}
+      <Analytics />
+      <SpeedInsights />
+    </>
+  );
 }
