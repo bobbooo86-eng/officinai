@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { getProvinceList, getComuniByProvincia } from '@/lib/provinceItaliane';
+import { useHistoryState } from '@/lib/useHistoryState';
 
 interface RegisterPageProps {
   onGoLogin: () => void;
@@ -22,7 +23,7 @@ const tipiOfficina = [
 
 export function RegisterPage({ onGoLogin }: RegisterPageProps) {
   const { initialize } = useAuthStore();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useHistoryState('register-step', 1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);

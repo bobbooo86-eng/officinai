@@ -6,6 +6,7 @@ import { AppointmentDetail } from '@/features/appointments/AppointmentDetail';
 import { CalendarView } from '@/features/appointments/CalendarView';
 import { CustomersPage } from '@/features/appointments/CustomersPage';
 import { PageSkeleton } from '@/components/ui/PageSkeleton';
+import { useHistoryState } from '@/lib/useHistoryState';
 import type { Appuntamento } from '@/types/database';
 
 const AnalyticsPage = lazy(() => import('./AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
@@ -27,7 +28,7 @@ const TABS = [
 ];
 
 export function AppOfficina() {
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useHistoryState('officina-tab', 'home');
   const [selectedApp, setSelectedApp] = useState<Appuntamento | null>(null);
   const [subPage, setSubPage] = useState<'calendario' | 'magazzino' | 'analytics' | 'fatture' | 'abbonamento' | 'impostazioni' | 'obd' | 'guida' | null>(null);
   const [agendaFiltro, setAgendaFiltro] = useState<string | undefined>(undefined);

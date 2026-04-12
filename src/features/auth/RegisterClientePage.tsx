@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { useHistoryState } from '@/lib/useHistoryState';
 
 interface RegisterClientePageProps {
   onGoLogin: () => void;
@@ -14,7 +15,7 @@ interface OfficinaResult {
 
 export function RegisterClientePage({ onGoLogin }: RegisterClientePageProps) {
   const { initialize } = useAuthStore();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useHistoryState('register-cliente-step', 1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);

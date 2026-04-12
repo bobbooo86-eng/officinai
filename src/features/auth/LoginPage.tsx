@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Button, Input } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
 import { validateEmail, validatePassword, useFormValidation } from '@/lib/validation';
+import { useHistoryState } from '@/lib/useHistoryState';
 
 interface LoginPageProps {
   onGoRegister?: () => void;
@@ -10,7 +11,7 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ onGoRegister, onGoRegisterCliente, onGoLanding }: LoginPageProps = {}) {
-  const [tipo, setTipo] = useState<'officina' | 'cliente' | null>(null);
+  const [tipo, setTipo] = useHistoryState<'officina' | 'cliente' | null>('login-tipo', null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
