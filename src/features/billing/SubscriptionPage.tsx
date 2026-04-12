@@ -656,7 +656,7 @@ export function SubscriptionPage() {
       {/* Footer note */}
       <div className="text-center text-xs text-gray-400 pt-2">
         <p>I pagamenti sono gestiti in modo sicuro tramite Stripe.</p>
-        <p className="mt-1">Per assistenza scrivi a supporto@officinai.it</p>
+        <p className="mt-1">Per assistenza scrivi a <a href="mailto:supporto@myofficinai.it" className="text-blue-500 hover:underline">supporto@myofficinai.it</a></p>
       </div>
     </div>
   );
