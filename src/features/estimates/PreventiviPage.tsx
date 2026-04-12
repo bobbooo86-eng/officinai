@@ -1557,12 +1557,20 @@ interface PreventivoListItem {
   veicolo_desc?: string;
 }
 
-export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar }: { onSelectAppuntamento?: (app: any) => void; onNavigateToCalendar?: (date: Date) => void }) {
+export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, externalSearch }: { onSelectAppuntamento?: (app: any) => void; onNavigateToCalendar?: (date: Date) => void; externalSearch?: string }) {
   const { officina } = useAuthStore();
   const [view, setView] = useState<'list' | 'new'>('list');
   const [preventivi, setPreventivi] = useState<PreventivoListItem[]>([]);
   const [loadingList, setLoadingList] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(externalSearch || '');
+
+  // Update search when external search changes (from global search)
+  useEffect(() => {
+    if (externalSearch) {
+      setSearchQuery(externalSearch);
+      setView('list');
+    }
+  }, [externalSearch]);
 
   // Fetch preventivi with joined data
   useEffect(() => {

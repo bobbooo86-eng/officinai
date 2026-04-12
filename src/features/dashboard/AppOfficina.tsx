@@ -37,6 +37,7 @@ export function AppOfficina() {
   const [agendaView, setAgendaView] = useState<'calendario' | 'lista'>('calendario');
   const [showNewApp, setShowNewApp] = useState(false);
   const [calendarDate, setCalendarDate] = useState<Date | undefined>(undefined);
+  const [preventiviSearch, setPreventiviSearch] = useState<string>('');
 
   const handleSelectApp = (app: Appuntamento) => {
     setSelectedApp(app);
@@ -59,8 +60,17 @@ export function AppOfficina() {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
-  // Handle global search result selection — navigate to calendar on the appointment's date
+  // Handle global search result selection
   const handleSearchSelect = async (type: string, id: string) => {
+    // If we're on preventivi tab and searching a cliente, filter preventivi list
+    if (activeTab === 'preventivi' && type === 'cliente') {
+      const { data: cl } = await supabase.from('clienti').select('nome').eq('id', id).single();
+      if (cl) {
+        setPreventiviSearch(cl.nome);
+      }
+      return;
+    }
+
     let appData: any = null;
 
     if (type === 'appuntamento') {
@@ -89,7 +99,6 @@ export function AppOfficina() {
     }
 
     if (appData) {
-      // Navigate to calendar on the appointment's date
       setCalendarDate(new Date(appData.data_ora));
       setAgendaView('calendario');
       setActiveTab('agenda');
@@ -172,7 +181,7 @@ export function AppOfficina() {
           </div>
         )
       )}
-      {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} onNavigateToCalendar={(date) => { setCalendarDate(date); setAgendaView('calendario'); setActiveTab('agenda'); }} /></Suspense>}
+      {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} onNavigateToCalendar={(date) => { setCalendarDate(date); setAgendaView('calendario'); setActiveTab('agenda'); }} externalSearch={preventiviSearch} /></Suspense>}
       {activeTab === 'clienti' && <CustomersPage />}
       {activeTab === 'altro' && !subPage && (
         <div className="p-4 space-y-3">
