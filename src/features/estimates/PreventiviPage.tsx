@@ -1557,7 +1557,7 @@ interface PreventivoListItem {
   veicolo_desc?: string;
 }
 
-export function PreventiviPage() {
+export function PreventiviPage({ onSelectAppuntamento }: { onSelectAppuntamento?: (app: any) => void }) {
   const { officina } = useAuthStore();
   const [view, setView] = useState<'list' | 'new'>('list');
   const [preventivi, setPreventivi] = useState<PreventivoListItem[]>([]);
@@ -1696,7 +1696,14 @@ export function PreventiviPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((p) => (
-            <div key={p.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-all">
+            <div
+              key={p.id}
+              onClick={async () => {
+                if (!onSelectAppuntamento) return;
+                const { data } = await supabase.from('appuntamenti').select('*').eq('id', p.appuntamento_id).single();
+                if (data) onSelectAppuntamento(data);
+              }}
+              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer">
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <div className="font-bold text-gray-900 dark:text-white text-sm">{p.cliente_nome}</div>

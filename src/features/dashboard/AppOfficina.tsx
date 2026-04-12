@@ -71,27 +71,35 @@ export function AppOfficina() {
       )}
       {activeTab === 'agenda' && (
         <div>
-          {/* Toggle Calendario / Lista */}
-          <div className="px-4 pt-4 flex items-center gap-2">
+          {/* Toggle Calendario / Lista + Nuovo Appuntamento */}
+          <div className="px-4 pt-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setAgendaView('calendario')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+                  agendaView === 'calendario'
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                📆 Calendario
+              </button>
+              <button
+                onClick={() => setAgendaView('lista')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+                  agendaView === 'lista'
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                📋 Lista
+              </button>
+            </div>
             <button
-              onClick={() => setAgendaView('calendario')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-                agendaView === 'calendario'
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              onClick={() => { setAgendaFiltro('nuovo'); setAgendaView('lista'); }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-all active:scale-95 cursor-pointer"
             >
-              📆 Calendario
-            </button>
-            <button
-              onClick={() => setAgendaView('lista')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-                agendaView === 'lista'
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              📋 Lista
+              + Nuovo
             </button>
           </div>
           {agendaView === 'calendario' ? (
@@ -101,7 +109,7 @@ export function AppOfficina() {
           )}
         </div>
       )}
-      {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage /></Suspense>}
+      {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} /></Suspense>}
       {activeTab === 'clienti' && <CustomersPage />}
       {activeTab === 'altro' && !subPage && (
         <div className="p-4 space-y-3">
