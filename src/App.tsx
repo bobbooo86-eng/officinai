@@ -65,38 +65,38 @@ export default function App() {
 
     if (page === 'choose-register') {
       return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 flex items-start sm:items-center justify-center px-4 pt-12 sm:pt-4 pb-8">
           <div className="w-full max-w-md">
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg">
-                <span className="text-3xl">🔧</span>
+            <div className="text-center mb-4 sm:mb-8">
+              <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-blue-600 rounded-2xl mb-2 shadow-lg">
+                <span className="text-2xl sm:text-3xl">🔧</span>
               </div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Inizia gratis</h1>
-              <p className="text-gray-500 dark:text-gray-400 mt-2">Come vuoi registrarti?</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Inizia gratis</h1>
+              <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">Come vuoi registrarti?</p>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 p-8 space-y-4">
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 p-5 sm:p-8 space-y-3 sm:space-y-4">
               <button
                 onClick={() => setPage('register')}
-                className="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-gray-200 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group cursor-pointer"
+                className="w-full flex items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 border-gray-200 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group cursor-pointer"
               >
-                <div className="w-14 h-14 rounded-xl bg-blue-100 flex items-center justify-center text-2xl group-hover:bg-blue-200 transition-colors shrink-0">🏭</div>
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-blue-100 flex items-center justify-center text-2xl group-hover:bg-blue-200 transition-colors shrink-0">🏭</div>
                 <div className="text-left">
-                  <div className="font-bold text-gray-900 dark:text-white text-lg">Sono un'officina</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Registra la tua officina e gestisci tutto con AI</div>
+                  <div className="font-bold text-gray-900 dark:text-white text-base sm:text-lg">Sono un'officina</div>
+                  <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Registra la tua officina e gestisci tutto con AI</div>
                 </div>
               </button>
               <button
                 onClick={() => setPage('register-cliente')}
-                className="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-gray-200 dark:border-gray-600 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all group cursor-pointer"
+                className="w-full flex items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 border-gray-200 dark:border-gray-600 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all group cursor-pointer"
               >
-                <div className="w-14 h-14 rounded-xl bg-emerald-100 flex items-center justify-center text-2xl group-hover:bg-emerald-200 transition-colors shrink-0">🚗</div>
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-emerald-100 flex items-center justify-center text-2xl group-hover:bg-emerald-200 transition-colors shrink-0">🚗</div>
                 <div className="text-left">
-                  <div className="font-bold text-gray-900 dark:text-white text-lg">Sono un cliente</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Segui lo stato della tua auto e prenota appuntamenti</div>
+                  <div className="font-bold text-gray-900 dark:text-white text-base sm:text-lg">Sono un cliente</div>
+                  <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Segui lo stato della tua auto e prenota appuntamenti</div>
                 </div>
               </button>
             </div>
-            <div className="text-center mt-6 space-y-2">
+            <div className="text-center mt-5 space-y-2">
               <div>
                 <span className="text-sm text-gray-500">Hai gia un account? </span>
                 <button onClick={() => setPage('login')} className="text-sm font-semibold text-blue-600 hover:text-blue-700 cursor-pointer">Accedi</button>
