@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { supabase } from '@/lib/supabase';
 
 interface LandingPageProps {
   onEnter: () => void;
@@ -253,6 +254,27 @@ export function LandingPage({ onEnter, onLogin }: LandingPageProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   const [demoSlide, setDemoSlide] = useState(0);
+  const [contactForm, setContactForm] = useState({ nome: '', email: '', telefono: '', messaggio: '' });
+  const [contactStatus, setContactStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+
+  const handleContactSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setContactStatus('sending');
+    const { error } = await supabase.from('contatti_landing').insert({
+      nome: contactForm.nome,
+      email: contactForm.email,
+      telefono: contactForm.telefono || null,
+      messaggio: contactForm.messaggio,
+    });
+    if (error) {
+      console.error('Contact form error:', error);
+      setContactStatus('error');
+    } else {
+      setContactStatus('success');
+      setContactForm({ nome: '', email: '', telefono: '', messaggio: '' });
+      setTimeout(() => setContactStatus('idle'), 5000);
+    }
+  };
 
   const demoSlides = [
     {
@@ -1324,9 +1346,81 @@ export function LandingPage({ onEnter, onLogin }: LandingPageProps) {
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white mb-3">
               Hai domande? Scrivici subito.
             </h2>
-            <p className="text-gray-500 dark:text-gray-400">Rispondiamo entro poche ore. Puoi anche mandarci un WhatsApp.</p>
+            <p className="text-gray-500 dark:text-gray-400">Compila il form oppure contattaci direttamente via email o WhatsApp.</p>
           </AnimatedSection>
+
+          {/* Contact Form */}
           <AnimatedSection delay={100}>
+            <form
+              onSubmit={handleContactSubmit}
+              className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm p-6 sm:p-8 mb-6"
+            >
+              <div className="grid sm:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Nome *</label>
+                  <input
+                    type="text"
+                    value={contactForm.nome}
+                    onChange={(e) => setContactForm(f => ({ ...f, nome: e.target.value }))}
+                    required
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    placeholder="Il tuo nome"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Email *</label>
+                  <input
+                    type="email"
+                    value={contactForm.email}
+                    onChange={(e) => setContactForm(f => ({ ...f, email: e.target.value }))}
+                    required
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    placeholder="email@esempio.it"
+                  />
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Telefono (opzionale)</label>
+                <input
+                  type="tel"
+                  value={contactForm.telefono}
+                  onChange={(e) => setContactForm(f => ({ ...f, telefono: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                  placeholder="+39 ..."
+                />
+              </div>
+              <div className="mb-5">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Messaggio *</label>
+                <textarea
+                  value={contactForm.messaggio}
+                  onChange={(e) => setContactForm(f => ({ ...f, messaggio: e.target.value }))}
+                  required
+                  rows={4}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none"
+                  placeholder="Raccontaci le tue esigenze..."
+                />
+              </div>
+              {contactStatus === 'success' && (
+                <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-xl text-sm font-medium text-center">
+                  Messaggio inviato con successo! Ti risponderemo presto.
+                </div>
+              )}
+              {contactStatus === 'error' && (
+                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-xl text-sm font-medium text-center">
+                  Errore nell'invio. Riprova o scrivici direttamente a info@myofficinai.it
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={contactStatus === 'sending'}
+                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+              >
+                {contactStatus === 'sending' ? 'Invio in corso...' : 'Invia messaggio'}
+              </button>
+            </form>
+          </AnimatedSection>
+
+          <AnimatedSection delay={200}>
             <div className="grid sm:grid-cols-2 gap-5">
               {/* Email */}
               <a href="mailto:info@myofficinai.it" className="group hover-lift flex items-center gap-5 p-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm hover:border-blue-300 dark:hover:border-blue-700 transition-all">
