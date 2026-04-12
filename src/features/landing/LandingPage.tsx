@@ -1498,7 +1498,7 @@ export function LandingPage({ onEnter, onLogin }: LandingPageProps) {
               <span className="text-xs text-gray-400">·</span>
               <a href="mailto:info@myofficinai.it" className="text-xs text-gray-500 hover:text-blue-600 transition-colors">info@myofficinai.it</a>
               <span className="text-xs text-gray-400">·</span>
-              <a href="https://wa.me/393488552285" className="text-xs text-gray-500 hover:text-green-600 transition-colors">WhatsApp</a>
+              <a href="https://wa.me/393488552285" className="text-xs text-gray-500 hover:text-green-600 transition-colors">WhatsApp +39 348 855 2285</a>
             </div>
             <p className="text-xs text-gray-400">© 2026 OfficinAI — Made in Italy 🇮🇹</p>
           </div>

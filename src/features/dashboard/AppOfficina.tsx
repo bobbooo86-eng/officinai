@@ -38,11 +38,24 @@ export function AppOfficina() {
 
   const handleSelectApp = (app: Appuntamento) => {
     setSelectedApp(app);
+    window.history.pushState({ selectedAppId: app.id, ...window.history.state }, '');
   };
 
   const handleBack = () => {
     setSelectedApp(null);
+    window.history.pushState({ ...window.history.state, selectedAppId: null }, '');
   };
+
+  // Listen for back button to clear selected app
+  useEffect(() => {
+    const handlePop = (e: PopStateEvent) => {
+      if (!e.state?.selectedAppId) {
+        setSelectedApp(null);
+      }
+    };
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, []);
 
   // Appointment detail view
   if (selectedApp) {
