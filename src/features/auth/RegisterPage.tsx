@@ -152,6 +152,11 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
       });
       if (subErr) console.warn('Trial subscription not created (table may not exist):', subErr.message);
 
+      // Notify admin of new registration
+      supabase.functions.invoke('notify-registration', {
+        body: { tipo: 'officina', nome: `${nome} ${cognome}`, email, telefono, officina: nomeOfficina, citta },
+      }).catch(() => {});
+
       setSuccess(true);
 
       // Auto-login after 2 seconds

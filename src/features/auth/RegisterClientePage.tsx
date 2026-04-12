@@ -137,6 +137,11 @@ export function RegisterClientePage({ onGoLogin }: RegisterClientePageProps) {
         if (veicoloErr) console.warn('Veicolo non creato:', veicoloErr.message);
       }
 
+      // Notify admin of new registration
+      supabase.functions.invoke('notify-registration', {
+        body: { tipo: 'cliente', nome: `${nome} ${cognome}`, email, telefono },
+      }).catch(() => {});
+
       setSuccess(true);
 
       // Auto-login after 2 seconds
