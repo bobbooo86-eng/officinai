@@ -8,14 +8,20 @@ import type { Appuntamento } from '@/types/database';
 
 interface CalendarViewProps {
   onSelect: (app: Appuntamento) => void;
+  initialDate?: Date;
 }
 
-export function CalendarView({ onSelect }: CalendarViewProps) {
+export function CalendarView({ onSelect, initialDate }: CalendarViewProps) {
   const { officina } = useAuthStore();
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(initialDate || new Date());
   const [viewMode, setViewMode] = useState<'giorno' | 'settimana'>('giorno');
+
+  // Update selected date when initialDate changes (e.g. from search)
+  useEffect(() => {
+    if (initialDate) setSelectedDate(initialDate);
+  }, [initialDate]);
 
   useEffect(() => {
     if (!officina) return;

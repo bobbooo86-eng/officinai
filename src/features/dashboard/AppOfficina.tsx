@@ -36,6 +36,7 @@ export function AppOfficina() {
   const [agendaFiltro, setAgendaFiltro] = useState<string | undefined>(undefined);
   const [agendaView, setAgendaView] = useState<'calendario' | 'lista'>('calendario');
   const [showNewApp, setShowNewApp] = useState(false);
+  const [calendarDate, setCalendarDate] = useState<Date | undefined>(undefined);
 
   const handleSelectApp = (app: Appuntamento) => {
     setSelectedApp(app);
@@ -58,13 +59,14 @@ export function AppOfficina() {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
-  // Handle global search result selection
+  // Handle global search result selection — navigate to calendar on the appointment's date
   const handleSearchSelect = async (type: string, id: string) => {
+    let appData: any = null;
+
     if (type === 'appuntamento') {
       const { data } = await supabase.from('appuntamenti').select('*').eq('id', id).single();
-      if (data) handleSelectApp(data);
+      appData = data;
     } else if (type === 'cliente') {
-      // Find latest appointment for this client
       const { data } = await supabase
         .from('appuntamenti')
         .select('*')
@@ -72,10 +74,9 @@ export function AppOfficina() {
         .order('data_ora', { ascending: false })
         .limit(1)
         .single();
-      if (data) handleSelectApp(data);
-      else { setActiveTab('clienti'); }
+      appData = data;
+      if (!data) { setActiveTab('clienti'); return; }
     } else if (type === 'veicolo') {
-      // Find latest appointment for this vehicle
       const { data } = await supabase
         .from('appuntamenti')
         .select('*')
@@ -83,8 +84,17 @@ export function AppOfficina() {
         .order('data_ora', { ascending: false })
         .limit(1)
         .single();
-      if (data) handleSelectApp(data);
-      else { setActiveTab('agenda'); }
+      appData = data;
+      if (!data) { setActiveTab('agenda'); return; }
+    }
+
+    if (appData) {
+      // Navigate to calendar on the appointment's date
+      setCalendarDate(new Date(appData.data_ora));
+      setAgendaView('calendario');
+      setActiveTab('agenda');
+      setShowNewApp(false);
+      setSelectedApp(null);
     }
   };
 
@@ -155,7 +165,7 @@ export function AppOfficina() {
               </button>
             </div>
             {agendaView === 'calendario' ? (
-              <CalendarView onSelect={handleSelectApp} />
+              <CalendarView onSelect={handleSelectApp} initialDate={calendarDate} />
             ) : (
               <AppointmentList onSelect={handleSelectApp} initialFiltro={agendaFiltro} />
             )}
@@ -281,7 +291,7 @@ export function AppOfficina() {
           >
             ← Indietro
           </button>
-          <CalendarView onSelect={handleSelectApp} />
+          <CalendarView onSelect={handleSelectApp} initialDate={calendarDate} />
         </div>
       )}
       {activeTab === 'altro' && subPage === 'magazzino' && (
