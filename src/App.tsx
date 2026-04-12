@@ -23,6 +23,25 @@ export default function App() {
     initialize();
   }, []);
 
+  // Browser history integration — back button works across pages
+  const navigateTo = useCallback((newPage: Page) => {
+    setPage(newPage);
+    window.history.pushState({ page: newPage }, '', '/');
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (e.state?.page) {
+        setPage(e.state.page);
+      } else {
+        setPage('landing');
+      }
+    };
+    window.history.replaceState({ page: 'landing' }, '', '/');
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // Check if onboarding is needed: use officina.tel as proxy for completed setup
   const needsOnboarding = userType === 'officina' && officina && !officina.tel && !onboardingComplete;
 
@@ -57,8 +76,8 @@ export default function App() {
     if (page === 'landing') {
       return (
         <LandingPage
-          onEnter={() => setPage('choose-register')}
-          onLogin={() => setPage('login')}
+          onEnter={() => navigateTo('choose-register')}
+          onLogin={() => navigateTo('login')}
         />
       );
     }
@@ -76,7 +95,7 @@ export default function App() {
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 p-5 sm:p-8 space-y-3 sm:space-y-4">
               <button
-                onClick={() => setPage('register')}
+                onClick={() => navigateTo('register')}
                 className="w-full flex items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 border-gray-200 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group cursor-pointer"
               >
                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-blue-100 flex items-center justify-center text-2xl group-hover:bg-blue-200 transition-colors shrink-0">🏭</div>
@@ -86,7 +105,7 @@ export default function App() {
                 </div>
               </button>
               <button
-                onClick={() => setPage('register-cliente')}
+                onClick={() => navigateTo('register-cliente')}
                 className="w-full flex items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 border-gray-200 dark:border-gray-600 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all group cursor-pointer"
               >
                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-emerald-100 flex items-center justify-center text-2xl group-hover:bg-emerald-200 transition-colors shrink-0">🚗</div>
@@ -99,10 +118,10 @@ export default function App() {
             <div className="text-center mt-5 space-y-2">
               <div>
                 <span className="text-sm text-gray-500">Hai gia un account? </span>
-                <button onClick={() => setPage('login')} className="text-sm font-semibold text-blue-600 hover:text-blue-700 cursor-pointer">Accedi</button>
+                <button onClick={() => navigateTo('login')} className="text-sm font-semibold text-blue-600 hover:text-blue-700 cursor-pointer">Accedi</button>
               </div>
               <div>
-                <button onClick={() => setPage('landing')} className="text-sm text-gray-400 hover:text-gray-600 cursor-pointer">← Torna al sito</button>
+                <button onClick={() => navigateTo('landing')} className="text-sm text-gray-400 hover:text-gray-600 cursor-pointer">← Torna al sito</button>
               </div>
             </div>
           </div>
@@ -111,14 +130,14 @@ export default function App() {
     }
 
     if (page === 'register') {
-      return <RegisterPage onGoLogin={() => setPage('login')} />;
+      return <RegisterPage onGoLogin={() => navigateTo('login')} />;
     }
 
     if (page === 'register-cliente') {
-      return <RegisterClientePage onGoLogin={() => setPage('login')} />;
+      return <RegisterClientePage onGoLogin={() => navigateTo('login')} />;
     }
 
-    return <LoginPage onGoRegister={() => setPage('register')} onGoRegisterCliente={() => setPage('register-cliente')} onGoLanding={() => setPage('landing')} />;
+    return <LoginPage onGoRegister={() => navigateTo('register')} onGoRegisterCliente={() => navigateTo('register-cliente')} onGoLanding={() => navigateTo('landing')} />;
   };
 
   return (
