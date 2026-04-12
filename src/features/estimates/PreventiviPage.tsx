@@ -1557,7 +1557,7 @@ interface PreventivoListItem {
   veicolo_desc?: string;
 }
 
-export function PreventiviPage({ onSelectAppuntamento }: { onSelectAppuntamento?: (app: any) => void }) {
+export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar }: { onSelectAppuntamento?: (app: any) => void; onNavigateToCalendar?: (date: Date) => void }) {
   const { officina } = useAuthStore();
   const [view, setView] = useState<'list' | 'new'>('list');
   const [preventivi, setPreventivi] = useState<PreventivoListItem[]>([]);
@@ -1699,9 +1699,12 @@ export function PreventiviPage({ onSelectAppuntamento }: { onSelectAppuntamento?
             <div
               key={p.id}
               onClick={async () => {
-                if (!onSelectAppuntamento) return;
                 const { data } = await supabase.from('appuntamenti').select('*').eq('id', p.appuntamento_id).single();
-                if (data) onSelectAppuntamento(data);
+                if (data && onNavigateToCalendar) {
+                  onNavigateToCalendar(new Date(data.data_ora));
+                } else if (data && onSelectAppuntamento) {
+                  onSelectAppuntamento(data);
+                }
               }}
               className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer">
               <div className="flex items-start justify-between mb-2">

@@ -172,7 +172,7 @@ export function AppOfficina() {
           </div>
         )
       )}
-      {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} /></Suspense>}
+      {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} onNavigateToCalendar={(date) => { setCalendarDate(date); setAgendaView('calendario'); setActiveTab('agenda'); }} /></Suspense>}
       {activeTab === 'clienti' && <CustomersPage />}
       {activeTab === 'altro' && !subPage && (
         <div className="p-4 space-y-3">
