@@ -5,10 +5,11 @@ import { validateEmail, validatePassword, useFormValidation } from '@/lib/valida
 
 interface LoginPageProps {
   onGoRegister?: () => void;
+  onGoRegisterCliente?: () => void;
   onGoLanding?: () => void;
 }
 
-export function LoginPage({ onGoRegister, onGoLanding }: LoginPageProps = {}) {
+export function LoginPage({ onGoRegister, onGoRegisterCliente, onGoLanding }: LoginPageProps = {}) {
   const [tipo, setTipo] = useState<'officina' | 'cliente' | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -191,11 +192,19 @@ export function LoginPage({ onGoRegister, onGoLanding }: LoginPageProps = {}) {
 
         {/* Register / Back links */}
         <div className="text-center mt-6 space-y-2">
-          {onGoRegister && (
+          {onGoRegister && tipo !== 'cliente' && (
             <div>
               <span className="text-sm text-gray-500">Non hai un account? </span>
               <button onClick={onGoRegister} className="text-sm font-semibold text-blue-600 hover:text-blue-700 cursor-pointer">
-                Registrati gratis →
+                Registra la tua officina →
+              </button>
+            </div>
+          )}
+          {onGoRegisterCliente && (tipo === 'cliente' || !tipo) && (
+            <div>
+              <span className="text-sm text-gray-500">{tipo === 'cliente' ? 'Non hai un account? ' : 'Sei un cliente? '}</span>
+              <button onClick={onGoRegisterCliente} className="text-sm font-semibold text-emerald-600 hover:text-emerald-700 cursor-pointer">
+                Registrati come cliente →
               </button>
             </div>
           )}

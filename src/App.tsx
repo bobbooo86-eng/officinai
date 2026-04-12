@@ -8,10 +8,11 @@ import { RegisterPage } from '@/features/auth/RegisterPage';
 import { LandingPage } from '@/features/landing/LandingPage';
 import { AppOfficina } from '@/features/dashboard/AppOfficina';
 import { AppCliente } from '@/features/customer/AppCliente';
+import { RegisterClientePage } from '@/features/auth/RegisterClientePage';
 import { OnboardingWizard } from '@/features/onboarding/OnboardingWizard';
 import { Loader } from '@/components/ui';
 
-type Page = 'landing' | 'login' | 'register';
+type Page = 'landing' | 'login' | 'register' | 'register-cliente';
 
 export default function App() {
   const { loading, userType, officina, initialize } = useAuthStore();
@@ -66,7 +67,11 @@ export default function App() {
       return <RegisterPage onGoLogin={() => setPage('login')} />;
     }
 
-    return <LoginPage onGoRegister={() => setPage('register')} onGoLanding={() => setPage('landing')} />;
+    if (page === 'register-cliente') {
+      return <RegisterClientePage onGoLogin={() => setPage('login')} />;
+    }
+
+    return <LoginPage onGoRegister={() => setPage('register')} onGoRegisterCliente={() => setPage('register-cliente')} onGoLanding={() => setPage('landing')} />;
   };
 
   return (
