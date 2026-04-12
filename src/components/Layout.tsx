@@ -2,15 +2,17 @@ import { useState, type ReactNode } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { NotificationBell } from '@/features/notifications/NotificationBell';
 import { GlobalSearch } from '@/features/search/GlobalSearch';
+import { PrintButton } from '@/components/PrintButton';
 
 interface LayoutProps {
   children: ReactNode;
   tabs: { id: string; label: string; icon: string }[];
   activeTab: string;
   onTabChange: (tab: string) => void;
+  onSearchSelect?: (type: string, id: string) => void;
 }
 
-export function Layout({ children, tabs, activeTab, onTabChange }: LayoutProps) {
+export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect }: LayoutProps) {
   const { utente, officina, cliente, userType, logout } = useAuthStore();
   const [showMenu, setShowMenu] = useState(false);
 
@@ -26,50 +28,57 @@ export function Layout({ children, tabs, activeTab, onTabChange }: LayoutProps) 
       >
         Vai al contenuto principale
       </a>
-      {/* Top bar */}
-      <header role="banner" className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <span className="text-lg">🔧</span>
+
+      {/* Top bar — sticky with blur */}
+      <header role="banner" className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
+        <div className="px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm">
+              <span className="text-lg">🔧</span>
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                {officina?.nome || 'OfficinAI'}
+              </h1>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                {userName} — <span className="capitalize">{userRole}</span>
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
-              {officina?.nome || 'OfficinAI'}
-            </h1>
-            <p className="text-[11px] text-gray-400 dark:text-gray-500">
-              {userName} — <span className="capitalize">{userRole}</span>
-            </p>
+
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+              >
+                <span className="text-sm font-semibold dark:text-gray-300">{userName?.charAt(0).toUpperCase()}</span>
+              </button>
+              {showMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                    <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{userName}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 capitalize">{userRole}</p>
+                    </div>
+                    <button
+                      onClick={logout}
+                      className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                    >
+                      Esci
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <GlobalSearch />
-          <NotificationBell />
-          <div className="relative">
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-          >
-            <span className="text-sm dark:text-gray-300">{userName?.charAt(0).toUpperCase()}</span>
-          </button>
-          {showMenu && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-              <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
-                <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{userName}</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 capitalize">{userRole}</p>
-                </div>
-                <button
-                  onClick={logout}
-                  className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                >
-                  Esci
-                </button>
-              </div>
-            </>
-          )}
-          </div>
+        {/* Always-visible search bar */}
+        <div className="px-4 pb-3">
+          <GlobalSearch onSelect={onSearchSelect} />
         </div>
       </header>
 
@@ -78,22 +87,25 @@ export function Layout({ children, tabs, activeTab, onTabChange }: LayoutProps) 
         {children}
       </main>
 
-      {/* Bottom navigation */}
-      <nav role="navigation" aria-label="Menu principale" className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50">
+      {/* Print button — floating on every page */}
+      <PrintButton />
+
+      {/* Bottom navigation — min 48px touch targets */}
+      <nav role="navigation" aria-label="Menu principale" className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 z-50">
         <div className="flex items-center justify-around max-w-lg mx-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               aria-current={activeTab === tab.id ? 'page' : undefined}
-              className={`flex flex-col items-center gap-0.5 py-2 px-4 min-w-[64px] transition-colors cursor-pointer ${
+              className={`flex flex-col items-center justify-center gap-0.5 min-h-[56px] min-w-[56px] px-3 transition-all cursor-pointer rounded-xl ${
                 activeTab === tab.id
-                  ? 'text-blue-600'
-                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                  ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:text-gray-300 dark:hover:bg-gray-800'
               }`}
             >
-              <span className="text-xl">{tab.icon}</span>
-              <span className="text-[10px] font-medium">{tab.label}</span>
+              <span className="text-[22px] leading-none">{tab.icon}</span>
+              <span className="text-[11px] font-semibold">{tab.label}</span>
             </button>
           ))}
         </div>

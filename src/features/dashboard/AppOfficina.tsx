@@ -8,6 +8,7 @@ import { CustomersPage } from '@/features/appointments/CustomersPage';
 import { NuovoAppuntamento } from '@/features/appointments/NuovoAppuntamento';
 import { PageSkeleton } from '@/components/ui/PageSkeleton';
 import { useHistoryState } from '@/lib/useHistoryState';
+import { supabase } from '@/lib/supabase';
 import type { Appuntamento } from '@/types/database';
 
 const AnalyticsPage = lazy(() => import('./AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
@@ -57,17 +58,47 @@ export function AppOfficina() {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
+  // Handle global search result selection
+  const handleSearchSelect = async (type: string, id: string) => {
+    if (type === 'appuntamento') {
+      const { data } = await supabase.from('appuntamenti').select('*').eq('id', id).single();
+      if (data) handleSelectApp(data);
+    } else if (type === 'cliente') {
+      // Find latest appointment for this client
+      const { data } = await supabase
+        .from('appuntamenti')
+        .select('*')
+        .eq('cliente_id', id)
+        .order('data_ora', { ascending: false })
+        .limit(1)
+        .single();
+      if (data) handleSelectApp(data);
+      else { setActiveTab('clienti'); }
+    } else if (type === 'veicolo') {
+      // Find latest appointment for this vehicle
+      const { data } = await supabase
+        .from('appuntamenti')
+        .select('*')
+        .eq('veicolo_id', id)
+        .order('data_ora', { ascending: false })
+        .limit(1)
+        .single();
+      if (data) handleSelectApp(data);
+      else { setActiveTab('agenda'); }
+    }
+  };
+
   // Appointment detail view
   if (selectedApp) {
     return (
-      <Layout tabs={TABS} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSelectedApp(null); setSubPage(null); }}>
+      <Layout tabs={TABS} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSelectedApp(null); setSubPage(null); }} onSearchSelect={handleSearchSelect}>
         <AppointmentDetail appuntamento={selectedApp} onBack={handleBack} />
       </Layout>
     );
   }
 
   return (
-    <Layout tabs={TABS} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSubPage(null); }}>
+    <Layout tabs={TABS} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSubPage(null); }} onSearchSelect={handleSearchSelect}>
       {activeTab === 'home' && (
         <Dashboard
           onSelectAppuntamento={handleSelectApp}
