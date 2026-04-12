@@ -5,21 +5,21 @@ import { supabase } from './supabase';
 // ---------------------------------------------------------------------------
 
 const STRIPE_PUBLISHABLE_KEY =
-  import.meta.env.VITE_STRIPE_KEY || 'pk_test_placeholder';
+  import.meta.env.VITE_STRIPE_KEY || 'pk_test_51TLLN3LkrUabbK8joknIbjhFajbTeoPIt0GwPu2gaDQqDS8Nn4920Zi1FQ2Hr627evUEVINdGSrtGeEbEA4QcZxZ002zKdljJP';
 
 // Price IDs for each plan (monthly and yearly)
 export const STRIPE_PRICES = {
   starter: {
-    monthly: 'price_starter_monthly',
-    yearly: 'price_starter_yearly',
+    monthly: 'price_1TLLm2LkrUabbK8jrYyWmu0t',
+    yearly: 'price_1TLLm4LkrUabbK8j7G3IdJ3W',
   },
   professional: {
-    monthly: 'price_professional_monthly',
-    yearly: 'price_professional_yearly',
+    monthly: 'price_1TLLm6LkrUabbK8j91fGRRot',
+    yearly: 'price_1TLLmwLkrUabbK8jOPaebqYn',
   },
   enterprise: {
-    monthly: 'price_enterprise_monthly',
-    yearly: 'price_enterprise_yearly',
+    monthly: 'price_1TLLmzLkrUabbK8jgFEP2kOt',
+    yearly: 'price_1TLLn0LkrUabbK8jy6yJnUCM',
   },
 } as const;
 
