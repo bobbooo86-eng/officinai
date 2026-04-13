@@ -9,9 +9,10 @@ import type { Appuntamento } from '@/types/database';
 interface CalendarViewProps {
   onSelect: (app: Appuntamento) => void;
   initialDate?: Date;
+  searchQuery?: string;
 }
 
-export function CalendarView({ onSelect, initialDate }: CalendarViewProps) {
+export function CalendarView({ onSelect, initialDate, searchQuery = '' }: CalendarViewProps) {
   const { officina } = useAuthStore();
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,18 +59,31 @@ export function CalendarView({ onSelect, initialDate }: CalendarViewProps) {
   const todayStr = dateStr(new Date());
   const selectedStr = dateStr(selectedDate);
 
-  // Filter appointments for selected date or week
+  // Filter appointments for selected date or week + search
   const filteredApps = useMemo(() => {
+    let list = appuntamenti;
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((a) =>
+        (a as any).clienti?.nome?.toLowerCase().includes(q) ||
+        (a as any).veicoli?.targa?.toLowerCase().includes(q) ||
+        (a as any).veicoli?.marca?.toLowerCase().includes(q) ||
+        (a as any).veicoli?.modello?.toLowerCase().includes(q) ||
+        a.problema?.toLowerCase().includes(q)
+      );
+    }
+    // Filter by date
     if (viewMode === 'giorno') {
-      return appuntamenti.filter((a) => a.data_ora?.startsWith(selectedStr));
+      return list.filter((a) => a.data_ora?.startsWith(selectedStr));
     }
     const weekStart = dateStr(weekDates[0]);
     const weekEnd = dateStr(weekDates[6]);
-    return appuntamenti.filter((a) => {
+    return list.filter((a) => {
       const d = a.data_ora?.slice(0, 10);
       return d && d >= weekStart && d <= weekEnd;
     });
-  }, [appuntamenti, selectedStr, viewMode, weekDates]);
+  }, [appuntamenti, selectedStr, viewMode, weekDates, searchQuery]);
 
   // Group by hour for day view
   const hourSlots = useMemo(() => {

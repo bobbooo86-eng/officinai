@@ -6,7 +6,7 @@ import { fmtData, fmtOra } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import type { Appuntamento } from '@/types/database';
 
-export function AppointmentList({ onSelect, initialFiltro }: { onSelect: (a: Appuntamento) => void; initialFiltro?: string }) {
+export function AppointmentList({ onSelect, initialFiltro, searchQuery = '' }: { onSelect: (a: Appuntamento) => void; initialFiltro?: string; searchQuery?: string }) {
   const { officina } = useAuthStore();
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +52,6 @@ export function AppointmentList({ onSelect, initialFiltro }: { onSelect: (a: App
 
   if (loading) return <Loader text="Caricamento agenda..." />;
 
-  const [searchLocal, setSearchLocal] = useState('');
   const oggi = new Date().toISOString().slice(0, 10);
   const richieste = appuntamenti.filter((a) => a.stato === 'richiesta');
   const filtered = (() => {
@@ -60,8 +59,8 @@ export function AppointmentList({ onSelect, initialFiltro }: { onSelect: (a: App
     if (filtro === 'oggi') list = list.filter((a) => a.data_ora?.startsWith(oggi));
     else if (filtro === 'in_corso') list = list.filter((a) => a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi');
     else if (filtro !== 'tutti') list = list.filter((a) => a.stato === filtro);
-    if (searchLocal.trim()) {
-      const q = searchLocal.toLowerCase();
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
       list = list.filter((a) =>
         a.clienti?.nome?.toLowerCase().includes(q) ||
         a.veicoli?.targa?.toLowerCase().includes(q) ||
@@ -80,22 +79,6 @@ export function AppointmentList({ onSelect, initialFiltro }: { onSelect: (a: App
           {toast}
         </div>
       )}
-      <h2 className="text-lg font-bold text-gray-900 dark:text-white">Appuntamenti</h2>
-
-      {/* Local search */}
-      <div className="relative">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-        </div>
-        <input
-          type="text"
-          value={searchLocal}
-          onChange={(e) => setSearchLocal(e.target.value)}
-          placeholder="Cerca per cliente, targa, problema..."
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
-        />
-      </div>
-
       {/* Pending requests alert */}
       {richieste.length > 0 && filtro !== 'richiesta' && (
         <button

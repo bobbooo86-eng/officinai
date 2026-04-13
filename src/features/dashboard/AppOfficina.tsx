@@ -37,6 +37,7 @@ export function AppOfficina() {
   const [agendaView, setAgendaView] = useState<'calendario' | 'lista'>('calendario');
   const [showNewApp, setShowNewApp] = useState(false);
   const [calendarDate, setCalendarDate] = useState<Date | undefined>(undefined);
+  const [agendaSearch, setAgendaSearch] = useState('');
   const [preventiviSearch, setPreventiviSearch] = useState<string>('');
   const [selectedClienteId, setSelectedClienteId] = useState<string | undefined>(undefined);
 
@@ -140,41 +141,57 @@ export function AppOfficina() {
           />
         ) : (
           <div>
-            {/* Toggle Calendario / Lista + Nuovo Appuntamento */}
-            <div className="px-4 pt-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            {/* Search + Toggle + Nuovo */}
+            <div className="px-4 pt-4 space-y-3">
+              {/* Search bar */}
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                </div>
+                <input
+                  type="text"
+                  value={agendaSearch}
+                  onChange={(e) => setAgendaSearch(e.target.value)}
+                  placeholder="Cerca appuntamento per cliente, targa, problema..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
+                />
+              </div>
+              {/* Toggle + Nuovo */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setAgendaView('calendario')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+                      agendaView === 'calendario'
+                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    📆 Calendario
+                  </button>
+                  <button
+                    onClick={() => setAgendaView('lista')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+                      agendaView === 'lista'
+                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    📋 Lista
+                  </button>
+                </div>
                 <button
-                  onClick={() => setAgendaView('calendario')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-                    agendaView === 'calendario'
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  onClick={() => setShowNewApp(true)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-all active:scale-95 cursor-pointer"
                 >
-                  📆 Calendario
-                </button>
-                <button
-                  onClick={() => setAgendaView('lista')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-                    agendaView === 'lista'
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  📋 Lista
+                  + Nuovo
                 </button>
               </div>
-              <button
-                onClick={() => setShowNewApp(true)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-all active:scale-95 cursor-pointer"
-              >
-                + Nuovo
-              </button>
             </div>
             {agendaView === 'calendario' ? (
-              <CalendarView onSelect={handleSelectApp} initialDate={calendarDate} />
+              <CalendarView onSelect={handleSelectApp} initialDate={calendarDate} searchQuery={agendaSearch} />
             ) : (
-              <AppointmentList onSelect={handleSelectApp} initialFiltro={agendaFiltro} />
+              <AppointmentList onSelect={handleSelectApp} initialFiltro={agendaFiltro} searchQuery={agendaSearch} />
             )}
           </div>
         )
