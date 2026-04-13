@@ -123,6 +123,8 @@ export function AppOfficina() {
           onSelectAppuntamento={handleSelectApp}
           onNavigateToAgenda={(filtro) => {
             setAgendaFiltro(filtro);
+            setAgendaView('lista');
+            setShowNewApp(false);
             setActiveTab('agenda');
           }}
           onNavigateToPreventivi={() => {
