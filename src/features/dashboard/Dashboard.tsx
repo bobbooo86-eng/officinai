@@ -115,7 +115,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
     .sort((a, b) => a.data_ora.localeCompare(b.data_ora));
   const richieste = appuntamenti.filter((a) => a.stato === 'richiesta');
   const inCorso = appuntamenti.filter((a) => a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi');
-  const autoInOfficina = appuntamenti.filter((a) => a.stato === 'in_diagnosi' || a.stato === 'in_lavorazione' || a.stato === 'attesa_ricambi');
+  const autoInOfficina = appuntamenti.filter((a) => a.stato !== 'consegnato' && a.stato !== 'annullato' && a.stato !== 'richiesta');
   const nonInLavorazione = appuntamenti.filter((a) => a.stato === 'prenotato');
   const pronti = appuntamenti.filter((a) => a.stato === 'pronto');
   const consegnati = appuntamenti.filter((a) => a.stato === 'consegnato');
