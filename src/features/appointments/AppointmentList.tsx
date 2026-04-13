@@ -11,12 +11,13 @@ export function AppointmentList({ onSelect, initialFiltro }: { onSelect: (a: App
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<string>(initialFiltro || 'tutti');
+  const [toast, setToast] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!officina) return;
     const { data } = await supabase
       .from('appuntamenti')
-      .select('*, clienti(nome,tel), veicoli(marca,modello,targa,km)')
+      .select('*, clienti(nome,tel,email), veicoli(marca,modello,targa,km)')
       .eq('officina_id', officina.id)
       .order('data_ora', { ascending: false });
     setAppuntamenti(data || []);
@@ -36,26 +37,64 @@ export function AppointmentList({ onSelect, initialFiltro }: { onSelect: (a: App
 
   const accettaRapida = async (e: React.MouseEvent, app: Appuntamento) => {
     e.stopPropagation();
-    await supabase
+    const { error } = await supabase
       .from('appuntamenti')
       .update({ stato: 'prenotato' })
       .eq('id', app.id);
+    if (error) {
+      setToast('Errore nell\'accettazione: ' + error.message);
+    } else {
+      setToast('Appuntamento accettato');
+      fetchData();
+    }
+    setTimeout(() => setToast(null), 3000);
   };
 
   if (loading) return <Loader text="Caricamento agenda..." />;
 
+  const [searchLocal, setSearchLocal] = useState('');
   const oggi = new Date().toISOString().slice(0, 10);
   const richieste = appuntamenti.filter((a) => a.stato === 'richiesta');
   const filtered = (() => {
-    if (filtro === 'tutti') return appuntamenti;
-    if (filtro === 'oggi') return appuntamenti.filter((a) => a.data_ora?.startsWith(oggi));
-    if (filtro === 'in_corso') return appuntamenti.filter((a) => a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi');
-    return appuntamenti.filter((a) => a.stato === filtro);
+    let list = appuntamenti;
+    if (filtro === 'oggi') list = list.filter((a) => a.data_ora?.startsWith(oggi));
+    else if (filtro === 'in_corso') list = list.filter((a) => a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi');
+    else if (filtro !== 'tutti') list = list.filter((a) => a.stato === filtro);
+    if (searchLocal.trim()) {
+      const q = searchLocal.toLowerCase();
+      list = list.filter((a) =>
+        a.clienti?.nome?.toLowerCase().includes(q) ||
+        a.veicoli?.targa?.toLowerCase().includes(q) ||
+        a.veicoli?.marca?.toLowerCase().includes(q) ||
+        a.veicoli?.modello?.toLowerCase().includes(q) ||
+        a.problema?.toLowerCase().includes(q)
+      );
+    }
+    return list;
   })();
 
   return (
     <div className="p-4 space-y-3">
-      <h2 className="text-lg font-bold text-gray-900">Agenda</h2>
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-xl shadow-lg animate-fade-in">
+          {toast}
+        </div>
+      )}
+      <h2 className="text-lg font-bold text-gray-900 dark:text-white">Appuntamenti</h2>
+
+      {/* Local search */}
+      <div className="relative">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        </div>
+        <input
+          type="text"
+          value={searchLocal}
+          onChange={(e) => setSearchLocal(e.target.value)}
+          placeholder="Cerca per cliente, targa, problema..."
+          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
+        />
+      </div>
 
       {/* Pending requests alert */}
       {richieste.length > 0 && filtro !== 'richiesta' && (
@@ -80,11 +119,17 @@ export function AppointmentList({ onSelect, initialFiltro }: { onSelect: (a: App
         </button>
       )}
 
-      {/* Filters */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        <FilterBtn active={filtro === 'tutti'} onClick={() => setFiltro('tutti')}>
-          Tutti ({appuntamenti.length})
-        </FilterBtn>
+      {/* Filters — griglia pulsanti quadrati */}
+      <div className="grid grid-cols-4 gap-2">
+        <FilterBtn
+          active={filtro === 'tutti'}
+          onClick={() => setFiltro('tutti')}
+          icon="📋"
+          label="Tutti"
+          count={appuntamenti.length}
+          color="#3b82f6"
+          bg="#dbeafe"
+        />
         {Object.entries(STATO_CONFIG).map(([key, cfg]) => {
           const count = appuntamenti.filter((a) => a.stato === key).length;
           if (count === 0 && key !== 'richiesta') return null;
@@ -93,10 +138,13 @@ export function AppointmentList({ onSelect, initialFiltro }: { onSelect: (a: App
               key={key}
               active={filtro === key}
               onClick={() => setFiltro(key)}
+              icon={cfg.icon}
+              label={cfg.label}
+              count={count}
+              color={cfg.color}
+              bg={cfg.bg}
               highlight={key === 'richiesta' && count > 0}
-            >
-              {cfg.icon} {cfg.label} ({count})
-            </FilterBtn>
+            />
           );
         })}
       </div>
@@ -157,22 +205,33 @@ export function AppointmentList({ onSelect, initialFiltro }: { onSelect: (a: App
   );
 }
 
-function FilterBtn({ active, onClick, children, highlight }: {
+function FilterBtn({ active, onClick, icon, label, count, color, bg, highlight }: {
   active: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  icon: string;
+  label: string;
+  count: number;
+  color: string;
+  bg: string;
   highlight?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+      className={`flex flex-col items-center justify-center rounded-xl p-2.5 min-h-[72px] transition-all cursor-pointer border-2 ${
         active
-          ? highlight ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white'
-          : highlight ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-      }`}
+          ? 'shadow-md scale-[1.02]'
+          : 'hover:scale-[1.01]'
+      } ${highlight && !active ? 'animate-pulse' : ''}`}
+      style={{
+        backgroundColor: active ? bg : '#f9fafb',
+        color: active ? color : '#6b7280',
+        borderColor: active ? color : '#e5e7eb',
+      }}
     >
-      {children}
+      <span className="text-xl leading-none">{icon}</span>
+      <span className="text-[10px] font-bold mt-1 leading-tight">{label}</span>
+      <span className={`text-sm font-black leading-none mt-0.5 ${active ? '' : 'text-gray-800'}`}>{count}</span>
     </button>
   );
 }
