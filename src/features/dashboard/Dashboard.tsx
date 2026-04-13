@@ -117,6 +117,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
   const inCorso = appuntamenti.filter((a) => a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi');
   const autoInOfficina = appuntamenti.filter((a) => a.stato === 'in_diagnosi' || a.stato === 'in_lavorazione' || a.stato === 'attesa_ricambi');
   const pronti = appuntamenti.filter((a) => a.stato === 'pronto');
+  const consegnati = appuntamenti.filter((a) => a.stato === 'consegnato');
   const recenti = appuntamenti.slice(0, 8);
 
   const isNuovoUtente = appuntamenti.length === 0;
@@ -204,13 +205,14 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
       )}
 
       {/* KPIs — larger, with colored borders */}
-      <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 animate-fade-in" style={{ animationDelay: '0.1s' }}>
         {[
           { label: 'Richieste', count: richieste.length, color: 'purple', filter: 'richiesta', icon: '🔔' },
           { label: 'Auto in officina', count: autoInOfficina.length, color: 'orange', filter: 'in_corso', icon: '🚗' },
           { label: 'Oggi', count: appOggi.length, color: 'blue', filter: 'oggi', icon: '📅' },
           { label: 'In Corso', count: inCorso.length, color: 'amber', filter: 'in_corso', icon: '🔧' },
           { label: 'Pronti', count: pronti.length, color: 'emerald', filter: 'pronto', icon: '✅' },
+          { label: 'Consegnati', count: consegnati.length, color: 'gray', filter: 'consegnato', icon: '🏁' },
         ].map((kpi) => (
           <button key={kpi.filter} onClick={() => onNavigateToAgenda?.(kpi.filter)} className="text-left cursor-pointer">
             <Card hover className={`text-center !p-4 border-l-4 !border-l-${kpi.color}-500 ${kpi.count > 0 && kpi.filter === 'in_corso' ? 'animate-pulse-glow' : ''}`}>

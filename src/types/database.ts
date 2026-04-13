@@ -9,6 +9,7 @@ export type AppuntamentoStato =
   | 'in_lavorazione'
   | 'attesa_ricambi'
   | 'pronto'
+  | 'consegnato'
   | 'annullato';
 
 export type PreventivoStato = 'bozza' | 'inviato' | 'accettato' | 'rifiutato';
@@ -33,6 +34,9 @@ export interface Officina {
   tel: string;
   email: string;
   p_iva: string;
+  logo_url?: string | null;
+  servizi?: { id: string; label: string }[];
+  orari_apertura?: { giorno: string; attivo: boolean; apertura: string; chiusura: string }[];
   piano: string;
   created_at?: string;
 }
@@ -107,6 +111,9 @@ export interface FoglioLavoro {
   km_uscita?: number;
   note_finali?: string;
   chiuso: boolean;
+  firma_operaio?: string;
+  costo_manodopera?: number;
+  tariffa_oraria?: number;
   created_at?: string;
 }
 
@@ -118,6 +125,7 @@ export interface RicambioUsato {
   quantita: number;
   stato_rimosso?: string;
   prezzo: number;
+  tipo: 'nuovo' | 'usato' | 'consumabile';
   created_at?: string;
 }
 
@@ -234,4 +242,14 @@ export interface ScansioneOBD {
   // Relations (joined)
   clienti?: Cliente;
   veicoli?: Veicolo;
+}
+
+export interface Recensione {
+  id: string;
+  appuntamento_id: string;
+  officina_id: string;
+  cliente_id: string;
+  voto: number;
+  commento?: string;
+  created_at?: string;
 }
