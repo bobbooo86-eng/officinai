@@ -879,6 +879,80 @@ function VoiceButton({ onResult, className }: { onResult: (text: string) => void
   );
 }
 
+// ==================== CATALOGO RICAMBI COMUNI ====================
+const RICAMBI_COMUNI: { nome: string; cat: string; prezzo?: number }[] = [
+  // Tagliando
+  { nome: 'Filtro olio', cat: 'Tagliando', prezzo: 12 },
+  { nome: 'Filtro aria motore', cat: 'Tagliando', prezzo: 18 },
+  { nome: 'Filtro abitacolo / antipolline', cat: 'Tagliando', prezzo: 15 },
+  { nome: 'Filtro carburante gasolio', cat: 'Tagliando', prezzo: 22 },
+  { nome: 'Olio motore 5W30 (5L)', cat: 'Tagliando', prezzo: 35 },
+  { nome: 'Olio motore 5W40 (5L)', cat: 'Tagliando', prezzo: 38 },
+  { nome: 'Olio motore 0W20 (5L)', cat: 'Tagliando', prezzo: 42 },
+  { nome: 'Candele (set 4)', cat: 'Tagliando', prezzo: 40 },
+  { nome: 'Candele (set 6)', cat: 'Tagliando', prezzo: 60 },
+  { nome: 'Candelette diesel (set 4)', cat: 'Tagliando', prezzo: 45 },
+  // Freni
+  { nome: 'Pastiglie freni anteriori', cat: 'Freni', prezzo: 35 },
+  { nome: 'Pastiglie freni posteriori', cat: 'Freni', prezzo: 30 },
+  { nome: 'Dischi freni anteriori (coppia)', cat: 'Freni', prezzo: 55 },
+  { nome: 'Dischi freni posteriori (coppia)', cat: 'Freni', prezzo: 50 },
+  { nome: 'Liquido freni DOT4 (500ml)', cat: 'Freni', prezzo: 8 },
+  { nome: 'Kit revisione pinza freno ant.', cat: 'Freni', prezzo: 12 },
+  { nome: 'Kit revisione pinza freno post.', cat: 'Freni', prezzo: 12 },
+  // Distribuzione
+  { nome: 'Cinghia distribuzione', cat: 'Distribuzione', prezzo: 45 },
+  { nome: 'Kit cinghia distribuzione', cat: 'Distribuzione', prezzo: 80 },
+  { nome: 'Kit catena distribuzione', cat: 'Distribuzione', prezzo: 120 },
+  { nome: 'Pompa acqua', cat: 'Distribuzione', prezzo: 55 },
+  // Raffreddamento
+  { nome: 'Termostato', cat: 'Raffreddamento', prezzo: 25 },
+  { nome: 'Liquido raffreddamento (1L)', cat: 'Raffreddamento', prezzo: 12 },
+  { nome: 'Radiatore acqua', cat: 'Raffreddamento', prezzo: 90 },
+  { nome: 'Manicotto tubo raffreddamento', cat: 'Raffreddamento', prezzo: 20 },
+  // Sospensioni
+  { nome: 'Ammortizzatore anteriore sx', cat: 'Sospensioni', prezzo: 65 },
+  { nome: 'Ammortizzatore anteriore dx', cat: 'Sospensioni', prezzo: 65 },
+  { nome: 'Ammortizzatore posteriore sx', cat: 'Sospensioni', prezzo: 55 },
+  { nome: 'Ammortizzatore posteriore dx', cat: 'Sospensioni', prezzo: 55 },
+  { nome: 'Molla anteriore sx', cat: 'Sospensioni', prezzo: 40 },
+  { nome: 'Molla anteriore dx', cat: 'Sospensioni', prezzo: 40 },
+  { nome: 'Silent block braccio ant.', cat: 'Sospensioni', prezzo: 25 },
+  { nome: 'Braccio oscillante ant. sx', cat: 'Sospensioni', prezzo: 55 },
+  { nome: 'Braccio oscillante ant. dx', cat: 'Sospensioni', prezzo: 55 },
+  { nome: 'Tirante barra stabilizzatrice', cat: 'Sospensioni', prezzo: 18 },
+  { nome: 'Cuscinetto ruota anteriore', cat: 'Sospensioni', prezzo: 45 },
+  { nome: 'Cuscinetto ruota posteriore', cat: 'Sospensioni', prezzo: 40 },
+  // Elettrico
+  { nome: 'Batteria 55Ah', cat: 'Elettrico', prezzo: 65 },
+  { nome: 'Batteria 60Ah', cat: 'Elettrico', prezzo: 75 },
+  { nome: 'Batteria 70Ah', cat: 'Elettrico', prezzo: 85 },
+  { nome: 'Batteria 80Ah', cat: 'Elettrico', prezzo: 95 },
+  { nome: 'Alternatore', cat: 'Elettrico', prezzo: 120 },
+  { nome: 'Motorino avviamento', cat: 'Elettrico', prezzo: 110 },
+  { nome: 'Sensore ABS anteriore sx', cat: 'Elettrico', prezzo: 35 },
+  { nome: 'Sensore ABS anteriore dx', cat: 'Elettrico', prezzo: 35 },
+  { nome: 'Sensore temperatura motore', cat: 'Elettrico', prezzo: 20 },
+  // Clima
+  { nome: 'Gas climatizzatore R134a (1kg)', cat: 'Clima', prezzo: 45 },
+  { nome: 'Gas climatizzatore R1234yf (1kg)', cat: 'Clima', prezzo: 85 },
+  { nome: 'Compressore clima', cat: 'Clima', prezzo: 150 },
+  { nome: 'Filtro essiccatore clima', cat: 'Clima', prezzo: 25 },
+  { nome: 'Liquido sterzo', cat: 'Sterzo', prezzo: 15 },
+  // Gomme / varie
+  { nome: 'Pneumatico estivo', cat: 'Gomme', prezzo: 85 },
+  { nome: 'Pneumatico invernale', cat: 'Gomme', prezzo: 90 },
+  { nome: 'Valvola pneumatico', cat: 'Gomme', prezzo: 3 },
+  { nome: 'Equilibratura ruota', cat: 'Gomme', prezzo: 6 },
+  { nome: 'Tergicristallo anteriore', cat: 'Varie', prezzo: 18 },
+  { nome: 'Tergicristallo posteriore', cat: 'Varie', prezzo: 12 },
+  { nome: 'Lampadina faro H7', cat: 'Varie', prezzo: 8 },
+  { nome: 'Lampadina faro H4', cat: 'Varie', prezzo: 8 },
+  { nome: 'Cinghia servizi', cat: 'Varie', prezzo: 18 },
+  { nome: 'Olio cambio automatico (1L)', cat: 'Cambio', prezzo: 18 },
+  { nome: 'Olio cambio manuale (1L)', cat: 'Cambio', prezzo: 14 },
+];
+
 // ==================== TAB FOGLIO LAVORO ====================
 function RicambioCard({ r, ricambi, setRicambi, updateRicambio, deleteRicambio }: {
   r: RicambioUsato; ricambi: RicambioUsato[];
@@ -886,16 +960,65 @@ function RicambioCard({ r, ricambi, setRicambi, updateRicambio, deleteRicambio }
   updateRicambio: (id: string, u: Partial<RicambioUsato>) => void;
   deleteRicambio: (id: string) => void;
 }) {
+  const [showSugg, setShowSugg] = useState(false);
+
+  const suggestions = r.nome.trim().length > 0
+    ? RICAMBI_COMUNI.filter((s) =>
+        s.nome.toLowerCase().includes(r.nome.toLowerCase()) ||
+        s.cat.toLowerCase().includes(r.nome.toLowerCase())
+      ).slice(0, 8)
+    : RICAMBI_COMUNI.slice(0, 10);
+
+  const applySuggestion = (s: typeof RICAMBI_COMUNI[0]) => {
+    const updated = ricambi.map((x) =>
+      x.id === r.id
+        ? { ...x, nome: s.nome, prezzo: s.prezzo ?? x.prezzo }
+        : x
+    );
+    setRicambi(updated);
+    updateRicambio(r.id, { nome: s.nome, prezzo: s.prezzo ?? r.prezzo });
+    setShowSugg(false);
+  };
+
   return (
     <div className="border border-gray-200 rounded-xl p-3 mb-2 bg-white">
-      <div className="flex items-center gap-2 mb-2">
-        <input
-          value={r.nome}
-          onChange={(e) => setRicambi(ricambi.map((x) => (x.id === r.id ? { ...x, nome: e.target.value } : x)))}
-          onBlur={() => updateRicambio(r.id, { nome: r.nome })}
-          placeholder="Nome ricambio (es. Filtro olio)"
-          className="flex-1 text-sm border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+      <div className="flex items-center gap-2 mb-2 relative">
+        <div className="flex-1 relative">
+          <input
+            value={r.nome}
+            onChange={(e) => setRicambi(ricambi.map((x) => (x.id === r.id ? { ...x, nome: e.target.value } : x)))}
+            onFocus={() => setShowSugg(true)}
+            onBlur={() => setTimeout(() => setShowSugg(false), 150)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowSugg(false); }}
+            placeholder="Cerca ricambio o scrivi nome..."
+            className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {/* Dropdown suggerimenti */}
+          {showSugg && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-0.5 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden max-h-60 overflow-y-auto">
+              {r.nome.trim() === '' && (
+                <div className="px-3 py-1.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wide bg-gray-50 border-b border-gray-100">
+                  Ricambi più comuni
+                </div>
+              )}
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  onMouseDown={() => applySuggestion(s)}
+                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-blue-50 text-left transition-colors cursor-pointer border-b border-gray-50 last:border-0"
+                >
+                  <div>
+                    <div className="text-sm text-gray-900">{s.nome}</div>
+                    <div className="text-[10px] text-gray-400">{s.cat}</div>
+                  </div>
+                  {s.prezzo && (
+                    <span className="text-xs font-semibold text-blue-600 ml-2 shrink-0">€{s.prezzo}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <VoiceButton onResult={(text) => { const updated = ricambi.map((x) => (x.id === r.id ? { ...x, nome: text } : x)); setRicambi(updated); updateRicambio(r.id, { nome: text }); }} />
       </div>
       <div className="grid grid-cols-3 gap-2">
