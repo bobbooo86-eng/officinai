@@ -116,6 +116,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
   const richieste = appuntamenti.filter((a) => a.stato === 'richiesta');
   const inCorso = appuntamenti.filter((a) => a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi');
   const autoInOfficina = appuntamenti.filter((a) => a.stato === 'in_diagnosi' || a.stato === 'in_lavorazione' || a.stato === 'attesa_ricambi');
+  const nonInLavorazione = appuntamenti.filter((a) => a.stato === 'prenotato');
   const pronti = appuntamenti.filter((a) => a.stato === 'pronto');
   const consegnati = appuntamenti.filter((a) => a.stato === 'consegnato');
   const recenti = appuntamenti.slice(0, 8);
@@ -205,12 +206,11 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
       )}
 
       {/* KPIs — larger, with colored borders */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 animate-fade-in" style={{ animationDelay: '0.1s' }}>
         {[
           { label: 'Richieste', count: richieste.length, color: 'purple', filter: 'richiesta', icon: '🔔' },
           { label: 'Auto in officina', count: autoInOfficina.length, color: 'orange', filter: 'in_corso', icon: '🚗' },
-          { label: 'Oggi', count: appOggi.length, color: 'blue', filter: 'oggi', icon: '📅' },
-          { label: 'In Corso', count: inCorso.length, color: 'amber', filter: 'in_corso', icon: '🔧' },
+          { label: 'Non in lavorazione', count: nonInLavorazione.length, color: 'amber', filter: 'prenotato', icon: '⏳' },
           { label: 'Pronti', count: pronti.length, color: 'emerald', filter: 'pronto', icon: '✅' },
           { label: 'Consegnati', count: consegnati.length, color: 'gray', filter: 'consegnato', icon: '🏁' },
         ].map((kpi) => (
