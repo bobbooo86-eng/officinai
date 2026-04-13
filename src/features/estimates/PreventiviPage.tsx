@@ -1552,6 +1552,7 @@ interface PreventivoListItem {
   stato: string;
   created_at: string;
   appuntamento_id: string;
+  righe: { tipo: 'manodopera' | 'ricambio'; desc: string; qta: number; prezzo: number }[];
   cliente_nome?: string;
   veicolo_targa?: string;
   veicolo_desc?: string;
@@ -1559,7 +1560,8 @@ interface PreventivoListItem {
 
 export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, externalSearch }: { onSelectAppuntamento?: (app: any) => void; onNavigateToCalendar?: (date: Date) => void; externalSearch?: string }) {
   const { officina } = useAuthStore();
-  const [view, setView] = useState<'list' | 'new'>('list');
+  const [view, setView] = useState<'list' | 'new' | 'detail'>('list');
+  const [selectedPreventivo, setSelectedPreventivo] = useState<PreventivoListItem | null>(null);
   const [preventivi, setPreventivi] = useState<PreventivoListItem[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [searchQuery, setSearchQuery] = useState(externalSearch || '');
@@ -1611,6 +1613,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
         const ve = app?.veicolo_id ? veicoliMap[app.veicolo_id] : null;
         return {
           ...p,
+          righe: p.righe || [],
           cliente_nome: cl?.nome || 'Cliente sconosciuto',
           veicolo_targa: ve?.targa || '',
           veicolo_desc: ve ? `${ve.marca} ${ve.modello}` : '',
@@ -1646,6 +1649,113 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
 
   if (view === 'new') {
     return <PreventivoBuilder onBack={() => setView('list')} />;
+  }
+
+  if (view === 'detail' && selectedPreventivo) {
+    const p = selectedPreventivo;
+    const statoMap: Record<string, { label: string; color: string; bg: string }> = {
+      bozza: { label: 'Bozza', color: '#6b7280', bg: '#f3f4f6' },
+      inviato: { label: 'Inviato', color: '#3b82f6', bg: '#dbeafe' },
+      accettato: { label: 'Accettato', color: '#10b981', bg: '#d1fae5' },
+      rifiutato: { label: 'Rifiutato', color: '#ef4444', bg: '#fee2e2' },
+    };
+    const statoInfo = statoMap[p.stato] || statoMap.bozza;
+
+    return (
+      <div className="p-4 space-y-4 pb-24">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <button onClick={() => { setView('list'); setSelectedPreventivo(null); }} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer">
+            <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="flex-1">
+            <h2 className="font-bold text-gray-900 text-base">{p.cliente_nome}</h2>
+            <div className="flex items-center gap-2 mt-0.5">
+              {p.veicolo_desc && <span className="text-xs text-gray-500">{p.veicolo_desc}</span>}
+              {p.veicolo_targa && (
+                <span className="text-[10px] font-mono bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-bold">{p.veicolo_targa}</span>
+              )}
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: statoInfo.bg, color: statoInfo.color }}>
+            {statoInfo.label}
+          </span>
+        </div>
+
+        {/* Data */}
+        <div className="text-xs text-gray-400">
+          Creato il {new Date(p.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        </div>
+
+        {/* Voci preventivo */}
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+            <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Voci preventivo</span>
+          </div>
+          {p.righe.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-gray-400">Nessuna voce</div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {p.righe.map((r, i) => (
+                <div key={i} className="px-4 py-3 flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${r.tipo === 'manodopera' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {r.tipo === 'manodopera' ? '🔧 Manodopera' : '📦 Ricambio'}
+                      </span>
+                    </div>
+                    <div className="text-sm font-medium text-gray-900">{r.desc}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {r.qta} × {fmtEuro(r.prezzo)}
+                    </div>
+                  </div>
+                  <div className="text-sm font-bold text-gray-900 shrink-0">
+                    {fmtEuro(r.qta * r.prezzo)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Totali */}
+        <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
+          <div className="flex justify-between text-sm text-gray-600">
+            <span>Subtotale</span>
+            <span>{fmtEuro(p.subtotale)}</span>
+          </div>
+          {p.sconto > 0 && (
+            <div className="flex justify-between text-sm text-green-600">
+              <span>Sconto</span>
+              <span>− {fmtEuro(p.sconto)}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-sm text-gray-600">
+            <span>IVA 22%</span>
+            <span>{fmtEuro(p.iva)}</span>
+          </div>
+          <div className="flex justify-between text-base font-black text-gray-900 pt-2 border-t border-gray-200">
+            <span>TOTALE</span>
+            <span>{fmtEuro(p.totale)}</span>
+          </div>
+        </div>
+
+        {/* Azioni */}
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              const { data } = await supabase.from('appuntamenti').select('*, clienti(nome,tel), veicoli(marca,modello,targa)').eq('id', p.appuntamento_id).single();
+              if (data && onSelectAppuntamento) onSelectAppuntamento(data);
+            }}
+            className="flex-1 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold text-sm hover:bg-blue-50 cursor-pointer transition-colors"
+          >
+            📅 Vai all'appuntamento
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1706,14 +1816,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
           {filtered.map((p) => (
             <div
               key={p.id}
-              onClick={async () => {
-                const { data } = await supabase.from('appuntamenti').select('*').eq('id', p.appuntamento_id).single();
-                if (data && onNavigateToCalendar) {
-                  onNavigateToCalendar(new Date(data.data_ora));
-                } else if (data && onSelectAppuntamento) {
-                  onSelectAppuntamento(data);
-                }
-              }}
+              onClick={() => { setSelectedPreventivo(p); setView('detail'); }}
               className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer">
               <div className="flex items-start justify-between mb-2">
                 <div>
