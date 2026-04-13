@@ -10,9 +10,9 @@ export function Card({ children, padding = true, hover = false, className = '', 
   return (
     <div
       className={`
-        bg-white rounded-2xl border border-gray-200 shadow-sm
+        bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm
         ${padding ? 'p-5' : ''}
-        ${hover ? 'hover:shadow-md hover:border-gray-300 transition-all cursor-pointer' : ''}
+        ${hover ? 'hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 active:scale-[0.99] transition-all cursor-pointer' : ''}
         ${className}
       `}
       {...(hover ? { role: 'region' } : {})}

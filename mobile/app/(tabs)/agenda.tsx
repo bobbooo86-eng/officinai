@@ -7,55 +7,59 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Alert,
   StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/lib/authStore';
 import StatusBadge from '@/components/StatusBadge';
-import { BRAND_BLUE, FILTER_TABS, type AppuntamentoStato } from '@/lib/constants';
+import { BRAND_BLUE, type AppuntamentoStato } from '@/lib/constants';
+import { fmtDataOra } from '@/lib/format';
 
 interface Appointment {
   id: string;
   data_ora: string;
   stato: AppuntamentoStato;
-  problema_descritto: string | null;
-  clienti: { nome: string; cognome: string } | null;
+  problema: string | null;
+  clienti: { nome: string; tel: string } | null;
   veicoli: { marca: string; modello: string; targa: string } | null;
 }
+
+const SELECT_QUERY =
+  'id, data_ora, stato, problema, clienti(nome, tel), veicoli(marca, modello, targa)';
+
+const FILTER_TABS = [
+  { key: 'tutti', label: 'Tutti' },
+  { key: 'richiesta', label: 'Richieste' },
+  { key: 'in_attesa', label: 'In Attesa' },
+  { key: 'in_corso', label: 'In Corso' },
+  { key: 'completato', label: 'Completato' },
+] as const;
 
 type FilterKey = (typeof FILTER_TABS)[number]['key'];
 
 export default function AgendaScreen() {
   const router = useRouter();
+  const { officina } = useAuthStore();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterKey>('tutti');
 
   useEffect(() => {
-    loadAppointments();
-  }, []);
+    if (officina?.id) {
+      loadAppointments();
+    }
+  }, [officina?.id]);
 
   async function loadAppointments() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: utente } = await supabase
-      .from('utenti')
-      .select('officina_id')
-      .eq('id', user.id)
-      .single();
-
-    if (!utente) return;
+    if (!officina?.id) return;
 
     const { data, error } = await supabase
       .from('appuntamenti')
-      .select(
-        'id, data_ora, stato, problema_descritto, clienti(nome, cognome), veicoli(marca, modello, targa)'
-      )
-      .eq('officina_id', utente.officina_id)
+      .select(SELECT_QUERY)
+      .eq('officina_id', officina.id)
       .order('data_ora', { ascending: false });
 
     if (!error && data) {
@@ -68,27 +72,18 @@ export default function AgendaScreen() {
     setRefreshing(true);
     await loadAppointments();
     setRefreshing(false);
-  }, []);
+  }, [officina?.id]);
 
   const filteredAppointments = appointments.filter((a) => {
     if (activeFilter === 'tutti') return true;
-    if (activeFilter === 'in_attesa') return a.stato === 'prenotato' || a.stato === 'attesa_ricambi';
+    if (activeFilter === 'richiesta') return a.stato === 'richiesta';
+    if (activeFilter === 'in_attesa')
+      return a.stato === 'prenotato' || a.stato === 'attesa_ricambi';
     if (activeFilter === 'in_corso')
       return a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi';
     if (activeFilter === 'completato') return a.stato === 'pronto';
     return true;
   });
-
-  function formatDate(dateStr: string) {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('it-IT', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  }
 
   function renderAppointment({ item }: { item: Appointment }) {
     return (
@@ -98,22 +93,20 @@ export default function AgendaScreen() {
         onPress={() => router.push(`/appointment/${item.id}`)}
       >
         <View style={styles.cardHeader}>
-          <Text style={styles.cardDate}>{formatDate(item.data_ora)}</Text>
+          <Text style={styles.cardDate}>{fmtDataOra(item.data_ora)}</Text>
           <StatusBadge status={item.stato} />
         </View>
         <Text style={styles.cardClient}>
-          {item.clienti
-            ? `${item.clienti.nome} ${item.clienti.cognome}`
-            : 'Cliente sconosciuto'}
+          {item.clienti?.nome || 'Cliente sconosciuto'}
         </Text>
         {item.veicoli && (
           <Text style={styles.cardVehicle}>
             {item.veicoli.marca} {item.veicoli.modello} - {item.veicoli.targa}
           </Text>
         )}
-        {item.problema_descritto && (
+        {item.problema && (
           <Text style={styles.cardProblem} numberOfLines={2}>
-            {item.problema_descritto}
+            {item.problema}
           </Text>
         )}
       </TouchableOpacity>
@@ -163,7 +156,7 @@ export default function AgendaScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📋</Text>
+            <Text style={styles.emptyIcon}>{"\uD83D\uDCCB"}</Text>
             <Text style={styles.emptyText}>Nessun appuntamento trovato</Text>
           </View>
         }
@@ -173,9 +166,7 @@ export default function AgendaScreen() {
       <TouchableOpacity
         style={styles.fab}
         activeOpacity={0.8}
-        onPress={() => {
-          // Navigate to new appointment form (future implementation)
-        }}
+        onPress={() => router.push('/nuovo-appuntamento')}
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
@@ -200,15 +191,16 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 12,
-    gap: 8,
+    gap: 6,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
+    flexWrap: 'wrap',
   },
   filterTab: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: '#f1f5f9',

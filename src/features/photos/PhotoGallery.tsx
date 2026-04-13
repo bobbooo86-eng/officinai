@@ -17,6 +17,7 @@ export function PhotoGallery({ appuntamentoId, readOnly = false }: PhotoGalleryP
   const [uploading, setUploading] = useState(false);
   const [categoria, setCategoria] = useState<FotoCategoria>('durante');
   const [selectedFoto, setSelectedFoto] = useState<Foto | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -45,6 +46,8 @@ export function PhotoGallery({ appuntamentoId, readOnly = false }: PhotoGalleryP
     if (!files || files.length === 0) return;
 
     setUploading(true);
+    setUploadError(null);
+    let failedCount = 0;
 
     for (const file of Array.from(files)) {
       try {
@@ -53,15 +56,16 @@ export function PhotoGallery({ appuntamentoId, readOnly = false }: PhotoGalleryP
         const fileName = `${appuntamentoId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
         // Upload to Supabase Storage
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { data: uploadData, error: storageError } = await supabase.storage
           .from('foto-lavorazione')
           .upload(fileName, file, {
             cacheControl: '3600',
             upsert: false,
           });
 
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
+        if (storageError) {
+          console.error('Upload error:', storageError);
+          failedCount++;
           continue;
         }
 
@@ -81,10 +85,14 @@ export function PhotoGallery({ appuntamentoId, readOnly = false }: PhotoGalleryP
         });
       } catch (err) {
         console.error('Upload failed:', err);
+        failedCount++;
       }
     }
 
     setUploading(false);
+    if (failedCount > 0) {
+      setUploadError(`${failedCount} foto non ${failedCount === 1 ? 'caricata' : 'caricate'}. Riprova.`);
+    }
     fetchFoto();
 
     // Reset file input
@@ -152,6 +160,17 @@ export function PhotoGallery({ appuntamentoId, readOnly = false }: PhotoGalleryP
           >
             📸 {uploading ? 'Caricamento...' : `Scatta / Seleziona foto (${categoriaLabel(categoria)})`}
           </Button>
+          {uploadError && (
+            <div className="mt-2 p-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-center justify-between">
+              <span>{uploadError}</span>
+              <button
+                onClick={() => setUploadError(null)}
+                className="ml-2 text-red-400 hover:text-red-600 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </Card>
       )}
 

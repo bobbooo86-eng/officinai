@@ -1,80 +1,309 @@
 import { useEffect, useState } from 'react';
-import { Card, Badge, Loader } from '@/components/ui';
+import { Card, Badge, Button, Loader, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import type { Magazzino } from '@/types/database';
+
+const CATEGORIE = [
+  'Filtri', 'Olio', 'Freni', 'Sospensioni', 'Cinghie', 'Batterie',
+  'Candele', 'Pneumatici', 'Elettronica', 'Carrozzeria', 'Altro',
+];
+
+const emptyItem: Partial<Magazzino> = {
+  nome: '', codice: '', categoria: 'Altro',
+  quantita: 0, quantita_minima: 2,
+  prezzo_acq: 0, prezzo_vend: 0,
+};
 
 export function InventoryPage() {
   const { officina } = useAuthStore();
   const [items, setItems] = useState<Magazzino[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [catFilter, setCatFilter] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState<Partial<Magazzino>>(emptyItem);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState('');
 
-  useEffect(() => {
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+
+  const fetchItems = async () => {
     if (!officina) return;
-    const fetch = async () => {
-      const { data } = await supabase
-        .from('magazzino')
-        .select('*')
-        .eq('officina_id', officina.id)
-        .order('nome');
-      setItems(data || []);
-      setLoading(false);
-    };
-    fetch();
-  }, [officina]);
+    const { data } = await supabase
+      .from('magazzino')
+      .select('*')
+      .eq('officina_id', officina.id)
+      .order('nome');
+    setItems(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchItems(); }, [officina]);
+
+  const saveItem = async () => {
+    if (!officina || !editItem.nome?.trim()) return;
+    setSaving(true);
+    if (editItem.id) {
+      // Update
+      const { error } = await supabase.from('magazzino')
+        .update({
+          nome: editItem.nome, codice: editItem.codice || '',
+          categoria: editItem.categoria || 'Altro',
+          quantita: editItem.quantita || 0,
+          quantita_minima: editItem.quantita_minima || 0,
+          prezzo_acq: editItem.prezzo_acq || 0,
+          prezzo_vend: editItem.prezzo_vend || 0,
+        })
+        .eq('id', editItem.id);
+      if (!error) {
+        showToast('Articolo aggiornato');
+        setShowForm(false);
+        setEditItem(emptyItem);
+        fetchItems();
+      }
+    } else {
+      // Insert
+      const { error } = await supabase.from('magazzino')
+        .insert({
+          officina_id: officina.id,
+          nome: editItem.nome, codice: editItem.codice || '',
+          categoria: editItem.categoria || 'Altro',
+          quantita: editItem.quantita || 0,
+          quantita_minima: editItem.quantita_minima || 0,
+          prezzo_acq: editItem.prezzo_acq || 0,
+          prezzo_vend: editItem.prezzo_vend || 0,
+        });
+      if (!error) {
+        showToast('Articolo aggiunto');
+        setShowForm(false);
+        setEditItem(emptyItem);
+        fetchItems();
+      }
+    }
+    setSaving(false);
+  };
+
+  const deleteItem = async (id: string, nome: string) => {
+    if (!confirm(`Eliminare "${nome}" dal magazzino?`)) return;
+    await supabase.from('magazzino').delete().eq('id', id);
+    setItems(items.filter(i => i.id !== id));
+    showToast('Articolo eliminato');
+  };
+
+  const adjustQty = async (id: string, delta: number) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    const newQty = Math.max(0, item.quantita + delta);
+    await supabase.from('magazzino').update({ quantita: newQty }).eq('id', id);
+    setItems(items.map(i => i.id === id ? { ...i, quantita: newQty } : i));
+  };
 
   if (loading) return <Loader text="Caricamento magazzino..." />;
 
-  const filtered = items.filter((m) =>
-    m.nome.toLowerCase().includes(search.toLowerCase()) ||
-    m.codice?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = items.filter((m) => {
+    const matchSearch = m.nome.toLowerCase().includes(search.toLowerCase()) ||
+      m.codice?.toLowerCase().includes(search.toLowerCase());
+    const matchCat = !catFilter || m.categoria === catFilter;
+    return matchSearch && matchCat;
+  });
+
+  const lowStockCount = items.filter(i => i.quantita <= i.quantita_minima).length;
+  const totalValue = items.reduce((sum, i) => sum + ((i.quantita || 0) * (i.prezzo_acq || 0)), 0);
+  const categories = [...new Set(items.map(i => i.categoria).filter(Boolean))];
 
   return (
     <div className="p-4 space-y-3">
-      <h2 className="text-lg font-bold text-gray-900">Magazzino</h2>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-gray-900">Magazzino</h2>
+        <Button size="sm" onClick={() => { setEditItem(emptyItem); setShowForm(true); }}>
+          + Nuovo
+        </Button>
+      </div>
 
-      {/* Search */}
-      <input
-        type="text"
-        placeholder="Cerca articolo..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-2">
+        <Card className="!p-2 text-center">
+          <div className="text-lg font-bold text-gray-900">{items.length}</div>
+          <div className="text-[10px] text-gray-500">Articoli</div>
+        </Card>
+        <Card className="!p-2 text-center">
+          <div className={`text-lg font-bold ${lowStockCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+            {lowStockCount}
+          </div>
+          <div className="text-[10px] text-gray-500">Sotto scorta</div>
+        </Card>
+        <Card className="!p-2 text-center">
+          <div className="text-lg font-bold text-blue-700">{fmtEuro(totalValue)}</div>
+          <div className="text-[10px] text-gray-500">Valore stock</div>
+        </Card>
+      </div>
 
-      {/* Items */}
+      {/* Search + category filter */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder="Cerca articolo..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 px-3 py-2 rounded-xl border border-gray-300 bg-white text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <select
+          value={catFilter}
+          onChange={(e) => setCatFilter(e.target.value)}
+          className="px-2 py-2 rounded-xl border border-gray-300 bg-white text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Tutte</option>
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-xl shadow-lg z-50">
+          {toast}
+        </div>
+      )}
+
+      {/* Add/Edit Form */}
+      {showForm && (
+        <Card className="!p-4 border-blue-200 bg-blue-50">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">
+            {editItem.id ? 'Modifica articolo' : 'Nuovo articolo'}
+          </h3>
+          <div className="space-y-2">
+            <Input
+              label="Nome articolo *"
+              value={editItem.nome || ''}
+              onChange={(e) => setEditItem({ ...editItem, nome: e.target.value })}
+              placeholder="es. Filtro olio BMW"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                label="Codice"
+                value={editItem.codice || ''}
+                onChange={(e) => setEditItem({ ...editItem, codice: e.target.value })}
+                placeholder="es. FO-1234"
+              />
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Categoria</label>
+                <select
+                  value={editItem.categoria || 'Altro'}
+                  onChange={(e) => setEditItem({ ...editItem, categoria: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {CATEGORIE.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                label="Quantita"
+                type="number"
+                value={editItem.quantita?.toString() || '0'}
+                onChange={(e) => setEditItem({ ...editItem, quantita: parseInt(e.target.value) || 0 })}
+              />
+              <Input
+                label="Scorta minima"
+                type="number"
+                value={editItem.quantita_minima?.toString() || '0'}
+                onChange={(e) => setEditItem({ ...editItem, quantita_minima: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                label="Prezzo acquisto"
+                type="number"
+                step="0.01"
+                value={editItem.prezzo_acq?.toString() || '0'}
+                onChange={(e) => setEditItem({ ...editItem, prezzo_acq: parseFloat(e.target.value) || 0 })}
+              />
+              <Input
+                label="Prezzo vendita"
+                type="number"
+                step="0.01"
+                value={editItem.prezzo_vend?.toString() || '0'}
+                onChange={(e) => setEditItem({ ...editItem, prezzo_vend: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button onClick={saveItem} disabled={saving || !editItem.nome?.trim()} fullWidth>
+                {saving ? 'Salvataggio...' : editItem.id ? 'Aggiorna' : 'Aggiungi'}
+              </Button>
+              <Button variant="secondary" onClick={() => { setShowForm(false); setEditItem(emptyItem); }} fullWidth>
+                Annulla
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Items list */}
       <div className="space-y-2">
-        {filtered.map((item) => {
-          const lowStock = item.quantita <= item.quantita_minima;
-          return (
-            <Card key={item.id} className="!p-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-sm text-gray-900">{item.nome}</div>
-                  <div className="text-xs text-gray-400">
-                    {item.codice} {item.categoria && `• ${item.categoria}`}
+        {filtered.length === 0 ? (
+          <div className="text-center py-8 text-gray-400 text-sm">
+            {search || catFilter ? 'Nessun risultato' : 'Magazzino vuoto — aggiungi il primo articolo'}
+          </div>
+        ) : (
+          filtered.map((item) => {
+            const lowStock = item.quantita <= item.quantita_minima;
+            return (
+              <Card key={item.id} className={`!p-3 ${lowStock ? 'border-red-200 bg-red-50/30' : ''}`}>
+                <div className="flex items-start justify-between">
+                  <div
+                    className="flex-1 cursor-pointer"
+                    onClick={() => { setEditItem(item); setShowForm(true); }}
+                  >
+                    <div className="font-medium text-sm text-gray-900">{item.nome}</div>
+                    <div className="text-xs text-gray-400">
+                      {item.codice && <span className="font-mono">{item.codice}</span>}
+                      {item.codice && item.categoria && ' • '}
+                      {item.categoria}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      Acq: {fmtEuro(item.prezzo_acq)} • Vend: {fmtEuro(item.prezzo_vend)}
+                      {item.quantita > 0 && (
+                        <span className="text-gray-300"> • Stock: {fmtEuro((item.quantita || 0) * (item.prezzo_acq || 0))}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-end gap-1">
                     <Badge
                       color={lowStock ? '#991b1b' : '#065f46'}
                       bg={lowStock ? '#fee2e2' : '#d1fae5'}
                     >
-                      {lowStock ? '⚠️' : ''} {item.quantita} pz
+                      {lowStock ? '⚠️ ' : ''}{item.quantita} pz
                     </Badge>
-                  </div>
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    Acq: {fmtEuro(item.prezzo_acq)} • Vend: {fmtEuro(item.prezzo_vend)}
+                    {/* Quick qty adjust */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => adjustQty(item.id, -1)}
+                        className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs font-bold text-gray-600 flex items-center justify-center cursor-pointer"
+                      >
+                        −
+                      </button>
+                      <button
+                        onClick={() => adjustQty(item.id, 1)}
+                        className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs font-bold text-gray-600 flex items-center justify-center cursor-pointer"
+                      >
+                        +
+                      </button>
+                      <button
+                        onClick={() => deleteItem(item.id, item.nome)}
+                        className="w-6 h-6 rounded-lg bg-red-50 hover:bg-red-100 text-xs text-red-500 flex items-center justify-center cursor-pointer ml-1"
+                        title="Elimina"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </Card>
-          );
-        })}
+              </Card>
+            );
+          })
+        )}
       </div>
     </div>
   );

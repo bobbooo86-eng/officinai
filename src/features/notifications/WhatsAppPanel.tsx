@@ -70,20 +70,28 @@ export function WhatsAppPanel({ appuntamento }: WhatsAppPanelProps) {
     setSending(true);
     const testo = getPreviewMessage();
 
-    // Save to notification log in database
-    await supabase.from('notifiche_wa').insert({
-      officina_id: officina?.id,
-      cliente_id: appuntamento.cliente_id,
-      tipo: selectedTemplate,
-      testo,
-      stato: 'inviato',
-      tel_destinatario: clienteTel,
-    });
+    // Try Edge Function (Twilio) first, fallback to WhatsApp Web
+    try {
+      const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+        body: {
+          to: clienteTel,
+          message: testo,
+          officina_id: officina?.id,
+          cliente_id: appuntamento.cliente_id,
+          tipo: selectedTemplate,
+        },
+      });
 
-    // In production, this would call an Edge Function that uses Twilio/360dialog
-    // For now, we log it and open WhatsApp Web as fallback
-    const waUrl = `https://wa.me/${clienteTel.replace(/[^0-9+]/g, '')}?text=${encodeURIComponent(testo)}`;
-    window.open(waUrl, '_blank');
+      if (data?.fallback || error) {
+        // Twilio not configured or error — open WhatsApp Web
+        const waUrl = `https://wa.me/${clienteTel.replace(/[^0-9+]/g, '')}?text=${encodeURIComponent(testo)}`;
+        window.open(waUrl, '_blank');
+      }
+    } catch {
+      // Fallback: WhatsApp Web
+      const waUrl = `https://wa.me/${clienteTel.replace(/[^0-9+]/g, '')}?text=${encodeURIComponent(testo)}`;
+      window.open(waUrl, '_blank');
+    }
 
     setSending(false);
     setSent(true);

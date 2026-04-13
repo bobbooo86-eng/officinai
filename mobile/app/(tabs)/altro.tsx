@@ -1,38 +1,46 @@
 import { View, Text, SafeAreaView, TouchableOpacity, Alert, ScrollView, StyleSheet } from 'react-native';
-import { supabase } from '@/lib/supabase';
+import { useRouter } from 'expo-router';
+import { useAuthStore } from '@/lib/authStore';
 import { APP_VERSION, BRAND_BLUE } from '@/lib/constants';
 
 interface MenuItem {
   icon: string;
   title: string;
   subtitle: string;
-  onPress?: () => void;
+  route: string;
 }
 
 const MENU_ITEMS: MenuItem[] = [
   {
-    icon: '📦',
+    icon: '\uD83D\uDCE6',
     title: 'Magazzino',
     subtitle: 'Gestione ricambi e inventario',
+    route: '/magazzino',
   },
   {
-    icon: '📊',
+    icon: '\uD83D\uDD27',
+    title: 'Scansioni OBD',
+    subtitle: 'Codici errore e diagnostica',
+    route: '/obd',
+  },
+  {
+    icon: '\uD83D\uDCCA',
     title: 'Analytics',
     subtitle: 'Statistiche e report officina',
+    route: '/analytics',
   },
   {
-    icon: '🧾',
-    title: 'Fatturazione',
-    subtitle: 'Preventivi e fatture',
-  },
-  {
-    icon: '⚙️',
+    icon: '\u2699\uFE0F',
     title: 'Impostazioni',
     subtitle: 'Preferenze e configurazione',
+    route: '/settings',
   },
 ];
 
 export default function AltroScreen() {
+  const router = useRouter();
+  const { officina, logout } = useAuthStore();
+
   function handleLogout() {
     Alert.alert('Esci', 'Sei sicuro di voler uscire?', [
       { text: 'Annulla', style: 'cancel' },
@@ -40,7 +48,7 @@ export default function AltroScreen() {
         text: 'Esci',
         style: 'destructive',
         onPress: async () => {
-          await supabase.auth.signOut();
+          await logout();
         },
       },
     ]);
@@ -49,6 +57,19 @@ export default function AltroScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Officina Info */}
+        {officina && (
+          <View style={styles.infoCard}>
+            <Text style={styles.infoName}>{officina.nome}</Text>
+            {officina.indirizzo ? (
+              <Text style={styles.infoDetail}>{officina.indirizzo}</Text>
+            ) : null}
+            {officina.tel ? (
+              <Text style={styles.infoDetail}>{officina.tel}</Text>
+            ) : null}
+          </View>
+        )}
+
         {/* Menu Items */}
         <View style={styles.menuSection}>
           {MENU_ITEMS.map((item, index) => (
@@ -59,14 +80,14 @@ export default function AltroScreen() {
                 index < MENU_ITEMS.length - 1 && styles.menuItemBorder,
               ]}
               activeOpacity={0.6}
-              onPress={item.onPress}
+              onPress={() => router.push(item.route as any)}
             >
               <Text style={styles.menuIcon}>{item.icon}</Text>
               <View style={styles.menuText}>
                 <Text style={styles.menuTitle}>{item.title}</Text>
                 <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
               </View>
-              <Text style={styles.menuChevron}>›</Text>
+              <Text style={styles.menuChevron}>{">"}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -91,6 +112,23 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     gap: 20,
+  },
+  infoCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  infoName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  infoDetail: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 4,
   },
   menuSection: {
     backgroundColor: '#ffffff',

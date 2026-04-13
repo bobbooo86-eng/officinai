@@ -80,6 +80,15 @@ export interface Veicolo {
   created_at?: string;
 }
 
+export type PagamentoStato = 'pagato' | 'acconto' | 'non_pagato';
+
+export interface PagamentoInfo {
+  stato: PagamentoStato;
+  importo_pagato?: number;   // per acconto: quanto ha già pagato
+  importo_totale?: number;   // importo totale da pagare
+  note?: string;
+}
+
 export interface Appuntamento {
   id: string;
   officina_id: string;
@@ -94,6 +103,7 @@ export interface Appuntamento {
   codici_obd?: string;
   data_proposta?: string;
   nota_officina?: string;
+  pagamento?: PagamentoInfo | null;
   created_at?: string;
   // Relations (joined)
   clienti?: Cliente;

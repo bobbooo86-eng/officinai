@@ -1,0 +1,181 @@
+import { useState } from 'react';
+import { Button, Card } from '@/components/ui';
+import { supabase } from '@/lib/supabase';
+import { sendEmail } from '@/lib/email';
+import { useAuthStore } from '@/stores/authStore';
+
+interface ShareDocumentProps {
+  /** Tipo documento per il template email */
+  tipo: 'preventivo' | 'fattura' | 'foglio_lavoro' | 'conto';
+  /** Titolo mostrato nel dialog */
+  titolo: string;
+  /** Dati per l'email */
+  emailData: Record<string, any>;
+  /** Testo per WhatsApp */
+  whatsappText: string;
+  /** Email destinatario (pre-compilata) */
+  clienteEmail?: string;
+  /** Tel destinatario */
+  clienteTel?: string;
+  /** Nome cliente */
+  clienteNome?: string;
+  /** ID officina */
+  officinaId?: string;
+  /** ID cliente */
+  clienteId?: string;
+  /** Callback dopo invio */
+  onSent?: () => void;
+}
+
+export function ShareDocument({
+  tipo, titolo, emailData, whatsappText,
+  clienteEmail, clienteTel, clienteNome,
+  officinaId, clienteId, onSent,
+}: ShareDocumentProps) {
+  const { officina } = useAuthStore();
+  const [open, setOpen] = useState(false);
+  const [sending, setSending] = useState<'email' | 'whatsapp' | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [emailTo, setEmailTo] = useState(clienteEmail || '');
+  const [telTo, setTelTo] = useState(clienteTel || '');
+
+  const inviaEmail = async () => {
+    if (!emailTo) return;
+    setSending('email');
+    setResult(null);
+
+    const templateMap: Record<string, string> = {
+      preventivo: 'preventivo_inviato',
+      fattura: 'fattura_emessa',
+      foglio_lavoro: 'stato_aggiornato',
+      conto: 'stato_aggiornato',
+    };
+
+    const ok = await sendEmail(
+      emailTo,
+      templateMap[tipo] as any,
+      { ...emailData, officinaNome: officina?.nome || 'OfficinAI' }
+    );
+
+    setSending(null);
+    setResult(ok
+      ? { ok: true, msg: 'Email inviata con successo!' }
+      : { ok: false, msg: 'Errore invio email. Riprova.' }
+    );
+    if (ok && onSent) onSent();
+  };
+
+  const inviaWhatsApp = async () => {
+    if (!telTo) return;
+    setSending('whatsapp');
+    setResult(null);
+
+    // Try Edge Function first
+    try {
+      const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+        body: {
+          to: telTo,
+          message: whatsappText,
+          officina_id: officinaId || officina?.id,
+          cliente_id: clienteId,
+          tipo,
+        },
+      });
+
+      if (data?.fallback) {
+        // Twilio not configured, open WhatsApp Web
+        const normalizedTel = telTo.replace(/[^0-9+]/g, '');
+        window.open(`https://wa.me/${normalizedTel}?text=${encodeURIComponent(whatsappText)}`, '_blank');
+        setResult({ ok: true, msg: 'Aperto WhatsApp Web' });
+      } else if (data?.success) {
+        setResult({ ok: true, msg: 'WhatsApp inviato!' });
+      } else {
+        throw new Error(data?.error || error?.message || 'Errore');
+      }
+    } catch {
+      // Fallback: open WhatsApp Web directly
+      const normalizedTel = telTo.replace(/[^0-9+]/g, '');
+      window.open(`https://wa.me/${normalizedTel}?text=${encodeURIComponent(whatsappText)}`, '_blank');
+      setResult({ ok: true, msg: 'Aperto WhatsApp Web' });
+    }
+
+    setSending(null);
+    if (onSent) onSent();
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-medium cursor-pointer transition-colors"
+      >
+        <span>📤</span> Invia {titolo}
+      </button>
+    );
+  }
+
+  return (
+    <Card className="!p-4 border-blue-200 bg-blue-50/50">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-sm font-semibold text-gray-900">Invia {titolo}</h4>
+        <button
+          onClick={() => { setOpen(false); setResult(null); }}
+          className="text-gray-400 hover:text-gray-600 cursor-pointer text-lg"
+        >×</button>
+      </div>
+
+      {clienteNome && (
+        <div className="text-xs text-gray-500 mb-3">Destinatario: <strong>{clienteNome}</strong></div>
+      )}
+
+      {/* Result message */}
+      {result && (
+        <div className={`p-2 rounded-lg text-xs font-medium mb-3 ${
+          result.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
+          {result.ok ? '✅' : '❌'} {result.msg}
+        </div>
+      )}
+
+      {/* Email */}
+      <div className="space-y-2 mb-3">
+        <div className="flex gap-2">
+          <input
+            type="email"
+            placeholder="Email destinatario"
+            value={emailTo}
+            onChange={(e) => setEmailTo(e.target.value)}
+            className="flex-1 px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <Button
+            size="sm"
+            onClick={inviaEmail}
+            disabled={!emailTo || sending === 'email'}
+          >
+            {sending === 'email' ? '...' : '📧 Email'}
+          </Button>
+        </div>
+      </div>
+
+      {/* WhatsApp */}
+      <div className="flex gap-2">
+        <input
+          type="tel"
+          placeholder="Numero WhatsApp"
+          value={telTo}
+          onChange={(e) => setTelTo(e.target.value)}
+          className="flex-1 px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+        />
+        <Button
+          size="sm"
+          variant="success"
+          onClick={inviaWhatsApp}
+          disabled={!telTo || sending === 'whatsapp'}
+        >
+          {sending === 'whatsapp' ? '...' : '💬 WhatsApp'}
+        </Button>
+      </div>
+    </Card>
+  );
+}

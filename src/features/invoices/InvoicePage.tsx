@@ -3,6 +3,7 @@ import { Button, Card, Badge, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { fmtEuro, fmtData } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
+import { ShareDocument } from '@/components/ShareDocument';
 import type { Preventivo, PreventivoRiga, Appuntamento } from '@/types/database';
 
 // ============================================
@@ -717,10 +718,22 @@ function DettaglioFattura({
         )}
       </Card>
 
-      {/* PDF */}
+      {/* PDF + Condividi */}
       <Button variant="secondary" size="sm" onClick={generaPDF} loading={generating} fullWidth>
         📄 Genera PDF
       </Button>
+
+      <ShareDocument
+        tipo="fattura"
+        titolo="fattura"
+        clienteNome={fattura.cliente_nome}
+        emailData={{
+          clienteNome: fattura.cliente_nome,
+          numero: fattura.numero,
+          totale: fattura.totale,
+        }}
+        whatsappText={`Buongiorno ${fattura.cliente_nome}, le inviamo la fattura n. ${fattura.numero} per un totale di €${fattura.totale.toFixed(2)} (IVA incl.). Può consultarla dalla app OfficinAI. — ${officina?.nome || 'OfficinAI'}`}
+      />
     </div>
   );
 }

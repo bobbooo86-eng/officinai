@@ -204,17 +204,75 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   };
 
   // ---- Save logic ----
+  const uploadLogo = async (file: File, officinaId: string): Promise<string | null> => {
+    const ext = file.name.split('.').pop() || 'png';
+    const filePath = `${officinaId}/logo.${ext}`;
+
+    // Remove old logo if it exists (ignore errors)
+    await supabase.storage.from('logos').remove([filePath]);
+
+    const { error } = await supabase.storage
+      .from('logos')
+      .upload(filePath, file, { upsert: true, contentType: file.type });
+
+    if (error) {
+      console.error('Logo upload error:', error);
+      return null;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('logos')
+      .getPublicUrl(filePath);
+
+    return urlData?.publicUrl ?? null;
+  };
+
   const saveStep1 = async () => {
     if (!officina?.id) return;
     const fullIndirizzo = `${officinaData.indirizzo}, ${officinaData.cap} ${officinaData.citta}`;
+
+    // Upload logo if a file was selected
+    let logoUrl: string | null | undefined;
+    if (officinaData.logoFile) {
+      logoUrl = await uploadLogo(officinaData.logoFile, officina.id);
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      nome: officinaData.nome,
+      indirizzo: fullIndirizzo,
+      tel: officinaData.telefono,
+      email: officinaData.email,
+      p_iva: officinaData.piva,
+    };
+
+    if (logoUrl) {
+      updatePayload.logo_url = logoUrl;
+    }
+
+    await supabase
+      .from('officine')
+      .update(updatePayload)
+      .eq('id', officina.id);
+  };
+
+  const saveStep2 = async () => {
+    if (!officina?.id) return;
+    const serviziAttivi = servizi
+      .filter((s) => s.checked)
+      .map((s) => ({ id: s.id, label: s.label }));
+
+    const orariData = orari.map((o) => ({
+      giorno: o.giorno,
+      attivo: o.attivo,
+      apertura: o.apertura,
+      chiusura: o.chiusura,
+    }));
+
     await supabase
       .from('officine')
       .update({
-        nome: officinaData.nome,
-        indirizzo: fullIndirizzo,
-        tel: officinaData.telefono,
-        email: officinaData.email,
-        p_iva: officinaData.piva,
+        servizi: serviziAttivi,
+        orari_apertura: orariData,
       })
       .eq('id', officina.id);
   };
@@ -248,6 +306,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       if (!validateStep1()) return;
       setSaving(true);
       await saveStep1();
+      setSaving(false);
+    }
+    if (currentStep === 2) {
+      setSaving(true);
+      await saveStep2();
       setSaving(false);
     }
     if (currentStep === 3) {

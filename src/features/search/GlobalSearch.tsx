@@ -198,13 +198,14 @@ export function GlobalSearch({ onSelect }: GlobalSearchProps) {
 
   return (
     <>
-      {/* Trigger button */}
+      {/* Always-visible search bar */}
       <button
         onClick={() => setOpen(true)}
-        className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors cursor-pointer"
+        className="w-full flex items-center gap-3 h-12 px-4 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer border border-gray-200 dark:border-gray-700"
         aria-label="Cerca"
       >
-        <span className="text-sm">🔍</span>
+        <span className="text-base">🔍</span>
+        <span className="text-sm text-gray-400 dark:text-gray-500">Cerca cliente, targa, veicolo...</span>
       </button>
 
       {/* Full-screen overlay */}

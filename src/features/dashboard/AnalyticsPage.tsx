@@ -4,19 +4,20 @@ import { supabase } from '@/lib/supabase';
 import { fmtEuro } from '@/lib/format';
 import { STATO_CONFIG } from '@/lib/constants';
 import { useAuthStore } from '@/stores/authStore';
-import type { Appuntamento, Preventivo } from '@/types/database';
+import type { Appuntamento, Preventivo, Recensione } from '@/types/database';
 
 export function AnalyticsPage() {
   const { officina } = useAuthStore();
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [preventivi, setPreventivi] = useState<Preventivo[]>([]);
+  const [recensioni, setRecensioni] = useState<Recensione[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<'7d' | '30d' | '90d' | 'anno'>('30d');
 
   useEffect(() => {
     if (!officina) return;
     const fetch = async () => {
-      const [{ data: apps }, { data: prev }] = await Promise.all([
+      const [{ data: apps }, { data: prev }, { data: rec }] = await Promise.all([
         supabase
           .from('appuntamenti')
           .select('*')
@@ -26,9 +27,16 @@ export function AnalyticsPage() {
           .from('preventivi')
           .select('*')
           .order('created_at', { ascending: false }),
+        supabase
+          .from('recensioni')
+          .select('*')
+          .eq('officina_id', officina.id)
+          .order('created_at', { ascending: false })
+          .limit(20),
       ]);
       setAppuntamenti(apps || []);
       setPreventivi(prev || []);
+      setRecensioni(rec || []);
       setLoading(false);
     };
     fetch();
@@ -89,12 +97,40 @@ export function AnalyticsPage() {
     };
   }, [appuntamenti, preventivi, periodo]);
 
+  const exportCSV = () => {
+    const days = periodo === '7d' ? 7 : periodo === '30d' ? 30 : periodo === '90d' ? 90 : 365;
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const appsInPeriod = appuntamenti.filter((a) => a.data_ora >= cutoff);
+
+    const header = 'Data,Stato,Problema,Cliente ID,Veicolo ID\n';
+    const rows = appsInPeriod.map((a) =>
+      `${a.data_ora?.slice(0, 10)},${a.stato},"${(a.problema || '').replace(/"/g, '""')}",${a.cliente_id},${a.veicolo_id}`
+    ).join('\n');
+
+    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `officinai-report-${periodo}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) return <Loader text="Caricamento analytics..." />;
 
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-gray-900">Analytics</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-bold text-gray-900">Analytics</h2>
+          <button
+            onClick={exportCSV}
+            className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-[10px] font-medium text-gray-600 cursor-pointer"
+            title="Esporta CSV"
+          >
+            📥 CSV
+          </button>
+        </div>
         <div className="flex gap-1 bg-gray-100 p-0.5 rounded-lg">
           {(['7d', '30d', '90d', 'anno'] as const).map((p) => (
             <button
@@ -216,6 +252,56 @@ export function AnalyticsPage() {
           <div className="text-[10px] text-gray-400">Media/app</div>
         </Card>
       </div>
+
+      {/* Recensioni clienti */}
+      {recensioni.length > 0 && (
+        <Card className="!p-4">
+          <h3 className="text-xs font-semibold text-gray-500 mb-3">RECENSIONI CLIENTI</h3>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="text-3xl font-bold text-amber-500">
+              {(recensioni.reduce((s, r) => s + r.voto, 0) / recensioni.length).toFixed(1)}
+            </div>
+            <div>
+              <div className="flex">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <span key={s} className={`text-sm ${
+                    s <= Math.round(recensioni.reduce((sum, r) => sum + r.voto, 0) / recensioni.length)
+                      ? 'opacity-100' : 'opacity-20'
+                  }`}>⭐</span>
+                ))}
+              </div>
+              <div className="text-[10px] text-gray-400">{recensioni.length} recensioni</div>
+            </div>
+          </div>
+          <div className="space-y-1">
+            {[5, 4, 3, 2, 1].map((s) => {
+              const count = recensioni.filter((r) => r.voto === s).length;
+              const pct = recensioni.length > 0 ? (count / recensioni.length) * 100 : 0;
+              return (
+                <div key={s} className="flex items-center gap-2 text-xs">
+                  <span className="w-3 text-gray-500">{s}</span>
+                  <span className="text-[10px]">⭐</span>
+                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="w-6 text-right text-gray-400">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+          {/* Latest comments */}
+          {recensioni.filter((r) => r.commento).slice(0, 3).map((r) => (
+            <div key={r.id} className="mt-2 pt-2 border-t border-gray-100">
+              <div className="flex items-center gap-1 mb-0.5">
+                {Array.from({ length: r.voto }).map((_, i) => (
+                  <span key={i} className="text-[10px]">⭐</span>
+                ))}
+              </div>
+              <p className="text-xs text-gray-600 italic">"{r.commento}"</p>
+            </div>
+          ))}
+        </Card>
+      )}
     </div>
   );
 }

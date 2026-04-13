@@ -24,6 +24,7 @@ export function BookingPage() {
   const [errVeicolo, setErrVeicolo] = useState<string | null>(null);
   const [errData, setErrData] = useState<string | null>(null);
   const [errProblema, setErrProblema] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!cliente) return;
@@ -52,11 +53,9 @@ export function BookingPage() {
     if (!cliente || !selectedVeicolo || !data || !problema.trim()) return;
 
     setSubmitting(true);
+    setSubmitError(null);
 
-    // Find officina_id from cliente
-    const veicolo = veicoli.find((v) => v.id === selectedVeicolo);
-
-    await supabase.from('appuntamenti').insert({
+    const { error } = await supabase.from('appuntamenti').insert({
       officina_id: cliente.officina_id,
       cliente_id: cliente.id,
       veicolo_id: selectedVeicolo,
@@ -67,10 +66,28 @@ export function BookingPage() {
     });
 
     setSubmitting(false);
+
+    if (error) {
+      setSubmitError('Errore nell\'invio della richiesta. Riprova.');
+      return;
+    }
+
     setSuccess(true);
   };
 
   if (loading) return <div className="text-center py-8 text-sm text-gray-400">Caricamento...</div>;
+
+  if (!loading && veicoli.length === 0 && !success) {
+    return (
+      <div className="p-4 text-center py-16">
+        <div className="text-5xl mb-4">🚗</div>
+        <h2 className="text-lg font-semibold text-gray-900">Nessun veicolo registrato</h2>
+        <p className="text-sm text-gray-500 mt-2">
+          Per richiedere un appuntamento, contatta l'officina per aggiungere il tuo veicolo al sistema.
+        </p>
+      </div>
+    );
+  }
 
   if (success) {
     return (
@@ -238,6 +255,12 @@ export function BookingPage() {
               {problema && <><br />📝 {problema.slice(0, 80)}{problema.length > 80 ? '...' : ''}</>}
             </div>
           </Card>
+
+          {submitError && (
+            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+              {submitError}
+            </div>
+          )}
 
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setStep(2)} fullWidth>Indietro</Button>

@@ -22,7 +22,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1e3a5f"
       },
-      "package": "com.officinai.app"
+      "package": "com.officinai.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -52,6 +56,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2e5b4e3f-b1d7-464d-a630-3f1866ffd680"
+      }
+    },
+    "owner": "officinai"
   }
 }

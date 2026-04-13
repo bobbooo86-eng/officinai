@@ -1,9 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input } from '@/components/ui';
+import { Button, Card, Input, Badge } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import type { Utente } from '@/types/database';
+
+const RUOLO_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  titolare: { label: 'Titolare', color: 'text-amber-700', bg: 'bg-amber-100' },
+  operaio: { label: 'Operaio', color: 'text-blue-700', bg: 'bg-blue-100' },
+  reception: { label: 'Reception', color: 'text-green-700', bg: 'bg-green-100' },
+};
 
 export function SettingsPage() {
   const { officina, utente, logout } = useAuthStore();
@@ -18,6 +25,99 @@ export function SettingsPage() {
   const [tel, setTel] = useState(officina?.tel || '');
   const [email, setEmail] = useState(officina?.email || '');
   const [pIva, setPIva] = useState(officina?.p_iva || '');
+
+  // Team management
+  const [team, setTeam] = useState<Utente[]>([]);
+  const [loadingTeam, setLoadingTeam] = useState(true);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [newNome, setNewNome] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newTel, setNewTel] = useState('');
+  const [newRuolo, setNewRuolo] = useState<'operaio' | 'reception' | 'titolare'>('operaio');
+  const [teamToast, setTeamToast] = useState<string | null>(null);
+  const [editingMember, setEditingMember] = useState<string | null>(null);
+
+  const isTitolare = utente?.ruolo === 'titolare';
+
+  useEffect(() => {
+    if (!officina?.id) return;
+    const loadTeam = async () => {
+      const { data } = await supabase
+        .from('utenti')
+        .select('*')
+        .eq('officina_id', officina.id)
+        .order('created_at');
+      setTeam(data || []);
+      setLoadingTeam(false);
+    };
+    loadTeam();
+  }, [officina?.id]);
+
+  const showTeamToast = (msg: string) => {
+    setTeamToast(msg);
+    setTimeout(() => setTeamToast(null), 3000);
+  };
+
+  const addMember = async () => {
+    if (!officina?.id || !newNome.trim() || !newEmail.trim()) return;
+    const { data, error } = await supabase
+      .from('utenti')
+      .insert({
+        officina_id: officina.id,
+        nome: newNome.trim(),
+        email: newEmail.trim().toLowerCase(),
+        tel: newTel.trim(),
+        ruolo: newRuolo,
+        attivo: true,
+      })
+      .select()
+      .single();
+    if (error) {
+      if (error.code === '23505') {
+        showTeamToast('Email già esistente nel sistema');
+      } else {
+        showTeamToast('Errore: ' + error.message);
+      }
+      return;
+    }
+    if (data) {
+      setTeam([...team, data]);
+      setNewNome('');
+      setNewEmail('');
+      setNewTel('');
+      setNewRuolo('operaio');
+      setShowAddMember(false);
+      showTeamToast(`${data.nome} aggiunto al team`);
+    }
+  };
+
+  const toggleAttivo = async (id: string, current: boolean) => {
+    if (id === utente?.id) return;
+    const action = current ? 'disattivare' : 'riattivare';
+    if (!confirm(`Vuoi ${action} questo membro del team?`)) return;
+    await supabase.from('utenti').update({ attivo: !current }).eq('id', id);
+    setTeam(team.map((m) => (m.id === id ? { ...m, attivo: !current } : m)));
+    showTeamToast(current ? 'Membro disattivato' : 'Membro riattivato');
+  };
+
+  const updateMemberRole = async (id: string, ruolo: string) => {
+    await supabase.from('utenti').update({ ruolo }).eq('id', id);
+    setTeam(team.map((m) => (m.id === id ? { ...m, ruolo: ruolo as Utente['ruolo'] } : m)));
+    showTeamToast('Ruolo aggiornato');
+  };
+
+  const updateMemberField = async (id: string, field: string, value: string) => {
+    await supabase.from('utenti').update({ [field]: value }).eq('id', id);
+    setTeam(team.map((m) => (m.id === id ? { ...m, [field]: value } : m)));
+  };
+
+  const deleteMember = async (id: string, nome: string) => {
+    if (id === utente?.id) return;
+    if (!confirm(`Eliminare definitivamente ${nome} dal team? Questa azione è irreversibile.`)) return;
+    await supabase.from('utenti').delete().eq('id', id);
+    setTeam(team.filter((m) => m.id !== id));
+    showTeamToast(`${nome} rimosso dal team`);
+  };
 
   const salva = async () => {
     if (!officina) return;
@@ -141,6 +241,167 @@ export function SettingsPage() {
           </div>
         </div>
       </Card>
+
+      {/* Team management — solo titolare */}
+      {isTitolare && (
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-900 dark:text-white">Team officina</h3>
+            <button
+              onClick={() => setShowAddMember(!showAddMember)}
+              className="text-xs text-blue-600 font-semibold hover:text-blue-700 cursor-pointer"
+            >
+              {showAddMember ? '✗ Annulla' : '+ Aggiungi membro'}
+            </button>
+          </div>
+
+          {teamToast && (
+            <div className="mb-3 p-2.5 rounded-lg bg-gray-900 text-white text-xs text-center">
+              {teamToast}
+            </div>
+          )}
+
+          {/* Form nuovo membro */}
+          {showAddMember && (
+            <div className="mb-4 p-3 bg-blue-50 rounded-xl space-y-2">
+              <div className="text-xs font-semibold text-blue-900 mb-1">Nuovo membro</div>
+              <input
+                value={newNome}
+                onChange={(e) => setNewNome(e.target.value)}
+                placeholder="Nome e cognome"
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="Email"
+                  type="email"
+                  className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  value={newTel}
+                  onChange={(e) => setNewTel(e.target.value)}
+                  placeholder="Telefono"
+                  className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={newRuolo}
+                  onChange={(e) => setNewRuolo(e.target.value as any)}
+                  className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="operaio">Operaio / Meccanico</option>
+                  <option value="reception">Reception</option>
+                  <option value="titolare">Titolare</option>
+                </select>
+                <Button onClick={addMember} size="sm">Aggiungi</Button>
+              </div>
+            </div>
+          )}
+
+          {/* Lista team */}
+          {loadingTeam ? (
+            <div className="text-center py-3 text-xs text-gray-400">Caricamento team...</div>
+          ) : (
+            <div className="space-y-2">
+              {team.map((m) => {
+                const rCfg = RUOLO_CONFIG[m.ruolo] || RUOLO_CONFIG.operaio;
+                const isMe = m.id === utente?.id;
+                const isEditing = editingMember === m.id;
+                return (
+                  <div
+                    key={m.id}
+                    className={`border rounded-xl p-3 transition-colors ${
+                      !m.attivo ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-white border-gray-200'
+                    }`}
+                  >
+                    {!isEditing ? (
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${rCfg.bg} ${rCfg.color}`}>
+                          {m.nome.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-900 truncate">{m.nome}</span>
+                            {isMe && <span className="text-[9px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">Tu</span>}
+                            {!m.attivo && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">Disattivato</span>}
+                          </div>
+                          <div className="text-[11px] text-gray-500 truncate">{m.email}</div>
+                        </div>
+                        <Badge color={rCfg.color} bg={rCfg.bg}>{rCfg.label}</Badge>
+                        {!isMe && (
+                          <button
+                            onClick={() => setEditingMember(m.id)}
+                            className="text-gray-400 hover:text-blue-600 cursor-pointer text-sm"
+                            title="Modifica"
+                          >✏️</button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={m.nome}
+                            onChange={(e) => setTeam(team.map((t) => (t.id === m.id ? { ...t, nome: e.target.value } : t)))}
+                            onBlur={() => updateMemberField(m.id, 'nome', m.nome)}
+                            className="flex-1 text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <button onClick={() => setEditingMember(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer text-sm">✗</button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            value={m.email}
+                            onChange={(e) => setTeam(team.map((t) => (t.id === m.id ? { ...t, email: e.target.value } : t)))}
+                            onBlur={() => updateMemberField(m.id, 'email', m.email)}
+                            className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <input
+                            value={m.tel}
+                            onChange={(e) => setTeam(team.map((t) => (t.id === m.id ? { ...t, tel: e.target.value } : t)))}
+                            onBlur={() => updateMemberField(m.id, 'tel', m.tel)}
+                            placeholder="Telefono"
+                            className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={m.ruolo}
+                            onChange={(e) => updateMemberRole(m.id, e.target.value)}
+                            className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="operaio">Operaio</option>
+                            <option value="reception">Reception</option>
+                            <option value="titolare">Titolare</option>
+                          </select>
+                          <button
+                            onClick={() => toggleAttivo(m.id, m.attivo)}
+                            className={`text-[10px] px-2 py-1 rounded-lg cursor-pointer ${
+                              m.attivo ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                            }`}
+                          >
+                            {m.attivo ? 'Disattiva' : 'Riattiva'}
+                          </button>
+                          <button
+                            onClick={() => deleteMember(m.id, m.nome)}
+                            className="text-[10px] px-2 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer"
+                          >
+                            Elimina
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {team.length === 0 && (
+                <div className="text-center py-4 text-xs text-gray-400">Nessun membro nel team</div>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Subscription */}
       <Card>

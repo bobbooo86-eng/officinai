@@ -39,15 +39,109 @@ function tempoRelativo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
 }
 
+// Shared AudioContext — initialized on first user interaction
+let _audioCtx: AudioContext | null = null;
+function getAudioCtx(): AudioContext {
+  if (!_audioCtx) {
+    _audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  }
+  // Resume if suspended (browser autoplay policy)
+  if (_audioCtx.state === 'suspended') {
+    _audioCtx.resume();
+  }
+  return _audioCtx;
+}
+
+// Unlock AudioContext on first user click anywhere on the page
+if (typeof document !== 'undefined') {
+  const unlock = () => {
+    getAudioCtx();
+    document.removeEventListener('click', unlock);
+    document.removeEventListener('touchstart', unlock);
+  };
+  document.addEventListener('click', unlock, { once: true });
+  document.addEventListener('touchstart', unlock, { once: true });
+}
+
+// Play a short notification beep using Web Audio API
+function playNotificationSound() {
+  try {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+    // First beep
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+    osc.start(now);
+    osc.stop(now + 0.3);
+    // Second beep
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.type = 'sine';
+    osc2.frequency.value = 1100;
+    gain2.gain.setValueAtTime(0.3, now + 0.15);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+    osc2.start(now + 0.15);
+    osc2.stop(now + 0.45);
+  } catch (e) {
+    // Audio not available
+  }
+}
+
+// Browser push notification helpers
+function canUseBrowserNotifications(): boolean {
+  return 'Notification' in window;
+}
+
+function getBrowserPermission(): NotificationPermission | 'unsupported' {
+  if (!canUseBrowserNotifications()) return 'unsupported';
+  return Notification.permission;
+}
+
+async function requestBrowserPermission(): Promise<NotificationPermission | 'unsupported'> {
+  if (!canUseBrowserNotifications()) return 'unsupported';
+  return Notification.requestPermission();
+}
+
+function showBrowserNotification(titolo: string, messaggio: string, tipo: NotificaTipo) {
+  if (getBrowserPermission() !== 'granted') return;
+  // Only show browser notification if page is hidden (background)
+  if (document.visibilityState === 'visible') return;
+  try {
+    new Notification(titolo, {
+      body: messaggio,
+      icon: '/icons/icon.svg',
+      badge: '/icons/icon.svg',
+      tag: `officinai-${tipo}-${Date.now()}`,
+      silent: false,
+    });
+  } catch {
+    // Notification API not available in this context
+  }
+}
+
 export function NotificationBell() {
   const { officina, utente, cliente, userType } = useAuthStore();
   const [notifiche, setNotifiche] = useState<Notifica[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>('default');
   const ref = useRef<HTMLDivElement>(null);
 
   const officinaId = officina?.id;
   const utenteId = userType === 'officina' ? utente?.id : cliente?.id;
+
+  // Check browser notification permission on mount
+  useEffect(() => {
+    setPushPermission(getBrowserPermission());
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -104,6 +198,8 @@ export function NotificationBell() {
         (payload) => {
           const nuova = payload.new as Notifica;
           setNotifiche((prev) => [nuova, ...prev]);
+          playNotificationSound();
+          showBrowserNotification(nuova.titolo, nuova.messaggio, nuova.tipo);
         }
       )
       .subscribe();
@@ -171,6 +267,22 @@ export function NotificationBell() {
                 </button>
               )}
             </div>
+
+            {/* Push notification permission request */}
+            {pushPermission === 'default' && (
+              <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
+                <span className="text-xs text-blue-800">Vuoi ricevere notifiche anche in background?</span>
+                <button
+                  onClick={async () => {
+                    const result = await requestBrowserPermission();
+                    setPushPermission(result);
+                  }}
+                  className="text-xs bg-blue-600 text-white px-2 py-1 rounded-lg hover:bg-blue-700 cursor-pointer"
+                >
+                  Attiva
+                </button>
+              </div>
+            )}
 
             {/* Notification list */}
             <div className="max-h-96 overflow-y-auto">

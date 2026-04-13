@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Layout } from '@/components/Layout';
 import { Dashboard } from './Dashboard';
 import { AppointmentList } from '@/features/appointments/AppointmentList';
@@ -9,6 +9,7 @@ import { NuovoAppuntamento } from '@/features/appointments/NuovoAppuntamento';
 import { PageSkeleton } from '@/components/ui/PageSkeleton';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
 import type { Appuntamento } from '@/types/database';
 
 const AnalyticsPage = lazy(() => import('./AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
@@ -30,6 +31,7 @@ const TABS = [
 ];
 
 export function AppOfficina() {
+  const { officina } = useAuthStore();
   const [activeTab, setActiveTab] = useHistoryState('officina-tab', 'home');
   const [selectedApp, setSelectedApp] = useState<Appuntamento | null>(null);
   const [subPage, setSubPage] = useState<'calendario' | 'magazzino' | 'analytics' | 'fatture' | 'abbonamento' | 'impostazioni' | 'obd' | 'guida' | null>(null);
@@ -40,6 +42,43 @@ export function AppOfficina() {
   const [agendaSearch, setAgendaSearch] = useState('');
   const [preventiviSearch, setPreventiviSearch] = useState<string>('');
   const [selectedClienteId, setSelectedClienteId] = useState<string | undefined>(undefined);
+  const [richiesteCount, setRichiesteCount] = useState(0);
+
+  // Load pending requests count (with realtime)
+  const loadRichiesteCount = useCallback(async () => {
+    if (!officina) return;
+    const { count } = await supabase
+      .from('appuntamenti')
+      .select('*', { count: 'exact', head: true })
+      .eq('officina_id', officina.id)
+      .eq('stato', 'richiesta');
+    setRichiesteCount(count || 0);
+  }, [officina]);
+
+  useEffect(() => {
+    loadRichiesteCount();
+    const channel = supabase
+      .channel('richieste-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appuntamenti' }, () => {
+        loadRichiesteCount();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [loadRichiesteCount]);
+
+  // FAB: open new appointment (navigate to agenda + showNewApp)
+  const handleFab = () => {
+    setActiveTab('agenda');
+    setSubPage(null);
+    setSelectedApp(null);
+    setShowNewApp(true);
+  };
+
+  // Tabs with badge
+  const tabsWithBadge = TABS.map((t) => ({
+    ...t,
+    badge: t.id === 'agenda' ? richiesteCount : undefined,
+  }));
 
   const handleSelectApp = (app: Appuntamento) => {
     setSelectedApp(app);
@@ -107,14 +146,14 @@ export function AppOfficina() {
   // Appointment detail view
   if (selectedApp) {
     return (
-      <Layout tabs={TABS} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSelectedApp(null); setSubPage(null); }} onSearchSelect={handleSearchSelect} showSearch>
+      <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSelectedApp(null); setSubPage(null); }} onSearchSelect={handleSearchSelect} showSearch>
         <AppointmentDetail appuntamento={selectedApp} onBack={handleBack} />
       </Layout>
     );
   }
 
   return (
-    <Layout tabs={TABS} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSubPage(null); }} onSearchSelect={handleSearchSelect}>
+    <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSubPage(null); }} onSearchSelect={handleSearchSelect} fab={!showNewApp ? { onClick: handleFab } : undefined}>
       {activeTab === 'home' && (
         <Dashboard
           onSelectAppuntamento={handleSelectApp}

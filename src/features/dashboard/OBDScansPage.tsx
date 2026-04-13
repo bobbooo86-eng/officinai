@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, Badge, Loader, Button } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { fmtData, fmtOra } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
-import type { ScansioneOBD, Appuntamento } from '@/types/database';
+import type { ScansioneOBD } from '@/types/database';
 
 // OBD2 codes database (matching AIDiagnostics)
 const OBD_DATABASE: Record<string, { desc: string; causa: string }> = {
   P0300: { desc: 'Misfiring casuale/multiplo', causa: 'Candele, bobine, iniettori' },
   P0171: { desc: 'Sistema troppo magro (Banco 1)', causa: 'Perdita aria, sonda lambda' },
+  P0172: { desc: 'Sistema troppo ricco (Banco 1)', causa: 'Iniettori, regolatore pressione' },
   P0420: { desc: 'Efficienza catalizzatore sotto soglia', causa: 'Catalizzatore esaurito' },
   P0442: { desc: 'Perdita piccola sistema EVAP', causa: 'Tappo serbatoio, tubazioni' },
   P0455: { desc: 'Perdita grande sistema EVAP', causa: 'Tappo serbatoio aperto' },
@@ -17,24 +18,47 @@ const OBD_DATABASE: Record<string, { desc: string; causa: string }> = {
   P0500: { desc: 'Malfunzionamento sensore velocità', causa: 'Sensore VSS difettoso' },
   P0113: { desc: 'Sensore temp. aria - segnale alto', causa: 'Sensore IAT difettoso' },
   P0340: { desc: 'Malfunzionamento sensore albero a camme', causa: 'Sensore CMP difettoso' },
+  P0301: { desc: 'Misfiring cilindro 1', causa: 'Candela, bobina, iniettore cil. 1' },
+  P0302: { desc: 'Misfiring cilindro 2', causa: 'Candela, bobina, iniettore cil. 2' },
+  P0303: { desc: 'Misfiring cilindro 3', causa: 'Candela, bobina, iniettore cil. 3' },
+  P0304: { desc: 'Misfiring cilindro 4', causa: 'Candela, bobina, iniettore cil. 4' },
+  P0101: { desc: 'Flusso massa aria fuori range', causa: 'Sensore MAF sporco/difettoso' },
+  P0131: { desc: 'Sonda lambda bassa tensione (Banco 1)', causa: 'Sonda lambda difettosa' },
+  P0135: { desc: 'Circuito riscaldatore sonda lambda', causa: 'Sonda lambda, fusibile' },
   C0035: { desc: 'Sensore velocità ruota ant. sx', causa: 'Sensore ABS difettoso' },
   B0100: { desc: 'Circuito airbag frontale', causa: 'Modulo airbag, clock spring' },
+  U0100: { desc: 'Comunicazione persa con ECM/PCM', causa: 'Cablaggio CAN bus, centralina' },
 };
 
 export function OBDScansPage() {
   const { officina } = useAuthStore();
   const [scansioni, setScansioni] = useState<ScansioneOBD[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errore, setErrore] = useState<string | null>(null);
   const [creandoApp, setCreandoApp] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
-  const fetchScansioni = async () => {
+  const showFeedback = (type: 'success' | 'error', msg: string) => {
+    setFeedback({ type, msg });
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
+  const fetchScansioni = useCallback(async () => {
     if (!officina) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('scansioni_obd')
       .select('*, clienti(nome,tel,email), veicoli(marca,modello,targa,anno,km)')
       .eq('officina_id', officina.id)
       .order('created_at', { ascending: false });
+
+    if (error) {
+      setErrore('Errore nel caricamento delle scansioni');
+      setLoading(false);
+      return;
+    }
+
     setScansioni(data || []);
+    setErrore(null);
     setLoading(false);
 
     // Mark unread as read
@@ -42,49 +66,98 @@ export function OBDScansPage() {
     if (unread.length > 0) {
       await supabase.from('scansioni_obd').update({ letto: true }).in('id', unread);
     }
-  };
+  }, [officina]);
 
   useEffect(() => {
     fetchScansioni();
 
+    if (!officina) return;
+
     const channel = supabase
-      .channel('obd-scans')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'scansioni_obd' }, () => {
+      .channel(`obd-scans-${officina.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'scansioni_obd',
+        filter: `officina_id=eq.${officina.id}`,
+      }, () => {
         fetchScansioni();
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [officina]);
+  }, [officina?.id, fetchScansioni]);
 
   const creaAppuntamento = async (scan: ScansioneOBD) => {
     if (!officina) return;
     setCreandoApp(scan.id);
 
-    // Create appointment from scan
-    await supabase.from('appuntamenti').insert({
-      officina_id: officina.id,
-      cliente_id: scan.cliente_id,
-      veicolo_id: scan.veicolo_id,
-      data_ora: new Date().toISOString(),
-      stato: 'prenotato',
-      priorita: 'normale',
-      problema: `Scansione OBD: ${scan.codici.join(', ')}${scan.nota_cliente ? ` — ${scan.nota_cliente}` : ''}`,
-      codici_obd: scan.codici.join(', '),
-    });
+    try {
+      // Create appointment from scan
+      const { error: insertErr } = await supabase.from('appuntamenti').insert({
+        officina_id: officina.id,
+        cliente_id: scan.cliente_id,
+        veicolo_id: scan.veicolo_id,
+        data_ora: new Date().toISOString(),
+        stato: 'prenotato',
+        priorita: 'normale',
+        problema: `Scansione OBD: ${scan.codici.join(', ')}${scan.nota_cliente ? ` — ${scan.nota_cliente}` : ''}`,
+        codici_obd: scan.codici.join(', '),
+      });
 
-    // Mark as handled
-    await supabase.from('scansioni_obd').update({ gestito: true }).eq('id', scan.id);
+      if (insertErr) {
+        showFeedback('error', 'Errore nella creazione dell\'appuntamento');
+        setCreandoApp(null);
+        return;
+      }
+
+      // Mark as handled
+      const { error: updateErr } = await supabase
+        .from('scansioni_obd')
+        .update({ gestito: true })
+        .eq('id', scan.id);
+
+      if (updateErr) {
+        showFeedback('error', 'Appuntamento creato, ma errore nel segnare come gestito');
+      } else {
+        showFeedback('success', 'Appuntamento creato con successo');
+      }
+    } catch {
+      showFeedback('error', 'Errore imprevisto nella creazione dell\'appuntamento');
+    }
+
     setCreandoApp(null);
     fetchScansioni();
   };
 
   const segnaGestito = async (id: string) => {
-    await supabase.from('scansioni_obd').update({ gestito: true }).eq('id', id);
+    const { error } = await supabase
+      .from('scansioni_obd')
+      .update({ gestito: true })
+      .eq('id', id);
+
+    if (error) {
+      showFeedback('error', 'Errore nell\'aggiornamento');
+    } else {
+      showFeedback('success', 'Scansione segnata come gestita');
+    }
     fetchScansioni();
   };
 
   if (loading) return <Loader text="Caricamento scansioni..." />;
+
+  if (errore) {
+    return (
+      <div className="p-4 text-center py-16">
+        <div className="text-5xl mb-4">&#x26A0;&#xFE0F;</div>
+        <h3 className="text-lg font-semibold text-gray-900">Errore</h3>
+        <p className="text-sm text-red-600 mt-1">{errore}</p>
+        <Button variant="secondary" className="mt-4" onClick={() => { setLoading(true); fetchScansioni(); }}>
+          Riprova
+        </Button>
+      </div>
+    );
+  }
 
   const nonGestite = scansioni.filter(s => !s.gestito);
   const gestite = scansioni.filter(s => s.gestito);
@@ -92,6 +165,17 @@ export function OBDScansPage() {
   return (
     <div className="p-4 space-y-4">
       <h2 className="text-lg font-bold text-gray-900">Scansioni OBD ricevute</h2>
+
+      {/* Feedback toast */}
+      {feedback && (
+        <div className={`px-4 py-3 rounded-xl text-sm font-medium ${
+          feedback.type === 'success'
+            ? 'bg-green-50 text-green-800 border border-green-200'
+            : 'bg-red-50 text-red-800 border border-red-200'
+        }`}>
+          {feedback.msg}
+        </div>
+      )}
 
       {scansioni.length === 0 ? (
         <div className="text-center py-16">

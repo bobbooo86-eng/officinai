@@ -79,7 +79,7 @@ export function OBDScanPage({ veicoli }: Props) {
 
     try {
       // Request Bluetooth device
-      const device = await navigator.bluetooth.requestDevice({
+      const device = await (navigator as any).bluetooth.requestDevice({
         filters: ELM_SERVICE_UUIDS.map(uuid => ({ services: [uuid] })),
         optionalServices: ELM_SERVICE_UUIDS,
       });
@@ -88,8 +88,8 @@ export function OBDScanPage({ veicoli }: Props) {
       const server = await device.gatt!.connect();
 
       // Find the right service
-      let txChar: BluetoothRemoteGATTCharacteristic | null = null;
-      let rxChar: BluetoothRemoteGATTCharacteristic | null = null;
+      let txChar: any = null;
+      let rxChar: any = null;
 
       for (const svcUuid of ELM_SERVICE_UUIDS) {
         try {
@@ -188,7 +188,7 @@ export function OBDScanPage({ veicoli }: Props) {
     setStep('sending');
     setStatusText('Invio dati all\'officina...');
 
-    await supabase.from('scansioni_obd').insert({
+    const { error } = await supabase.from('scansioni_obd').insert({
       officina_id: cliente.officina_id,
       cliente_id: cliente.id,
       veicolo_id: selectedVeicolo,
@@ -198,8 +198,27 @@ export function OBDScanPage({ veicoli }: Props) {
       gestito: false,
     });
 
+    if (error) {
+      setErrorMsg('Errore nell\'invio dei dati all\'officina. Riprova.');
+      setStep('error');
+      return;
+    }
+
     setStep('done');
   };
+
+  // ---- No vehicles ----
+  if (veicoli.length === 0) {
+    return (
+      <div className="p-4 text-center py-16">
+        <div className="text-5xl mb-4">🚗</div>
+        <h2 className="text-lg font-semibold text-gray-900">Nessun veicolo registrato</h2>
+        <p className="text-sm text-gray-500 mt-2">
+          Per effettuare una scansione OBD, contatta l'officina per aggiungere il tuo veicolo al sistema.
+        </p>
+      </div>
+    );
+  }
 
   // ---- Vehicle selection ----
   if (step === 'select') {

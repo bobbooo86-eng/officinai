@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Card, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
+import type { Accettazione } from '@/types/database';
 
 interface Props {
   appuntamentoId: string;
@@ -13,16 +14,6 @@ interface DannoPoint {
   y: number;
   tipo: string;
   nota: string;
-}
-
-interface AccettazioneData {
-  km_ingresso: number;
-  livello_carburante: number; // 0-100
-  danni: DannoPoint[];
-  checklist: Record<string, boolean>;
-  oggetti_personali: string;
-  note_accettazione: string;
-  firma_cliente: string | null; // base64 image
 }
 
 const CHECKLIST_ITEMS = [
@@ -53,7 +44,10 @@ const TIPI_DANNO = [
 export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Props) {
   const [step, setStep] = useState<'form' | 'firma' | 'done'>('form');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [kmIngresso, setKmIngresso] = useState(veicolo?.km?.toString() || '');
+  const [kmError, setKmError] = useState<string | null>(null);
   const [carburante, setCarburante] = useState(50);
   const [danni, setDanni] = useState<DannoPoint[]>([]);
   const [tipoDannoSel, setTipoDannoSel] = useState('graffio');
@@ -62,16 +56,17 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
   );
   const [oggettiPersonali, setOggettiPersonali] = useState('');
   const [noteAccettazione, setNoteAccettazione] = useState('');
-  const [existing, setExisting] = useState<AccettazioneData | null>(null);
+  const [existingId, setExistingId] = useState<string | null>(null);
 
   // Firma
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
-  // Load existing
+  // Load existing accettazione
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase
+      setLoadError(null);
+      const { data, error: fetchError } = await supabase
         .from('accettazioni')
         .select('*')
         .eq('appuntamento_id', appuntamentoId)
@@ -79,10 +74,16 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
         .limit(1)
         .maybeSingle();
 
+      if (fetchError) {
+        console.error('Errore caricamento accettazione:', fetchError);
+        setLoadError('Errore nel caricamento dell\'accettazione esistente. Riprova.');
+        return;
+      }
+
       if (data) {
-        setExisting(data);
+        setExistingId(data.id);
         setKmIngresso(data.km_ingresso?.toString() || '');
-        setCarburante(data.livello_carburante || 50);
+        setCarburante(data.livello_carburante ?? 50);
         setDanni(data.danni || []);
         setChecklist(data.checklist || {});
         setOggettiPersonali(data.oggetti_personali || '');
@@ -92,6 +93,28 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
     };
     load();
   }, [appuntamentoId]);
+
+  // Validate km value
+  const validateKm = (value: string): boolean => {
+    setKmError(null);
+    if (value.trim() === '') {
+      setKmError('Il chilometraggio è obbligatorio');
+      return false;
+    }
+    const parsed = parseInt(value, 10);
+    if (isNaN(parsed) || parsed < 0) {
+      setKmError('Il chilometraggio deve essere un numero maggiore o uguale a 0');
+      return false;
+    }
+    return true;
+  };
+
+  const handleKmChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setKmIngresso(val);
+    // Clear error on edit, validate on blur / save
+    if (kmError) setKmError(null);
+  };
 
   // Car diagram click handler
   const handleCarClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -103,6 +126,7 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
   };
 
   const removeDanno = (index: number) => {
+    if (!confirm('Eliminare questo danno?')) return;
     setDanni(prev => prev.filter((_, i) => i !== index));
   };
 
@@ -111,7 +135,7 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
   };
 
   // Signature canvas handlers
-  const initCanvas = () => {
+  const initCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -121,13 +145,13 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
-  };
+  }, []);
 
   useEffect(() => {
     if (step === 'firma') {
       setTimeout(initCanvas, 100);
     }
-  }, [step]);
+  }, [step, initCanvas]);
 
   const getCanvasPos = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current!;
@@ -138,10 +162,12 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
         y: e.touches[0].clientY - rect.top,
       };
     }
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
   };
 
   const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    // Prevent page scroll on touch devices while signing
+    if ('touches' in e) e.preventDefault();
     setIsDrawing(true);
     const pos = getCanvasPos(e);
     const ctx = canvasRef.current?.getContext('2d');
@@ -151,6 +177,7 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isDrawing) return;
+    if ('touches' in e) e.preventDefault();
     const pos = getCanvasPos(e);
     const ctx = canvasRef.current?.getContext('2d');
     ctx?.lineTo(pos.x, pos.y);
@@ -162,10 +189,17 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
   const clearSignature = () => initCanvas();
 
   const saveAccettazione = async (firma: string | null) => {
+    // Validate before saving
+    if (!validateKm(kmIngresso)) return;
+
     setSaving(true);
-    const data: any = {
+    setError(null);
+
+    const km = parseInt(kmIngresso, 10);
+
+    const payload: Omit<Accettazione, 'id' | 'created_at'> = {
       appuntamento_id: appuntamentoId,
-      km_ingresso: parseInt(kmIngresso) || 0,
+      km_ingresso: km,
       livello_carburante: carburante,
       danni,
       checklist,
@@ -174,25 +208,71 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
       firma_cliente: firma,
     };
 
-    if (existing) {
-      await supabase.from('accettazioni').update(data).eq('appuntamento_id', appuntamentoId);
-    } else {
-      await supabase.from('accettazioni').insert(data);
+    try {
+      if (existingId) {
+        const { error: updateError } = await supabase
+          .from('accettazioni')
+          .update(payload)
+          .eq('id', existingId);
+        if (updateError) throw updateError;
+      } else {
+        const { data: inserted, error: insertError } = await supabase
+          .from('accettazioni')
+          .insert(payload)
+          .select('id')
+          .single();
+        if (insertError) throw insertError;
+        if (inserted) setExistingId(inserted.id);
+      }
+      setStep('done');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Errore sconosciuto';
+      console.error('Errore salvataggio accettazione:', err);
+      setError(`Errore durante il salvataggio: ${message}`);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setStep('done');
   };
 
-  const goToFirma = () => setStep('firma');
+  const goToFirma = () => {
+    // Validate km before proceeding to signature step
+    if (!validateKm(kmIngresso)) return;
+    setStep('firma');
+  };
 
   const confirmFirma = () => {
     const canvas = canvasRef.current;
-    const firma = canvas ? canvas.toDataURL('image/png') : null;
+    if (!canvas) return;
+    // Check if canvas has been drawn on (not just white background)
+    const ctx = canvas.getContext('2d');
+    const pixels = ctx?.getImageData(0, 0, canvas.width, canvas.height).data;
+    let hasSignature = false;
+    if (pixels) {
+      for (let i = 0; i < pixels.length; i += 4) {
+        // Look for non-white pixels (signature is black strokes on white bg)
+        if (pixels[i] < 200 || pixels[i + 1] < 200 || pixels[i + 2] < 200) {
+          hasSignature = true;
+          break;
+        }
+      }
+    }
+    if (!hasSignature) {
+      setError('La firma del cliente è obbligatoria. Chiedi al cliente di firmare sopra.');
+      return;
+    }
+    setError(null);
+    const firma = canvas.toDataURL('image/png');
     saveAccettazione(firma);
   };
 
   // Fuel gauge visual
   const fuelColor = carburante < 15 ? '#ef4444' : carburante < 30 ? '#f59e0b' : '#10b981';
+
+  // Safe km display
+  const kmDisplay = (() => {
+    const parsed = parseInt(kmIngresso, 10);
+    return isNaN(parsed) ? '—' : parsed.toLocaleString();
+  })();
 
   // ---- DONE VIEW ----
   if (step === 'done') {
@@ -209,7 +289,7 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
         <div className="grid grid-cols-2 gap-3">
           <Card className="!p-3 text-center">
             <div className="text-xs text-gray-400">Km ingresso</div>
-            <div className="text-lg font-bold text-gray-900">{parseInt(kmIngresso)?.toLocaleString() || '—'}</div>
+            <div className="text-lg font-bold text-gray-900">{kmDisplay}</div>
           </Card>
           <Card className="!p-3 text-center">
             <div className="text-xs text-gray-400">Carburante</div>
@@ -269,11 +349,17 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
           </div>
         </Card>
 
+        {error && (
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
         <div className="flex gap-2">
           <Button fullWidth onClick={confirmFirma} loading={saving}>
             Conferma e salva
           </Button>
-          <Button variant="secondary" fullWidth onClick={() => saveAccettazione(null)}>
+          <Button variant="secondary" fullWidth onClick={() => saveAccettazione(null)} loading={saving}>
             Salva senza firma
           </Button>
         </div>
@@ -292,15 +378,29 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
         </div>
       </Card>
 
+      {/* Load error */}
+      {loadError && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+          {loadError}
+        </div>
+      )}
+
       {/* KM + Fuel */}
       <div className="grid grid-cols-2 gap-3">
-        <Input
-          label="Km ingresso"
-          type="number"
-          value={kmIngresso}
-          onChange={(e) => setKmIngresso(e.target.value)}
-          placeholder="50000"
-        />
+        <div>
+          <Input
+            label="Km ingresso"
+            type="number"
+            value={kmIngresso}
+            onChange={handleKmChange}
+            onBlur={() => { if (kmIngresso.trim()) validateKm(kmIngresso); }}
+            placeholder="50000"
+            min={0}
+          />
+          {kmError && (
+            <div className="text-xs text-red-600 mt-1">{kmError}</div>
+          )}
+        </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Carburante: <span style={{ color: fuelColor, fontWeight: 700 }}>{carburante}%</span>
@@ -318,7 +418,7 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
               max="100"
               step="5"
               value={carburante}
-              onChange={(e) => setCarburante(parseInt(e.target.value))}
+              onChange={(e) => setCarburante(parseInt(e.target.value, 10))}
               className="absolute inset-0 w-full h-6 opacity-0 cursor-pointer"
             />
             <div className="flex justify-between text-[9px] text-gray-400 mt-0.5 px-0.5">
@@ -479,6 +579,13 @@ export function AccettazioneVeicolo({ appuntamentoId, veicolo, clienteNome }: Pr
           rows={3}
         />
       </Card>
+
+      {/* Save error */}
+      {error && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       {/* Actions */}
       <Button fullWidth onClick={goToFirma}>

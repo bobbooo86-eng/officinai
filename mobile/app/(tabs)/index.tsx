@@ -11,103 +11,107 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/lib/authStore';
 import StatusBadge from '@/components/StatusBadge';
 import { BRAND_BLUE, type AppuntamentoStato } from '@/lib/constants';
+import { fmtOra } from '@/lib/format';
 
 interface Appointment {
   id: string;
   data_ora: string;
   stato: AppuntamentoStato;
-  problema_descritto: string | null;
-  clienti: { nome: string; cognome: string } | null;
+  problema: string | null;
+  clienti: { nome: string; tel: string } | null;
   veicoli: { marca: string; modello: string; targa: string } | null;
 }
 
+const SELECT_QUERY =
+  'id, data_ora, stato, problema, clienti(nome, tel), veicoli(marca, modello, targa)';
+
 export default function HomeScreen() {
   const router = useRouter();
-  const [officinaNome, setOfficinaNome] = useState('');
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const { officina } = useAuthStore();
+  const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
+  const [richieste, setRichieste] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [officinaId, setOfficinaId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadOfficina();
-  }, []);
-
-  useEffect(() => {
-    if (officinaId) {
-      loadTodayAppointments();
+    if (officina?.id) {
+      loadData();
+      return subscribeRealtime();
     }
-  }, [officinaId]);
+  }, [officina?.id]);
 
-  async function loadOfficina() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+  function subscribeRealtime() {
+    if (!officina?.id) return;
+    const channel = supabase
+      .channel('home-appuntamenti')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'appuntamenti',
+          filter: `officina_id=eq.${officina.id}`,
+        },
+        () => {
+          loadData();
+        }
+      )
+      .subscribe();
 
-    const { data: utente } = await supabase
-      .from('utenti')
-      .select('officina_id')
-      .eq('id', user.id)
-      .single();
-
-    if (!utente) return;
-
-    setOfficinaId(utente.officina_id);
-
-    const { data: officina } = await supabase
-      .from('officine')
-      .select('nome')
-      .eq('id', utente.officina_id)
-      .single();
-
-    if (officina) {
-      setOfficinaNome(officina.nome);
-    }
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }
 
-  async function loadTodayAppointments() {
-    if (!officinaId) return;
+  async function loadData() {
+    if (!officina?.id) return;
 
     const today = new Date().toISOString().split('T')[0];
     const startOfDay = `${today}T00:00:00`;
     const endOfDay = `${today}T23:59:59`;
 
-    const { data, error } = await supabase
+    // Load today's appointments
+    const { data: todayData } = await supabase
       .from('appuntamenti')
-      .select(
-        'id, data_ora, stato, problema_descritto, clienti(nome, cognome), veicoli(marca, modello, targa)'
-      )
-      .eq('officina_id', officinaId)
+      .select(SELECT_QUERY)
+      .eq('officina_id', officina.id)
       .gte('data_ora', startOfDay)
       .lte('data_ora', endOfDay)
       .order('data_ora', { ascending: true });
 
-    if (!error && data) {
-      setAppointments(data as unknown as Appointment[]);
+    // Load pending requests (richieste)
+    const { data: richiesteData } = await supabase
+      .from('appuntamenti')
+      .select(SELECT_QUERY)
+      .eq('officina_id', officina.id)
+      .eq('stato', 'richiesta')
+      .order('data_ora', { ascending: true });
+
+    if (todayData) {
+      setTodayAppointments(todayData as unknown as Appointment[]);
+    }
+    if (richiesteData) {
+      setRichieste(richiesteData as unknown as Appointment[]);
     }
     setLoading(false);
   }
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadTodayAppointments();
+    await loadData();
     setRefreshing(false);
-  }, [officinaId]);
+  }, [officina?.id]);
 
   // KPI calculations
-  const totalOggi = appointments.length;
-  const inCorso = appointments.filter(
+  const totalRichieste = richieste.length;
+  const totalOggi = todayAppointments.length;
+  const inCorso = todayAppointments.filter(
     (a) => a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi'
   ).length;
-  const pronti = appointments.filter((a) => a.stato === 'pronto').length;
-
-  function formatTime(dateStr: string) {
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-  }
+  const pronti = todayAppointments.filter((a) => a.stato === 'pronto').length;
 
   if (loading) {
     return (
@@ -128,39 +132,82 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND_BLUE} />
         }
       >
-        {/* Header */}
+        {/* Welcome Header */}
         <View>
-          <Text style={styles.headerTitle}>{officinaNome || 'OfficinAI'}</Text>
+          <Text style={styles.headerTitle}>{officina?.nome || 'OfficinAI'}</Text>
           <Text style={styles.headerSubtitle}>Benvenuto nella tua officina</Text>
         </View>
 
         {/* KPI Cards */}
         <View style={styles.kpiRow}>
-          <View style={[styles.kpiCard, { borderLeftColor: BRAND_BLUE }]}>
-            <Text style={styles.kpiValue}>{totalOggi}</Text>
+          <View style={[styles.kpiCard, { borderLeftColor: '#8b5cf6' }]}>
+            <Text style={[styles.kpiValue, { color: '#8b5cf6' }]}>{totalRichieste}</Text>
+            <Text style={styles.kpiLabel}>Richieste</Text>
+          </View>
+          <View style={[styles.kpiCard, { borderLeftColor: '#3b82f6' }]}>
+            <Text style={[styles.kpiValue, { color: '#3b82f6' }]}>{totalOggi}</Text>
             <Text style={styles.kpiLabel}>Oggi</Text>
           </View>
+        </View>
+        <View style={styles.kpiRow}>
           <View style={[styles.kpiCard, { borderLeftColor: '#f59e0b' }]}>
-            <Text style={styles.kpiValue}>{inCorso}</Text>
+            <Text style={[styles.kpiValue, { color: '#f59e0b' }]}>{inCorso}</Text>
             <Text style={styles.kpiLabel}>In Corso</Text>
           </View>
           <View style={[styles.kpiCard, { borderLeftColor: '#10b981' }]}>
-            <Text style={styles.kpiValue}>{pronti}</Text>
+            <Text style={[styles.kpiValue, { color: '#10b981' }]}>{pronti}</Text>
             <Text style={styles.kpiLabel}>Pronti</Text>
           </View>
         </View>
+
+        {/* Pending Requests Alert */}
+        {totalRichieste > 0 && (
+          <View style={styles.alertCard}>
+            <View style={styles.alertHeader}>
+              <Text style={styles.alertIcon}>{"\uD83D\uDD14"}</Text>
+              <Text style={styles.alertTitle}>
+                {totalRichieste} richiest{totalRichieste === 1 ? 'a' : 'e'} in attesa
+              </Text>
+            </View>
+            {richieste.slice(0, 2).map((r) => (
+              <TouchableOpacity
+                key={r.id}
+                style={styles.alertItem}
+                activeOpacity={0.7}
+                onPress={() => router.push(`/appointment/${r.id}`)}
+              >
+                <View style={styles.alertItemContent}>
+                  <Text style={styles.alertItemName}>
+                    {r.clienti?.nome || 'Cliente sconosciuto'}
+                  </Text>
+                  <Text style={styles.alertItemDetail} numberOfLines={1}>
+                    {r.veicoli
+                      ? `${r.veicoli.marca} ${r.veicoli.modello}`
+                      : r.problema || 'Nessun dettaglio'}
+                  </Text>
+                </View>
+                <Text style={styles.alertChevron}>{">"}</Text>
+              </TouchableOpacity>
+            ))}
+            {totalRichieste > 2 && (
+              <Text style={styles.alertMore}>
+                +{totalRichieste - 2} altr{totalRichieste - 2 === 1 ? 'a' : 'e'}
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* Today's Appointments */}
         <View>
           <Text style={styles.sectionTitle}>Appuntamenti di oggi</Text>
 
-          {appointments.length === 0 ? (
+          {todayAppointments.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyIcon}>📋</Text>
+              <Text style={styles.emptyIcon}>{"\uD83D\uDCCB"}</Text>
               <Text style={styles.emptyText}>Nessun appuntamento per oggi</Text>
             </View>
           ) : (
-            appointments.map((appt) => (
+            todayAppointments.map((appt) => (
               <TouchableOpacity
                 key={appt.id}
                 style={styles.appointmentCard}
@@ -168,17 +215,20 @@ export default function HomeScreen() {
                 onPress={() => router.push(`/appointment/${appt.id}`)}
               >
                 <View style={styles.appointmentHeader}>
-                  <Text style={styles.appointmentTime}>{formatTime(appt.data_ora)}</Text>
+                  <Text style={styles.appointmentTime}>{fmtOra(appt.data_ora)}</Text>
                   <StatusBadge status={appt.stato} />
                 </View>
                 <Text style={styles.appointmentClient}>
-                  {appt.clienti
-                    ? `${appt.clienti.nome} ${appt.clienti.cognome}`
-                    : 'Cliente sconosciuto'}
+                  {appt.clienti?.nome || 'Cliente sconosciuto'}
                 </Text>
                 {appt.veicoli && (
                   <Text style={styles.appointmentVehicle}>
                     {appt.veicoli.marca} {appt.veicoli.modello} - {appt.veicoli.targa}
+                  </Text>
+                )}
+                {appt.problema && (
+                  <Text style={styles.appointmentProblem} numberOfLines={2}>
+                    {appt.problema}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -197,7 +247,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    gap: 20,
+    gap: 16,
   },
   loadingContainer: {
     flex: 1,
@@ -243,6 +293,59 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 4,
     fontWeight: '500',
+  },
+  alertCard: {
+    backgroundColor: '#ede9fe',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#c4b5fd',
+  },
+  alertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  alertIcon: {
+    fontSize: 18,
+  },
+  alertTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#5b21b6',
+  },
+  alertItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 6,
+  },
+  alertItemContent: {
+    flex: 1,
+  },
+  alertItemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  alertItemDetail: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  alertChevron: {
+    fontSize: 18,
+    color: '#94a3b8',
+  },
+  alertMore: {
+    fontSize: 13,
+    color: '#7c3aed',
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 4,
   },
   sectionTitle: {
     fontSize: 18,
@@ -294,5 +397,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748b',
     marginTop: 4,
+  },
+  appointmentProblem: {
+    fontSize: 13,
+    color: '#94a3b8',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
 });

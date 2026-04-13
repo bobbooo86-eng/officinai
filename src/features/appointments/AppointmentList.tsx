@@ -9,18 +9,27 @@ import type { Appuntamento } from '@/types/database';
 export function AppointmentList({ onSelect, initialFiltro, searchQuery = '' }: { onSelect: (a: Appuntamento) => void; initialFiltro?: string; searchQuery?: string }) {
   const { officina } = useAuthStore();
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
+  const [fattureAppIds, setFattureAppIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<string>(initialFiltro || 'tutti');
   const [toast, setToast] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!officina) return;
-    const { data } = await supabase
-      .from('appuntamenti')
-      .select('*, clienti(nome,tel,email), veicoli(marca,modello,targa,km)')
-      .eq('officina_id', officina.id)
-      .order('data_ora', { ascending: false });
-    setAppuntamenti(data || []);
+    const [appsRes, fattureRes] = await Promise.all([
+      supabase
+        .from('appuntamenti')
+        .select('*, clienti(nome,tel,email), veicoli(marca,modello,targa,km)')
+        .eq('officina_id', officina.id)
+        .order('data_ora', { ascending: false }),
+      supabase
+        .from('fatture')
+        .select('appuntamento_id')
+        .eq('officina_id', officina.id)
+        .not('appuntamento_id', 'is', null),
+    ]);
+    setAppuntamenti(appsRes.data || []);
+    setFattureAppIds(new Set((fattureRes.data || []).map((f: any) => f.appuntamento_id)));
     setLoading(false);
   };
 
@@ -54,10 +63,15 @@ export function AppointmentList({ onSelect, initialFiltro, searchQuery = '' }: {
 
   const oggi = new Date().toISOString().slice(0, 10);
   const richieste = appuntamenti.filter((a) => a.stato === 'richiesta');
+  const nonFatturatiCount = appuntamenti.filter(
+    (a) => (a.stato === 'pronto' || a.stato === 'consegnato') && !fattureAppIds.has(a.id)
+  ).length;
+
   const filtered = (() => {
     let list = appuntamenti;
     if (filtro === 'oggi') list = list.filter((a) => a.data_ora?.startsWith(oggi));
     else if (filtro === 'in_corso') list = list.filter((a) => a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi');
+    else if (filtro === 'non_fatturati') list = list.filter((a) => (a.stato === 'pronto' || a.stato === 'consegnato') && !fattureAppIds.has(a.id));
     else if (filtro !== 'tutti') list = list.filter((a) => a.stato === filtro);
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -112,6 +126,16 @@ export function AppointmentList({ onSelect, initialFiltro, searchQuery = '' }: {
           count={appuntamenti.length}
           color="#3b82f6"
           bg="#dbeafe"
+        />
+        <FilterBtn
+          active={filtro === 'non_fatturati'}
+          onClick={() => setFiltro('non_fatturati')}
+          icon="🧾"
+          label="Non fatt."
+          count={nonFatturatiCount}
+          color="#ea580c"
+          bg="#ffedd5"
+          highlight={nonFatturatiCount > 0}
         />
         {Object.entries(STATO_CONFIG).map(([key, cfg]) => {
           const count = appuntamenti.filter((a) => a.stato === key).length;

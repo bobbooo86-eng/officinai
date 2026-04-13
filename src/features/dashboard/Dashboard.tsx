@@ -30,6 +30,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
   const [preventiviBozzaCount, setPreventiviBozzaCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [meseStats, setMeseStats] = useState<{ fatturato: number; lavori: number; nonFatturati: number } | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!officina) return;
@@ -37,7 +38,9 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
     try {
       setError(null);
 
-      const [appsResult, magazzinoResult, obdResult, prevResult] = await Promise.all([
+      const meseCorrente = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+
+      const [appsResult, magazzinoResult, obdResult, prevResult, fattureResult] = await Promise.all([
         supabase
           .from('appuntamenti')
           .select('*, clienti(nome,tel,email), veicoli(marca,modello,targa,km)')
@@ -56,16 +59,37 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
           .from('preventivi')
           .select('*', { count: 'exact', head: true })
           .eq('stato', 'bozza'),
+        supabase
+          .from('fatture')
+          .select('totale, stato, appuntamento_id')
+          .eq('officina_id', officina.id)
+          .gte('data_emissione', `${meseCorrente}-01`)
+          .lte('data_emissione', `${meseCorrente}-31`),
       ]);
 
       if (appsResult.error) throw appsResult.error;
 
-      setAppuntamenti(appsResult.data || []);
+      const apps = appsResult.data || [];
+      setAppuntamenti(apps);
       setAlertMagazzino(
         (magazzinoResult.data || []).filter((m) => m.quantita <= m.quantita_minima)
       );
       setObdCount(obdResult.count || 0);
       setPreventiviBozzaCount(prevResult.count || 0);
+
+      // Monthly stats from fatture
+      const fatture = fattureResult.data || [];
+      const fatturatoPagato = fatture
+        .filter((f: any) => f.stato === 'pagata' || f.stato === 'emessa')
+        .reduce((sum: number, f: any) => sum + (f.totale || 0), 0);
+
+      // Non-invoiced jobs: pronto/consegnato with no fattura
+      const fattureAppIds = new Set(fatture.map((f: any) => f.appuntamento_id).filter(Boolean));
+      const nonFatturati = apps.filter(
+        (a) => (a.stato === 'pronto' || a.stato === 'consegnato') && !fattureAppIds.has(a.id)
+      ).length;
+
+      setMeseStats({ fatturato: fatturatoPagato, lavori: fatture.length, nonFatturati });
     } catch (err: any) {
       console.error('Dashboard fetch error:', err);
       setError('Errore nel caricamento dei dati. Riprova.');
@@ -121,6 +145,17 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
   const consegnati = appuntamenti.filter((a) => a.stato === 'consegnato');
   const recenti = appuntamenti.slice(0, 8);
 
+  // Crediti: consegnati con pagamento non completo
+  const crediti = appuntamenti.filter((a) =>
+    a.stato === 'consegnato' && a.pagamento && a.pagamento.stato !== 'pagato'
+  );
+  const totaleCrediti = crediti.reduce((sum, a) => {
+    const p = a.pagamento!;
+    if (p.stato === 'non_pagato') return sum + (p.importo_totale || 0);
+    if (p.stato === 'acconto') return sum + ((p.importo_totale || 0) - (p.importo_pagato || 0));
+    return sum;
+  }, 0);
+
   const isNuovoUtente = appuntamenti.length === 0;
 
   return (
@@ -158,6 +193,44 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         </div>
         {/* Buttons removed — use tabs instead */}
       </div>
+
+      {/* Monthly stats — 3 cards */}
+      {meseStats !== null && (
+        <div className="grid grid-cols-3 gap-2 animate-fade-in">
+          {/* Fatturato mese */}
+          <Card className="!p-3 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 !border-emerald-200 dark:!border-emerald-700">
+            <div className="text-[10px] text-emerald-600 font-semibold mb-1">💶 Fatturato</div>
+            <div className="text-lg font-black text-emerald-700 tabular-nums leading-tight">
+              {meseStats.fatturato > 0
+                ? `€${meseStats.fatturato.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`
+                : '—'}
+            </div>
+            <div className="text-[10px] text-emerald-500 mt-0.5">questo mese</div>
+          </Card>
+
+          {/* Lavori fatturati */}
+          <Card className="!p-3 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 !border-blue-200 dark:!border-blue-700">
+            <div className="text-[10px] text-blue-600 font-semibold mb-1">🧾 Fatturati</div>
+            <div className="text-lg font-black text-blue-700 tabular-nums leading-tight">{meseStats.lavori}</div>
+            <div className="text-[10px] text-blue-500 mt-0.5">lavori</div>
+          </Card>
+
+          {/* Non fatturati — giallo/arancio se > 0 */}
+          <button onClick={() => onNavigateToAgenda?.('non_fatturati')} className="text-left cursor-pointer">
+            <Card hover className={`!p-3 ${meseStats.nonFatturati > 0 ? 'bg-gradient-to-br from-yellow-50 to-amber-50 !border-yellow-300' : 'bg-gray-50 !border-gray-200'}`}>
+              <div className={`text-[10px] font-semibold mb-1 ${meseStats.nonFatturati > 0 ? 'text-yellow-700' : 'text-gray-500'}`}>
+                🔧 Non fatt.
+              </div>
+              <div className={`text-lg font-black tabular-nums leading-tight ${meseStats.nonFatturati > 0 ? 'text-yellow-700' : 'text-gray-400'}`}>
+                {meseStats.nonFatturati}
+              </div>
+              <div className={`text-[10px] mt-0.5 ${meseStats.nonFatturati > 0 ? 'text-yellow-600' : 'text-gray-400'}`}>
+                {meseStats.nonFatturati > 0 ? 'da fare →' : 'ok ✓'}
+              </div>
+            </Card>
+          </button>
+        </div>
+      )}
 
       {/* Pending requests alert */}
       {richieste.length > 0 && (
@@ -230,7 +303,100 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
             </button>
           );
         })}
+        {/* Non fatturati KPI */}
+        {meseStats !== null && (
+          <button onClick={() => onNavigateToAgenda?.('non_fatturati')} className="text-left cursor-pointer">
+            <Card hover className="text-center !p-3" style={{ borderColor: meseStats.nonFatturati > 0 ? '#ea580c' : undefined }}>
+              <div className="text-lg mb-1">🧾</div>
+              <div className="text-xl font-black tabular-nums" style={{ color: meseStats.nonFatturati > 0 ? '#ea580c' : '#6b7280' }}>
+                {meseStats.nonFatturati}
+              </div>
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 font-medium leading-tight">Non fatt.</div>
+            </Card>
+          </button>
+        )}
       </div>
+
+      {/* Auto pronte — prominent alert */}
+      {pronti.length > 0 && (
+        <button
+          onClick={() => onNavigateToAgenda?.('pronto')}
+          className="w-full text-left cursor-pointer animate-fade-in"
+        >
+          <Card className="!p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 !border-green-300 dark:!border-green-700 hover:!border-green-400 hover:shadow-md transition-all">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-green-500 flex items-center justify-center text-2xl shadow-sm shrink-0">
+                ✅
+              </div>
+              <div className="flex-1">
+                <div className="text-base font-bold text-green-800 dark:text-green-300">
+                  {pronti.length} auto {pronti.length === 1 ? 'pronta' : 'pronte'} da consegnare
+                </div>
+                <div className="text-xs text-green-600 dark:text-green-400 mt-0.5">
+                  {pronti.slice(0, 2).map((a) => a.clienti?.nome).filter(Boolean).join(', ')}
+                  {pronti.length > 2 && ` +${pronti.length - 2} altri`}
+                </div>
+              </div>
+              <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </Card>
+        </button>
+      )}
+
+      {/* Crediti da incassare */}
+      {crediti.length > 0 && (
+        <Card className="!p-4 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/20 !border-red-300 dark:!border-red-700 animate-fade-in">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">💸</span>
+              <span className="text-sm font-bold text-red-800 dark:text-red-300">
+                Crediti da incassare
+              </span>
+            </div>
+            {totaleCrediti > 0 && (
+              <span className="text-base font-black text-red-700 tabular-nums">
+                €{totaleCrediti.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            )}
+          </div>
+          <div className="space-y-2">
+            {crediti.map((a) => {
+              const p = a.pagamento!;
+              const resto = p.stato === 'non_pagato'
+                ? p.importo_totale
+                : p.stato === 'acconto' ? (p.importo_totale || 0) - (p.importo_pagato || 0) : 0;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => onSelectAppuntamento(a)}
+                  className="w-full flex items-center justify-between text-left p-2.5 bg-white dark:bg-gray-800 rounded-xl border border-red-100 hover:border-red-300 hover:shadow-sm transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{p.stato === 'acconto' ? '💛' : '🔴'}</span>
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white">{a.clienti?.nome}</div>
+                      <div className="text-[11px] text-gray-500">
+                        {a.veicoli?.marca} {a.veicoli?.modello} {a.veicoli?.targa && `· ${a.veicoli.targa}`}
+                      </div>
+                      {p.note && <div className="text-[11px] text-gray-400 italic mt-0.5">{p.note}</div>}
+                    </div>
+                  </div>
+                  <div className="text-right ml-3 shrink-0">
+                    {resto != null && resto > 0 && (
+                      <div className="text-sm font-black text-red-600">€{resto.toFixed(2)}</div>
+                    )}
+                    <div className="text-[10px] text-gray-400">
+                      {p.stato === 'acconto' ? 'acconto' : 'da pagare'}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* Secondary alerts row: OBD + Preventivi bozza */}
       {(obdCount > 0 || preventiviBozzaCount > 0) && (

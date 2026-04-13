@@ -12,13 +12,14 @@ import { PhotoGallery } from '@/features/photos/PhotoGallery';
 
 const BookingPage = lazy(() => import('./BookingPage').then(m => ({ default: m.BookingPage })));
 const OBDScanPage = lazy(() => import('./OBDScanPage').then(m => ({ default: m.OBDScanPage })));
-import type { Appuntamento, Veicolo, Preventivo } from '@/types/database';
+import type { Appuntamento, Veicolo, Preventivo, Recensione } from '@/types/database';
 
 const TABS = [
   { id: 'home', label: 'Home', icon: '🏠' },
   { id: 'prenota', label: 'Richiedi', icon: '📅' },
   { id: 'obd', label: 'OBD', icon: '🔌' },
   { id: 'chat', label: 'Chat', icon: '💬' },
+  { id: 'storico', label: 'Storico', icon: '📋' },
   { id: 'auto', label: 'Auto', icon: '🚗' },
 ];
 
@@ -37,7 +38,7 @@ export function AppCliente() {
           .from('appuntamenti')
           .select('id')
           .eq('cliente_id', cliente.id)
-          .neq('stato', 'pronto')
+          .not('stato', 'in', '("pronto","annullato")')
           .order('data_ora', { ascending: false })
           .limit(1),
         supabase
@@ -74,6 +75,7 @@ export function AppCliente() {
           </div>
         )
       )}
+      {activeTab === 'storico' && <ClienteStorico />}
       {activeTab === 'auto' && <ClienteAuto />}
     </Layout>
   );
@@ -81,36 +83,67 @@ export function AppCliente() {
 
 // ==================== HOME ====================
 function ClienteHome() {
-  const { cliente } = useAuthStore();
+  const { cliente, officina } = useAuthStore();
   const [appAttivo, setAppAttivo] = useState<Appuntamento | null>(null);
   const [preventivo, setPreventivo] = useState<Preventivo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [actionError, setActionError] = useState<string | null>(null);
+  // Review
+  const [appDaRecensire, setAppDaRecensire] = useState<Appuntamento | null>(null);
+  const [voto, setVoto] = useState(0);
+  const [commento, setCommento] = useState('');
+  const [recensioneInviata, setRecensioneInviata] = useState(false);
 
   useEffect(() => {
     if (!cliente) return;
 
     const fetch = async () => {
-      // Get active appointments
+      // Get active appointments (exclude both 'pronto' and 'annullato')
       const { data: apps } = await supabase
         .from('appuntamenti')
         .select('*, clienti(nome,tel), veicoli(marca,modello,targa,km)')
         .eq('cliente_id', cliente.id)
-        .neq('stato', 'pronto')
+        .not('stato', 'in', '("pronto","annullato")')
         .order('data_ora', { ascending: false })
         .limit(1);
 
       if (apps && apps.length > 0) {
         setAppAttivo(apps[0]);
-        // Get estimate
+        // Get estimate — use .maybeSingle() to avoid error on zero rows
         const { data: prev } = await supabase
           .from('preventivi')
           .select('*')
           .eq('appuntamento_id', apps[0].id)
           .order('created_at', { ascending: false })
           .limit(1)
-          .single();
-        if (prev) setPreventivo(prev);
+          .maybeSingle();
+        setPreventivo(prev);
+      } else {
+        setAppAttivo(null);
+        setPreventivo(null);
       }
+
+      // Check for completed appointments without review
+      const { data: completati } = await supabase
+        .from('appuntamenti')
+        .select('*, veicoli(marca,modello,targa)')
+        .eq('cliente_id', cliente.id)
+        .eq('stato', 'pronto')
+        .order('data_ora', { ascending: false })
+        .limit(1);
+
+      if (completati && completati.length > 0) {
+        // Check if already reviewed
+        const { data: rec } = await supabase
+          .from('recensioni')
+          .select('id')
+          .eq('appuntamento_id', completati[0].id)
+          .maybeSingle();
+        if (!rec) {
+          setAppDaRecensire(completati[0]);
+        }
+      }
+
       setLoading(false);
     };
     fetch();
@@ -127,12 +160,76 @@ function ClienteHome() {
 
   if (loading) return <Loader text="Caricamento..." />;
 
+  const inviaRecensione = async () => {
+    if (!appDaRecensire || !cliente || !voto) return;
+    const { error } = await supabase.from('recensioni').insert({
+      appuntamento_id: appDaRecensire.id,
+      officina_id: appDaRecensire.officina_id,
+      cliente_id: cliente.id,
+      voto,
+      commento: commento.trim() || null,
+    });
+    if (!error) {
+      setRecensioneInviata(true);
+      setAppDaRecensire(null);
+    }
+  };
+
+  const ReviewCard = () => {
+    if (recensioneInviata) {
+      return (
+        <Card className="!p-4 bg-emerald-50 border-emerald-200 text-center">
+          <div className="text-2xl mb-1">🎉</div>
+          <div className="text-sm font-semibold text-emerald-800">Grazie per la tua recensione!</div>
+        </Card>
+      );
+    }
+    if (!appDaRecensire) return null;
+    return (
+      <Card className="!p-4 bg-amber-50 border-amber-200">
+        <div className="text-center mb-3">
+          <div className="text-2xl mb-1">⭐</div>
+          <div className="text-sm font-semibold text-amber-900">Come e andato il lavoro?</div>
+          <div className="text-xs text-amber-700">
+            {appDaRecensire.veicoli?.marca} {appDaRecensire.veicoli?.modello}
+          </div>
+        </div>
+        <div className="flex justify-center gap-2 mb-3">
+          {[1, 2, 3, 4, 5].map((s) => (
+            <button
+              key={s}
+              onClick={() => setVoto(s)}
+              className={`w-10 h-10 rounded-full text-xl cursor-pointer transition-transform ${
+                s <= voto ? 'scale-110' : 'opacity-30'
+              }`}
+            >
+              ⭐
+            </button>
+          ))}
+        </div>
+        <textarea
+          placeholder="Lascia un commento (facoltativo)..."
+          value={commento}
+          onChange={(e) => setCommento(e.target.value)}
+          rows={2}
+          className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400 mb-2"
+        />
+        <Button onClick={inviaRecensione} disabled={!voto} fullWidth>
+          Invia recensione
+        </Button>
+      </Card>
+    );
+  };
+
   if (!appAttivo) {
     return (
-      <div className="p-4 text-center py-16">
-        <div className="text-5xl mb-4">🚗</div>
-        <h2 className="text-lg font-semibold text-gray-900">Tutto a posto!</h2>
-        <p className="text-sm text-gray-500 mt-1">Nessun intervento in corso</p>
+      <div className="p-4 space-y-4">
+        <div className="text-center py-8">
+          <div className="text-5xl mb-4">🚗</div>
+          <h2 className="text-lg font-semibold text-gray-900">Tutto a posto!</h2>
+          <p className="text-sm text-gray-500 mt-1">Nessun intervento in corso</p>
+        </div>
+        <ReviewCard />
       </div>
     );
   }
@@ -142,17 +239,21 @@ function ClienteHome() {
 
   const accettaProposta = async () => {
     if (!appAttivo.data_proposta) return;
-    await supabase
+    setActionError(null);
+    const { error } = await supabase
       .from('appuntamenti')
       .update({ data_ora: appAttivo.data_proposta, stato: 'prenotato', data_proposta: null, nota_officina: null })
       .eq('id', appAttivo.id);
+    if (error) setActionError('Errore nell\'accettazione della proposta. Riprova.');
   };
 
   const rifiutaProposta = async () => {
-    await supabase
+    setActionError(null);
+    const { error } = await supabase
       .from('appuntamenti')
       .update({ data_proposta: null, nota_officina: null })
       .eq('id', appAttivo.id);
+    if (error) setActionError('Errore nel rifiuto della proposta. Riprova.');
   };
 
   return (
@@ -160,6 +261,12 @@ function ClienteHome() {
       <h2 className="text-lg font-bold text-gray-900">
         {appAttivo.stato === 'richiesta' ? 'La tua richiesta' : 'Il tuo intervento'}
       </h2>
+
+      {actionError && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+          {actionError}
+        </div>
+      )}
 
       {/* Vehicle */}
       <Card className="!p-3">
@@ -288,7 +395,9 @@ function ClienteHome() {
           <div className="flex gap-2 mt-3">
             <button
               onClick={async () => {
-                await supabase.from('preventivi').update({ stato: 'accettato' }).eq('id', preventivo.id);
+                setActionError(null);
+                const { error } = await supabase.from('preventivi').update({ stato: 'accettato' }).eq('id', preventivo.id);
+                if (error) { setActionError('Errore nell\'accettazione del preventivo. Riprova.'); return; }
                 setPreventivo({ ...preventivo, stato: 'accettato' });
               }}
               className="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors cursor-pointer"
@@ -297,7 +406,9 @@ function ClienteHome() {
             </button>
             <button
               onClick={async () => {
-                await supabase.from('preventivi').update({ stato: 'rifiutato' }).eq('id', preventivo.id);
+                setActionError(null);
+                const { error } = await supabase.from('preventivi').update({ stato: 'rifiutato' }).eq('id', preventivo.id);
+                if (error) { setActionError('Errore nel rifiuto del preventivo. Riprova.'); return; }
                 setPreventivo({ ...preventivo, stato: 'rifiutato' });
               }}
               className="flex-1 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-300 transition-colors cursor-pointer"
@@ -321,6 +432,9 @@ function ClienteHome() {
           <PhotoGallery appuntamentoId={appAttivo.id} readOnly />
         </div>
       )}
+
+      {/* Recensione */}
+      <ReviewCard />
     </div>
   );
 }
