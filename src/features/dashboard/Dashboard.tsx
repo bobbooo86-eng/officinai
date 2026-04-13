@@ -207,21 +207,29 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
 
       {/* KPIs — larger, with colored borders */}
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-        {[
-          { label: 'Richieste', count: richieste.length, color: 'purple', filter: 'richiesta', icon: '🔔' },
-          { label: 'Auto in officina', count: autoInOfficina.length, color: 'orange', filter: 'in_corso', icon: '🚗' },
-          { label: 'Non in lavorazione', count: nonInLavorazione.length, color: 'amber', filter: 'prenotato', icon: '⏳' },
-          { label: 'Pronti', count: pronti.length, color: 'emerald', filter: 'pronto', icon: '✅' },
-          { label: 'Consegnati', count: consegnati.length, color: 'gray', filter: 'consegnato', icon: '🏁' },
-        ].map((kpi) => (
-          <button key={kpi.filter} onClick={() => onNavigateToAgenda?.(kpi.filter)} className="text-left cursor-pointer">
-            <Card hover className={`text-center !p-4 border-l-4 !border-l-${kpi.color}-500 ${kpi.count > 0 && kpi.filter === 'in_corso' ? 'animate-pulse-glow' : ''}`}>
-              <div className="text-lg mb-1">{kpi.icon}</div>
-              <div className={`text-2xl font-black text-${kpi.color}-600 tabular-nums`}>{kpi.count}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 font-medium">{kpi.label}</div>
-            </Card>
-          </button>
-        ))}
+        {/* Auto in officina — special KPI */}
+        <button onClick={() => onNavigateToAgenda?.('tutti')} className="text-left cursor-pointer col-span-3 sm:col-span-5">
+          <Card hover className="!p-4 border-l-4 !border-l-blue-500 flex items-center gap-4">
+            <div className="text-3xl">🚗</div>
+            <div>
+              <div className="text-2xl font-black text-blue-600 tabular-nums">{autoInOfficina.length}</div>
+              <div className="text-sm text-gray-500 font-medium">Auto in officina</div>
+            </div>
+          </Card>
+        </button>
+        {/* All status filters */}
+        {Object.entries(STATO_CONFIG).map(([key, cfg]) => {
+          const count = appuntamenti.filter((a) => a.stato === key).length;
+          return (
+            <button key={key} onClick={() => onNavigateToAgenda?.(key)} className="text-left cursor-pointer">
+              <Card hover className="text-center !p-3">
+                <div className="text-lg mb-1">{cfg.icon}</div>
+                <div className="text-xl font-black tabular-nums" style={{ color: cfg.color }}>{count}</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 font-medium leading-tight">{cfg.label}</div>
+              </Card>
+            </button>
+          );
+        })}
       </div>
 
       {/* Secondary alerts row: OBD + Preventivi bozza */}
