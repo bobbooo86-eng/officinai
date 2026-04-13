@@ -10,9 +10,10 @@ interface LayoutProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onSearchSelect?: (type: string, id: string) => void;
+  showSearch?: boolean;
 }
 
-export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect }: LayoutProps) {
+export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect, showSearch = false }: LayoutProps) {
   const { utente, officina, cliente, userType, logout } = useAuthStore();
   const [showMenu, setShowMenu] = useState(false);
 
@@ -76,10 +77,12 @@ export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect 
           </div>
         </div>
 
-        {/* Always-visible search bar */}
-        <div className="px-4 pb-3">
-          <GlobalSearch onSelect={onSearchSelect} />
-        </div>
+        {/* Search bar — only on Home */}
+        {showSearch && (
+          <div className="px-4 pb-3">
+            <GlobalSearch onSelect={onSearchSelect} />
+          </div>
+        )}
       </header>
 
       {/* Content */}

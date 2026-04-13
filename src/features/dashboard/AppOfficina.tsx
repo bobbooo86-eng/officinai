@@ -38,6 +38,7 @@ export function AppOfficina() {
   const [showNewApp, setShowNewApp] = useState(false);
   const [calendarDate, setCalendarDate] = useState<Date | undefined>(undefined);
   const [preventiviSearch, setPreventiviSearch] = useState<string>('');
+  const [selectedClienteId, setSelectedClienteId] = useState<string | undefined>(undefined);
 
   const handleSelectApp = (app: Appuntamento) => {
     setSelectedApp(app);
@@ -77,15 +78,10 @@ export function AppOfficina() {
       const { data } = await supabase.from('appuntamenti').select('*').eq('id', id).single();
       appData = data;
     } else if (type === 'cliente') {
-      const { data } = await supabase
-        .from('appuntamenti')
-        .select('*')
-        .eq('cliente_id', id)
-        .order('data_ora', { ascending: false })
-        .limit(1)
-        .single();
-      appData = data;
-      if (!data) { setActiveTab('clienti'); return; }
+      // Navigate to Clienti tab with this client's detail
+      setSelectedClienteId(id);
+      setActiveTab('clienti');
+      return;
     } else if (type === 'veicolo') {
       const { data } = await supabase
         .from('appuntamenti')
@@ -110,7 +106,7 @@ export function AppOfficina() {
   // Appointment detail view
   if (selectedApp) {
     return (
-      <Layout tabs={TABS} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSelectedApp(null); setSubPage(null); }} onSearchSelect={handleSearchSelect}>
+      <Layout tabs={TABS} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSelectedApp(null); setSubPage(null); }} onSearchSelect={handleSearchSelect} showSearch>
         <AppointmentDetail appuntamento={selectedApp} onBack={handleBack} />
       </Layout>
     );
@@ -184,7 +180,7 @@ export function AppOfficina() {
         )
       )}
       {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} onNavigateToCalendar={(date) => { setCalendarDate(date); setAgendaView('calendario'); setActiveTab('agenda'); }} externalSearch={preventiviSearch} /></Suspense>}
-      {activeTab === 'clienti' && <CustomersPage />}
+      {activeTab === 'clienti' && <CustomersPage initialClienteId={selectedClienteId} />}
       {activeTab === 'altro' && !subPage && (
         <div className="p-4 space-y-3">
           <h2 className="text-lg font-bold text-gray-900">Altro</h2>
