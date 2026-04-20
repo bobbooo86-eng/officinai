@@ -7,7 +7,8 @@ type NotificaTipo = 'appuntamento' | 'preventivo' | 'chat' | 'sistema';
 interface Notifica {
   id: string;
   officina_id: string;
-  utente_id: string;
+  utente_id: string | null;
+  cliente_id: string | null;
   tipo: NotificaTipo;
   titolo: string;
   messaggio: string;
@@ -135,8 +136,10 @@ export function NotificationBell() {
   const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>('default');
   const ref = useRef<HTMLDivElement>(null);
 
-  const officinaId = officina?.id;
-  const utenteId = userType === 'officina' ? utente?.id : cliente?.id;
+  const isCliente = userType === 'cliente';
+  const officinaId = officina?.id ?? cliente?.officina_id;
+  const recipientId = isCliente ? cliente?.id : utente?.id;
+  const recipientColumn = isCliente ? 'cliente_id' : 'utente_id';
 
   // Check browser notification permission on mount
   useEffect(() => {
@@ -158,16 +161,18 @@ export function NotificationBell() {
 
   // Fetch notifications
   const fetchNotifiche = useCallback(async () => {
-    if (!officinaId || !utenteId) return;
+    if (!recipientId) return;
     setLoading(true);
     try {
-      const { data } = await supabase
+      let query = supabase
         .from('notifiche')
         .select('*')
-        .eq('officina_id', officinaId)
-        .eq('utente_id', utenteId)
+        .eq(recipientColumn, recipientId)
         .order('created_at', { ascending: false })
         .limit(30);
+      if (officinaId) query = query.eq('officina_id', officinaId);
+
+      const { data } = await query;
 
       if (data) setNotifiche(data as Notifica[]);
     } catch (err) {
@@ -175,7 +180,7 @@ export function NotificationBell() {
     } finally {
       setLoading(false);
     }
-  }, [officinaId, utenteId]);
+  }, [officinaId, recipientId, recipientColumn]);
 
   useEffect(() => {
     fetchNotifiche();
@@ -183,17 +188,17 @@ export function NotificationBell() {
 
   // Realtime subscription for new notifications
   useEffect(() => {
-    if (!officinaId || !utenteId) return;
+    if (!recipientId) return;
 
     const channel = supabase
-      .channel('notifiche-realtime')
+      .channel(`notifiche-realtime-${recipientColumn}-${recipientId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'notifiche',
-          filter: `utente_id=eq.${utenteId}`,
+          filter: `${recipientColumn}=eq.${recipientId}`,
         },
         (payload) => {
           const nuova = payload.new as Notifica;
@@ -207,7 +212,7 @@ export function NotificationBell() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [officinaId, utenteId]);
+  }, [recipientId, recipientColumn]);
 
   // Mark single notification as read
   const segnaLetta = async (id: string) => {
@@ -219,13 +224,14 @@ export function NotificationBell() {
 
   // Mark all as read
   const segnaTuttoLetto = async () => {
-    if (!officinaId || !utenteId) return;
-    await supabase
+    if (!recipientId) return;
+    let query = supabase
       .from('notifiche')
       .update({ letto: true })
-      .eq('officina_id', officinaId)
-      .eq('utente_id', utenteId)
+      .eq(recipientColumn, recipientId)
       .eq('letto', false);
+    if (officinaId) query = query.eq('officina_id', officinaId);
+    await query;
 
     setNotifiche((prev) => prev.map((n) => ({ ...n, letto: true })));
   };

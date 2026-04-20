@@ -70,6 +70,8 @@ export function ChatPanel({ appuntamentoId, senderName, senderType }: ChatPanelP
     await supabase.from('messaggi').insert({
       appuntamento_id: appuntamentoId,
       da: senderName,
+      mittente_tipo: senderType,
+      mittente_nome: senderName,
       testo: msg,
       letto: false,
     });
