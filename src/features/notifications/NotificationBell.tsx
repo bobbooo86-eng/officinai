@@ -2,12 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 
-type NotificaTipo = 'appuntamento' | 'preventivo' | 'chat' | 'sistema';
+type NotificaTipo = 'appuntamento' | 'preventivo' | 'chat' | 'messaggio' | 'sistema';
 
 interface Notifica {
   id: string;
   officina_id: string;
-  utente_id: string;
+  utente_id: string | null;
+  cliente_id: string | null;
   tipo: NotificaTipo;
   titolo: string;
   messaggio: string;
@@ -21,6 +22,7 @@ const TIPO_ICON: Record<NotificaTipo, string> = {
   appuntamento: '📅',
   preventivo: '📋',
   chat: '💬',
+  messaggio: '💬',
   sistema: '⚙️',
 };
 
@@ -135,8 +137,13 @@ export function NotificationBell() {
   const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>('default');
   const ref = useRef<HTMLDivElement>(null);
 
+  // Le notifiche staff filtrano per utente_id; quelle cliente per cliente_id.
+  // Schema: notifiche ha utente_id O cliente_id (XOR), mai entrambi.
+  const isStaff = userType === 'officina';
+  const staffId = isStaff ? utente?.id : null;
+  const clientId = !isStaff ? cliente?.id : null;
   const officinaId = officina?.id;
-  const utenteId = userType === 'officina' ? utente?.id : cliente?.id;
+  const subscriberId = staffId || clientId;
 
   // Check browser notification permission on mount
   useEffect(() => {
@@ -158,16 +165,17 @@ export function NotificationBell() {
 
   // Fetch notifications
   const fetchNotifiche = useCallback(async () => {
-    if (!officinaId || !utenteId) return;
+    if (!subscriberId) return;
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from('notifiche')
-        .select('*')
-        .eq('officina_id', officinaId)
-        .eq('utente_id', utenteId)
-        .order('created_at', { ascending: false })
-        .limit(30);
+      let q = supabase.from('notifiche').select('*');
+      if (isStaff) {
+        if (!officinaId) { setLoading(false); return; }
+        q = q.eq('officina_id', officinaId).eq('utente_id', staffId!);
+      } else {
+        q = q.eq('cliente_id', clientId!);
+      }
+      const { data } = await q.order('created_at', { ascending: false }).limit(30);
 
       if (data) setNotifiche(data as Notifica[]);
     } catch (err) {
@@ -175,7 +183,7 @@ export function NotificationBell() {
     } finally {
       setLoading(false);
     }
-  }, [officinaId, utenteId]);
+  }, [isStaff, officinaId, staffId, clientId, subscriberId]);
 
   useEffect(() => {
     fetchNotifiche();
@@ -183,17 +191,21 @@ export function NotificationBell() {
 
   // Realtime subscription for new notifications
   useEffect(() => {
-    if (!officinaId || !utenteId) return;
+    if (!subscriberId) return;
+
+    const filter = isStaff
+      ? `utente_id=eq.${staffId}`
+      : `cliente_id=eq.${clientId}`;
 
     const channel = supabase
-      .channel('notifiche-realtime')
+      .channel(`notifiche-realtime-${subscriberId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'notifiche',
-          filter: `utente_id=eq.${utenteId}`,
+          filter,
         },
         (payload) => {
           const nuova = payload.new as Notifica;
@@ -207,7 +219,7 @@ export function NotificationBell() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [officinaId, utenteId]);
+  }, [isStaff, staffId, clientId, subscriberId]);
 
   // Mark single notification as read
   const segnaLetta = async (id: string) => {
@@ -219,13 +231,12 @@ export function NotificationBell() {
 
   // Mark all as read
   const segnaTuttoLetto = async () => {
-    if (!officinaId || !utenteId) return;
-    await supabase
-      .from('notifiche')
-      .update({ letto: true })
-      .eq('officina_id', officinaId)
-      .eq('utente_id', utenteId)
-      .eq('letto', false);
+    if (!subscriberId) return;
+    let q = supabase.from('notifiche').update({ letto: true }).eq('letto', false);
+    q = isStaff
+      ? q.eq('officina_id', officinaId!).eq('utente_id', staffId!)
+      : q.eq('cliente_id', clientId!);
+    await q;
 
     setNotifiche((prev) => prev.map((n) => ({ ...n, letto: true })));
   };
