@@ -11,6 +11,11 @@ interface DashboardProps {
   onSelectAppuntamento: (a: Appuntamento) => void;
   onNavigateToAgenda?: (filtro?: string) => void;
   onNavigateToPreventivi?: () => void;
+  onNavigateToClienti?: () => void;
+  onNavigateToFatture?: () => void;
+  onNavigateToMagazzino?: () => void;
+  onNavigateToAnalytics?: () => void;
+  onNavigateToObd?: () => void;
   onNavigateToGuida?: () => void;
 }
 
@@ -22,7 +27,17 @@ function getGreeting(): string {
   return 'Buonasera';
 }
 
-export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigateToPreventivi, onNavigateToGuida }: DashboardProps) {
+export function Dashboard({
+  onSelectAppuntamento,
+  onNavigateToAgenda,
+  onNavigateToPreventivi,
+  onNavigateToClienti,
+  onNavigateToFatture,
+  onNavigateToMagazzino,
+  onNavigateToAnalytics,
+  onNavigateToObd,
+  onNavigateToGuida,
+}: DashboardProps) {
   const { officina, utente } = useAuthStore();
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [alertMagazzino, setAlertMagazzino] = useState<Magazzino[]>([]);
@@ -231,6 +246,74 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
           </button>
         </div>
       )}
+
+      {/* Quick actions — scorciatoie alle sezioni principali */}
+      <div className="grid grid-cols-3 gap-2 animate-fade-in sm:grid-cols-6">
+        {onNavigateToPreventivi && (
+          <button
+            onClick={onNavigateToPreventivi}
+            className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-lg">💰</div>
+            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Preventivi</span>
+          </button>
+        )}
+        {onNavigateToClienti && (
+          <button
+            onClick={onNavigateToClienti}
+            className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-lg">👥</div>
+            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Clienti</span>
+          </button>
+        )}
+        {onNavigateToFatture && (
+          <button
+            onClick={onNavigateToFatture}
+            className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-lg">🧾</div>
+            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Fatture</span>
+          </button>
+        )}
+        {onNavigateToMagazzino && (
+          <button
+            onClick={onNavigateToMagazzino}
+            className="relative flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-lg">📦</div>
+            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Magazzino</span>
+            {alertMagazzino.length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+                {alertMagazzino.length}
+              </span>
+            )}
+          </button>
+        )}
+        {onNavigateToAnalytics && (
+          <button
+            onClick={onNavigateToAnalytics}
+            className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-lg">📊</div>
+            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Analytics</span>
+          </button>
+        )}
+        {onNavigateToObd && (
+          <button
+            onClick={onNavigateToObd}
+            className="relative flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-lg">🔌</div>
+            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">OBD</span>
+            {obdCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+                {obdCount}
+              </span>
+            )}
+          </button>
+        )}
+      </div>
 
       {/* Pending requests alert */}
       {richieste.length > 0 && (
