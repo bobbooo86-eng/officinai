@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Text } from 'react-native';
+import { useNotifiche } from '@/lib/useNotifiche';
 
 function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return (
@@ -10,6 +11,7 @@ function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
 }
 
 export default function TabsLayout() {
+  const { nonLette } = useNotifiche();
   return (
     <Tabs
       screenOptions={{
@@ -33,6 +35,7 @@ export default function TabsLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" focused={focused} />,
+          tabBarBadge: nonLette > 0 ? (nonLette > 99 ? '99+' : nonLette) : undefined,
         }}
       />
       <Tabs.Screen
