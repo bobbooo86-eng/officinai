@@ -22,6 +22,22 @@ export function PhotoGallery({ appuntamentoId, readOnly = false }: PhotoGalleryP
 
   useEffect(() => {
     fetchFoto();
+
+    const channel = supabase
+      .channel(`foto-${appuntamentoId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'foto',
+          filter: `appuntamento_id=eq.${appuntamentoId}`,
+        },
+        () => { fetchFoto(); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [appuntamentoId]);
 
   const fetchFoto = async () => {

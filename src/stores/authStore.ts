@@ -23,15 +23,18 @@ interface AuthState {
 // Alcuni utenti (demo / migrati) non hanno un account Supabase Auth vero:
 // il login li autentica a livello di tabella `utenti`/`clienti` senza session.
 // Senza una copia in localStorage, un refresh della pagina li butta fuori.
-// Questo blocco e' la rete di sicurezza per quei casi.
+//
+// Cachiamo l'intero profilo (non solo gli id) perche' senza una sessione
+// Supabase le policy RLS bloccano qualsiasi SELECT su utenti/clienti,
+// quindi sui refresh il rehydrate non potrebbe ri-leggere il record.
 const FALLBACK_KEY = 'officinai-fallback-auth';
 
 interface FallbackAuth {
   userType: 'officina' | 'cliente';
   email: string;
-  utenteId?: string;
-  clienteId?: string;
-  officinaId?: string;
+  utente?: Utente | null;
+  officina?: Officina | null;
+  cliente?: Cliente | null;
 }
 
 function saveFallback(data: FallbackAuth) {
@@ -80,7 +83,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
           saveFallback({
             userType: 'officina', email: user.email!,
-            utenteId: utente.id, officinaId: utente.officina_id,
+            utente, officina,
           });
           set({ utente, officina, userType: 'officina', loading: false });
           return;
@@ -96,48 +99,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (cliente) {
           saveFallback({
             userType: 'cliente', email: user.email!,
-            clienteId: cliente.id, officinaId: cliente.officina_id,
+            cliente,
           });
           set({ cliente, userType: 'cliente', loading: false });
           return;
         }
       }
 
-      // Nessuna sessione Supabase: tenta ripristino da fallback localStorage
+      // Nessuna sessione Supabase: tenta ripristino da fallback localStorage.
+      // Usiamo direttamente i dati cachati perche' senza session RLS bloccherebbe
+      // la ri-lettura dal DB.
       const fb = loadFallback();
       if (fb) {
-        if (fb.userType === 'officina' && fb.utenteId) {
-          const [{ data: utente }, { data: officina }] = await Promise.all([
-            supabase.from('utenti').select('*').eq('id', fb.utenteId).eq('attivo', true).single(),
-            fb.officinaId
-              ? supabase.from('officine').select('*').eq('id', fb.officinaId).single()
-              : Promise.resolve({ data: null }),
-          ]);
-          if (utente) {
-            set({
-              utente,
-              officina: officina ?? null,
-              userType: 'officina',
-              sessionUser: { email: fb.email },
-              loading: false,
-            });
-            return;
-          }
+        if (fb.userType === 'officina' && fb.utente) {
+          set({
+            utente: fb.utente,
+            officina: fb.officina ?? null,
+            userType: 'officina',
+            sessionUser: { email: fb.email },
+            loading: false,
+          });
+          return;
         }
-        if (fb.userType === 'cliente' && fb.clienteId) {
-          const { data: cliente } = await supabase
-            .from('clienti').select('*').eq('id', fb.clienteId).single();
-          if (cliente) {
-            set({
-              cliente,
-              userType: 'cliente',
-              sessionUser: { email: fb.email },
-              loading: false,
-            });
-            return;
-          }
+        if (fb.userType === 'cliente' && fb.cliente) {
+          set({
+            cliente: fb.cliente,
+            userType: 'cliente',
+            sessionUser: { email: fb.email },
+            loading: false,
+          });
+          return;
         }
-        // fallback rotto o utente cancellato → pulisci
+        // fallback rotto → pulisci
         clearFallback();
       }
 
@@ -181,7 +174,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
           saveFallback({
             userType: 'officina', email,
-            utenteId: utente.id, officinaId: utente.officina_id,
+            utente, officina,
           });
           set({ utente, officina, userType: 'officina', sessionUser: { email } });
           return {};
@@ -199,7 +192,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
           saveFallback({
             userType: 'officina', email,
-            utenteId: utente.id, officinaId: utente.officina_id,
+            utente, officina,
           });
           set({ utente, officina, userType: 'officina', sessionUser: { email } });
           return {};
@@ -226,7 +219,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       saveFallback({
         userType: 'officina', email,
-        utenteId: utente.id, officinaId: utente.officina_id,
+        utente, officina,
       });
       set({
         sessionUser: authData?.user || { email },
@@ -262,7 +255,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         saveFallback({
           userType: 'cliente', email,
-          clienteId: cliente.id, officinaId: cliente.officina_id,
+          cliente,
         });
         set({ cliente, userType: 'cliente', sessionUser: { email } });
         return {};
@@ -280,7 +273,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       saveFallback({
         userType: 'cliente', email,
-        clienteId: cliente.id, officinaId: cliente.officina_id,
+        cliente,
       });
       set({
         sessionUser: authData?.user || { email },
