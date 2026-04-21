@@ -9,6 +9,7 @@ export type AppuntamentoStato =
   | 'in_lavorazione'
   | 'attesa_ricambi'
   | 'pronto'
+  | 'consegnato'
   | 'annullato';
 
 export type PreventivoStato = 'bozza' | 'inviato' | 'accettato' | 'rifiutato';

@@ -166,6 +166,25 @@ export function AppOfficina() {
           onNavigateToPreventivi={() => {
             setActiveTab('preventivi');
           }}
+          onNavigateToClienti={() => {
+            setActiveTab('clienti');
+          }}
+          onNavigateToFatture={() => {
+            setActiveTab('altro');
+            setSubPage('fatture');
+          }}
+          onNavigateToMagazzino={() => {
+            setActiveTab('altro');
+            setSubPage('magazzino');
+          }}
+          onNavigateToAnalytics={() => {
+            setActiveTab('altro');
+            setSubPage('analytics');
+          }}
+          onNavigateToObd={() => {
+            setActiveTab('altro');
+            setSubPage('obd');
+          }}
           onNavigateToGuida={() => {
             setActiveTab('altro');
             setSubPage('guida');

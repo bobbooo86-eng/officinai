@@ -38,7 +38,7 @@ export function AppCliente() {
           .from('appuntamenti')
           .select('id')
           .eq('cliente_id', cliente.id)
-          .not('stato', 'in', '("pronto","annullato")')
+          .not('stato', 'in', '("pronto","consegnato","annullato")')
           .order('data_ora', { ascending: false })
           .limit(1),
         supabase
@@ -98,12 +98,12 @@ function ClienteHome() {
     if (!cliente) return;
 
     const fetch = async () => {
-      // Get active appointments (exclude both 'pronto' and 'annullato')
+      // Get active appointments (exclude ready/delivered/cancelled)
       const { data: apps } = await supabase
         .from('appuntamenti')
         .select('*, clienti(nome,tel), veicoli(marca,modello,targa,km)')
         .eq('cliente_id', cliente.id)
-        .not('stato', 'in', '("pronto","annullato")')
+        .not('stato', 'in', '("pronto","consegnato","annullato")')
         .order('data_ora', { ascending: false })
         .limit(1);
 
@@ -128,7 +128,7 @@ function ClienteHome() {
         .from('appuntamenti')
         .select('*, veicoli(marca,modello,targa)')
         .eq('cliente_id', cliente.id)
-        .eq('stato', 'pronto')
+        .in('stato', ['pronto', 'consegnato'])
         .order('data_ora', { ascending: false })
         .limit(1);
 

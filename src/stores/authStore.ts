@@ -19,6 +19,37 @@ interface AuthState {
   logout: () => Promise<void>;
 }
 
+// --- Fallback persistence ---
+// Alcuni utenti (demo / migrati) non hanno un account Supabase Auth vero:
+// il login li autentica a livello di tabella `utenti`/`clienti` senza session.
+// Senza una copia in localStorage, un refresh della pagina li butta fuori.
+//
+// Cachiamo l'intero profilo (non solo gli id) perche' senza una sessione
+// Supabase le policy RLS bloccano qualsiasi SELECT su utenti/clienti,
+// quindi sui refresh il rehydrate non potrebbe ri-leggere il record.
+const FALLBACK_KEY = 'officinai-fallback-auth';
+
+interface FallbackAuth {
+  userType: 'officina' | 'cliente';
+  email: string;
+  utente?: Utente | null;
+  officina?: Officina | null;
+  cliente?: Cliente | null;
+}
+
+function saveFallback(data: FallbackAuth) {
+  try { localStorage.setItem(FALLBACK_KEY, JSON.stringify(data)); } catch { /* quota / ssr */ }
+}
+function loadFallback(): FallbackAuth | null {
+  try {
+    const raw = localStorage.getItem(FALLBACK_KEY);
+    return raw ? JSON.parse(raw) as FallbackAuth : null;
+  } catch { return null; }
+}
+function clearFallback() {
+  try { localStorage.removeItem(FALLBACK_KEY); } catch { /* */ }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   loading: true,
   sessionUser: null,
@@ -50,6 +81,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             .eq('id', utente.officina_id)
             .single();
 
+          saveFallback({
+            userType: 'officina', email: user.email!,
+            utente, officina,
+          });
           set({ utente, officina, userType: 'officina', loading: false });
           return;
         }
@@ -62,9 +97,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           .single();
 
         if (cliente) {
+          saveFallback({
+            userType: 'cliente', email: user.email!,
+            cliente,
+          });
           set({ cliente, userType: 'cliente', loading: false });
           return;
         }
+      }
+
+      // Nessuna sessione Supabase: tenta ripristino da fallback localStorage.
+      // Usiamo direttamente i dati cachati perche' senza session RLS bloccherebbe
+      // la ri-lettura dal DB.
+      const fb = loadFallback();
+      if (fb) {
+        if (fb.userType === 'officina' && fb.utente) {
+          set({
+            utente: fb.utente,
+            officina: fb.officina ?? null,
+            userType: 'officina',
+            sessionUser: { email: fb.email },
+            loading: false,
+          });
+          return;
+        }
+        if (fb.userType === 'cliente' && fb.cliente) {
+          set({
+            cliente: fb.cliente,
+            userType: 'cliente',
+            sessionUser: { email: fb.email },
+            loading: false,
+          });
+          return;
+        }
+        // fallback rotto → pulisci
+        clearFallback();
       }
 
       set({ loading: false });
@@ -105,6 +172,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             .eq('id', utente.officina_id)
             .single();
 
+          saveFallback({
+            userType: 'officina', email,
+            utente, officina,
+          });
           set({ utente, officina, userType: 'officina', sessionUser: { email } });
           return {};
         }
@@ -119,6 +190,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             .eq('id', utente.officina_id)
             .single();
 
+          saveFallback({
+            userType: 'officina', email,
+            utente, officina,
+          });
           set({ utente, officina, userType: 'officina', sessionUser: { email } });
           return {};
         }
@@ -142,6 +217,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         .eq('id', utente.officina_id)
         .single();
 
+      saveFallback({
+        userType: 'officina', email,
+        utente, officina,
+      });
       set({
         sessionUser: authData?.user || { email },
         utente,
@@ -174,6 +253,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           return { error: 'Email o password non validi' };
         }
 
+        saveFallback({
+          userType: 'cliente', email,
+          cliente,
+        });
         set({ cliente, userType: 'cliente', sessionUser: { email } });
         return {};
       }
@@ -188,6 +271,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { error: 'Cliente non trovato nel sistema' };
       }
 
+      saveFallback({
+        userType: 'cliente', email,
+        cliente,
+      });
       set({
         sessionUser: authData?.user || { email },
         cliente,
@@ -206,6 +293,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    clearFallback();
     await supabase.auth.signOut();
     set({
       sessionUser: null,
@@ -216,3 +304,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 }));
+
+// Mantieni lo store in sync con i cambi di sessione Supabase
+// (token refresh, signOut da altra tab, espirazione, ecc.)
+if (typeof window !== 'undefined') {
+  supabase.auth.onAuthStateChange((event, session) => {
+    const store = useAuthStore.getState();
+    if (event === 'SIGNED_OUT') {
+      clearFallback();
+      useAuthStore.setState({
+        sessionUser: null,
+        utente: null,
+        cliente: null,
+        officina: null,
+        userType: null,
+      });
+    } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+      useAuthStore.setState({ sessionUser: session.user });
+    } else if (event === 'SIGNED_IN' && session?.user && !store.userType) {
+      // Login avvenuto fuori dal flusso standard → reinizializza
+      store.initialize();
+    }
+  });
+}

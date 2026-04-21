@@ -6,6 +6,7 @@ export type AppuntamentoStato =
   | 'in_lavorazione'
   | 'attesa_ricambi'
   | 'pronto'
+  | 'consegnato'
   | 'annullato';
 
 export const STATO_CONFIG: Record<
@@ -18,6 +19,7 @@ export const STATO_CONFIG: Record<
   in_lavorazione: { label: 'In Lavorazione', color: '#3b82f6', bg: '#dbeafe', icon: '🔧' },
   attesa_ricambi: { label: 'Attesa Ricambi', color: '#ef4444', bg: '#fee2e2', icon: '📦' },
   pronto: { label: 'Pronto', color: '#10b981', bg: '#d1fae5', icon: '✅' },
+  consegnato: { label: 'Consegnato', color: '#64748b', bg: '#f1f5f9', icon: '🏁' },
   annullato: { label: 'Annullato', color: '#6b7280', bg: '#f3f4f6', icon: '🚫' },
 };
 
@@ -28,6 +30,7 @@ export const STATI_ORDINE: AppuntamentoStato[] = [
   'in_lavorazione',
   'attesa_ricambi',
   'pronto',
+  'consegnato',
 ];
 
 // ---- Filter tabs for agenda ----
