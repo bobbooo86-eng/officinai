@@ -106,29 +106,29 @@ export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect,
         </button>
       )}
 
-      {/* Bottom navigation — min 48px touch targets */}
+      {/* Bottom navigation — min 48px touch targets, scrollabile se tab > 5 */}
       <nav role="navigation" aria-label="Menu principale" className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 z-50">
-        <div className="flex items-center justify-around max-w-lg mx-auto">
+        <div className="flex items-center overflow-x-auto scrollbar-hide px-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               aria-current={activeTab === tab.id ? 'page' : undefined}
-              className={`flex flex-col items-center justify-center gap-0.5 min-h-[56px] min-w-[56px] px-3 transition-all cursor-pointer rounded-xl ${
+              className={`flex-shrink-0 flex flex-col items-center justify-center gap-0.5 min-h-[56px] min-w-[60px] px-2 transition-all cursor-pointer rounded-xl ${
                 activeTab === tab.id
                   ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30'
                   : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:text-gray-300 dark:hover:bg-gray-800'
               }`}
             >
               <div className="relative">
-                <span className="text-[22px] leading-none">{tab.icon}</span>
+                <span className="text-[20px] leading-none">{tab.icon}</span>
                 {tab.badge != null && tab.badge > 0 && (
                   <span className="absolute -top-1.5 -right-2 min-w-[17px] h-[17px] px-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none border-2 border-white dark:border-gray-900">
                     {tab.badge > 99 ? '99+' : tab.badge}
                   </span>
                 )}
               </div>
-              <span className="text-[11px] font-semibold">{tab.label}</span>
+              <span className="text-[10px] font-semibold whitespace-nowrap">{tab.label}</span>
             </button>
           ))}
         </div>
