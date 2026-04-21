@@ -247,44 +247,44 @@ export function Dashboard({
         </div>
       )}
 
-      {/* Quick actions — scorciatoie alle sezioni principali */}
-      <div className="grid grid-cols-3 gap-2 animate-fade-in sm:grid-cols-6">
+      {/* Quick actions — scorciatoie alle sezioni principali (unica riga) */}
+      <div className="grid grid-cols-6 gap-1.5 animate-fade-in">
         {onNavigateToPreventivi && (
           <button
             onClick={onNavigateToPreventivi}
-            className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+            className="flex flex-col items-center gap-1 p-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
           >
-            <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-lg">💰</div>
-            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Preventivi</span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-base">💰</div>
+            <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-200 text-center leading-tight">Preventivi</span>
           </button>
         )}
         {onNavigateToClienti && (
           <button
             onClick={onNavigateToClienti}
-            className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+            className="flex flex-col items-center gap-1 p-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
           >
-            <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-lg">👥</div>
-            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Clienti</span>
+            <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-base">👥</div>
+            <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-200 text-center leading-tight">Clienti</span>
           </button>
         )}
         {onNavigateToFatture && (
           <button
             onClick={onNavigateToFatture}
-            className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+            className="flex flex-col items-center gap-1 p-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
           >
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-lg">🧾</div>
-            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Fatture</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-base">🧾</div>
+            <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-200 text-center leading-tight">Fatture</span>
           </button>
         )}
         {onNavigateToMagazzino && (
           <button
             onClick={onNavigateToMagazzino}
-            className="relative flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+            className="relative flex flex-col items-center gap-1 p-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
           >
-            <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-lg">📦</div>
-            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Magazzino</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-base">📦</div>
+            <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-200 text-center leading-tight">Magazzino</span>
             {alertMagazzino.length > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
                 {alertMagazzino.length}
               </span>
             )}
@@ -293,21 +293,21 @@ export function Dashboard({
         {onNavigateToAnalytics && (
           <button
             onClick={onNavigateToAnalytics}
-            className="flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+            className="flex flex-col items-center gap-1 p-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
           >
-            <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-lg">📊</div>
-            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Analytics</span>
+            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-base">📊</div>
+            <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-200 text-center leading-tight">Analytics</span>
           </button>
         )}
         {onNavigateToObd && (
           <button
             onClick={onNavigateToObd}
-            className="relative flex flex-col items-center gap-1 p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+            className="relative flex flex-col items-center gap-1 p-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
           >
-            <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-lg">🔌</div>
-            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">OBD</span>
+            <div className="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-base">🔌</div>
+            <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-200 text-center leading-tight">OBD</span>
             {obdCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
                 {obdCount}
               </span>
             )}
