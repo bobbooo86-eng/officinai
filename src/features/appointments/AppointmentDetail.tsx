@@ -393,28 +393,73 @@ function TabStato({ app }: { app: Appuntamento }) {
     await cambiaStato('consegnato', pagamento);
   };
 
-  const accettaRichiesta = async () => {
+  const notifyClienteInApp = async (titolo: string, messaggio: string) => {
+    if (!app.cliente_id || !officina?.id) return;
+    try {
+      await supabase.from('notifiche').insert({
+        officina_id: officina.id,
+        cliente_id: app.cliente_id,
+        tipo: 'appuntamento',
+        titolo,
+        messaggio,
+        link_tipo: 'appuntamento',
+        link_id: app.id,
+      });
+    } catch {
+      // notifiche table may not yet support cliente_id — ignore
+    }
+  };
+
+  const openWhatsApp = (testo: string) => {
+    const tel = app.clienti?.tel;
+    if (!tel) return;
+    const numero = tel.replace(/[^0-9+]/g, '');
+    const url = `https://wa.me/${numero}?text=${encodeURIComponent(testo)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const accettaRichiesta = async (conWhatsapp = false) => {
     setUpdating(true);
     await supabase
       .from('appuntamenti')
       .update({ stato: 'prenotato' })
       .eq('id', app.id);
+
+    const d = parseISO(app.data_ora);
+    const dataFmt = format(d, 'dd/MM/yyyy', { locale: itLocale });
+    const oraFmt = format(d, 'HH:mm');
+    const clienteNome = app.clienti?.nome || 'Cliente';
+    const veicoloStr = app.veicoli ? `${app.veicoli.marca} ${app.veicoli.modello}` : '';
+    const officinaNome = officina?.nome || 'OfficinAI';
+
     // Send confirmation email
     const email = app.clienti?.email;
     if (email) {
-      const d = parseISO(app.data_ora);
       sendAppointmentConfirmation(email, {
-        clienteNome: app.clienti?.nome || 'Cliente',
-        data: format(d, 'dd/MM/yyyy', { locale: itLocale }),
-        ora: format(d, 'HH:mm'),
-        officinaNome: officina?.nome || 'OfficinAI',
-        veicolo: app.veicoli ? `${app.veicoli.marca} ${app.veicoli.modello}` : undefined,
+        clienteNome,
+        data: dataFmt,
+        ora: oraFmt,
+        officinaNome,
+        veicolo: veicoloStr || undefined,
       }).catch(() => {});
     }
+
+    // In-app notification for the cliente
+    notifyClienteInApp(
+      'Appuntamento confermato',
+      `Il tuo appuntamento per ${veicoloStr || 'il veicolo'} del ${dataFmt} alle ${oraFmt} è stato confermato.`
+    );
+
+    // Optional WhatsApp message
+    if (conWhatsapp) {
+      const testo = `Buongiorno ${clienteNome}, il suo appuntamento per ${veicoloStr || 'il veicolo'} del ${dataFmt} alle ore ${oraFmt} è stato CONFERMATO. L'aspettiamo! — ${officinaNome}`;
+      openWhatsApp(testo);
+    }
+
     setUpdating(false);
   };
 
-  const inviaControproposta = async () => {
+  const inviaControproposta = async (conWhatsapp = false) => {
     if (!propostaData) return;
     setUpdating(true);
     const nuovaDataIso = new Date(`${propostaData}T${propostaOra}:00`).toISOString();
@@ -426,18 +471,37 @@ function TabStato({ app }: { app: Appuntamento }) {
       })
       .eq('id', app.id);
 
-    // Notify cliente of the proposed new date
+    const d = parseISO(nuovaDataIso);
+    const dataFmt = format(d, 'dd/MM/yyyy', { locale: itLocale });
+    const oraFmt = format(d, 'HH:mm');
+    const clienteNome = app.clienti?.nome || 'Cliente';
+    const veicoloStr = app.veicoli ? `${app.veicoli.marca} ${app.veicoli.modello}` : '';
+    const officinaNome = officina?.nome || 'OfficinAI';
+    const nota = propostaNota.trim();
+
+    // Email
     const email = app.clienti?.email;
     if (email) {
-      const d = parseISO(nuovaDataIso);
       sendProposalChange(email, {
-        clienteNome: app.clienti?.nome || 'Cliente',
-        data: format(d, 'dd/MM/yyyy', { locale: itLocale }),
-        ora: format(d, 'HH:mm'),
-        officinaNome: officina?.nome || 'OfficinAI',
-        veicolo: app.veicoli ? `${app.veicoli.marca} ${app.veicoli.modello}` : undefined,
-        nota: propostaNota.trim() || undefined,
+        clienteNome,
+        data: dataFmt,
+        ora: oraFmt,
+        officinaNome,
+        veicolo: veicoloStr || undefined,
+        nota: nota || undefined,
       }).catch(() => {});
+    }
+
+    // In-app notification
+    notifyClienteInApp(
+      'Nuova data proposta',
+      `L'officina propone di spostare l'appuntamento al ${dataFmt} alle ${oraFmt}.${nota ? ` Nota: ${nota}` : ''}`
+    );
+
+    // Optional WhatsApp message
+    if (conWhatsapp) {
+      const testo = `Buongiorno ${clienteNome}, le proponiamo una nuova data per il suo appuntamento${veicoloStr ? ` (${veicoloStr})` : ''}: ${dataFmt} alle ore ${oraFmt}.${nota ? `\n\n${nota}` : ''}\n\nAccede all'app per confermare o contattarci. — ${officinaNome}`;
+      openWhatsApp(testo);
     }
 
     setUpdating(false);
@@ -468,7 +532,7 @@ function TabStato({ app }: { app: Appuntamento }) {
 
         <div className="flex gap-2">
           <button
-            onClick={accettaRichiesta}
+            onClick={() => accettaRichiesta(false)}
             disabled={updating}
             className="flex-1 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors cursor-pointer disabled:opacity-50"
           >
@@ -481,6 +545,16 @@ function TabStato({ app }: { app: Appuntamento }) {
             📅 Proponi altra data
           </button>
         </div>
+
+        {app.clienti?.tel && (
+          <button
+            onClick={() => accettaRichiesta(true)}
+            disabled={updating}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <span>📱</span> Accetta e avvisa il cliente via WhatsApp
+          </button>
+        )}
 
         {showProposta && (
           <Card className="!p-4 space-y-3">
@@ -527,13 +601,24 @@ function TabStato({ app }: { app: Appuntamento }) {
               />
             </div>
 
-            <button
-              onClick={inviaControproposta}
-              disabled={!propostaData || updating}
-              className="w-full py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              Invia proposta al cliente
-            </button>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => inviaControproposta(false)}
+                disabled={!propostaData || updating}
+                className="w-full py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Invia proposta al cliente
+              </button>
+              {app.clienti?.tel && (
+                <button
+                  onClick={() => inviaControproposta(true)}
+                  disabled={!propostaData || updating}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <span>📱</span> Invia proposta + WhatsApp
+                </button>
+              )}
+            </div>
           </Card>
         )}
       </div>

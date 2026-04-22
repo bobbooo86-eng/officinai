@@ -137,6 +137,8 @@ export function NotificationBell() {
 
   const officinaId = officina?.id;
   const utenteId = userType === 'officina' ? utente?.id : cliente?.id;
+  // Column to filter by: staff usa utente_id, cliente usa cliente_id
+  const filterColumn = userType === 'officina' ? 'utente_id' : 'cliente_id';
 
   // Check browser notification permission on mount
   useEffect(() => {
@@ -165,7 +167,7 @@ export function NotificationBell() {
         .from('notifiche')
         .select('*')
         .eq('officina_id', officinaId)
-        .eq('utente_id', utenteId)
+        .eq(filterColumn, utenteId)
         .order('created_at', { ascending: false })
         .limit(30);
 
@@ -175,7 +177,7 @@ export function NotificationBell() {
     } finally {
       setLoading(false);
     }
-  }, [officinaId, utenteId]);
+  }, [officinaId, utenteId, filterColumn]);
 
   useEffect(() => {
     fetchNotifiche();
@@ -193,7 +195,7 @@ export function NotificationBell() {
           event: 'INSERT',
           schema: 'public',
           table: 'notifiche',
-          filter: `utente_id=eq.${utenteId}`,
+          filter: `${filterColumn}=eq.${utenteId}`,
         },
         (payload) => {
           const nuova = payload.new as Notifica;
@@ -207,7 +209,7 @@ export function NotificationBell() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [officinaId, utenteId]);
+  }, [officinaId, utenteId, filterColumn]);
 
   // Mark single notification as read
   const segnaLetta = async (id: string) => {
@@ -224,7 +226,7 @@ export function NotificationBell() {
       .from('notifiche')
       .update({ letto: true })
       .eq('officina_id', officinaId)
-      .eq('utente_id', utenteId)
+      .eq(filterColumn, utenteId)
       .eq('letto', false);
 
     setNotifiche((prev) => prev.map((n) => ({ ...n, letto: true })));
