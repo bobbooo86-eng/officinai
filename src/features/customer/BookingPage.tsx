@@ -59,7 +59,7 @@ export function BookingPage() {
       officina_id: cliente.officina_id,
       cliente_id: cliente.id,
       veicolo_id: selectedVeicolo,
-      data_ora: `${data}T${ora}:00`,
+      data_ora: new Date(`${data}T${ora}:00`).toISOString(),
       stato: 'richiesta',
       priorita,
       problema: problema.trim(),

@@ -119,6 +119,7 @@ function ctaButton(text: string, url: string): string {
 type TemplateName =
   | 'benvenuto'
   | 'appuntamento_confermato'
+  | 'controproposta_data'
   | 'preventivo_inviato'
   | 'stato_aggiornato'
   | 'fattura_emessa'
@@ -179,6 +180,34 @@ function buildTemplate(template: TemplateName, data: Record<string, any>): Templ
         <p style="margin:16px 0 0;font-size:14px;color:#6b7280;line-height:1.6;">
           Ti ricordiamo di presentarti con qualche minuto di anticipo.
           Per modifiche o cancellazioni, contattaci direttamente.
+        </p>`;
+      return { subject, html: wrapHtml(subject, body) };
+    }
+
+    // ── Controproposta nuova data ───────────────────────────────
+    case 'controproposta_data': {
+      const clienteNome = data.clienteNome || 'Cliente';
+      const dataApp = data.data || '';
+      const ora = data.ora || '';
+      const officinaNome = data.officinaNome || BRAND_NAME;
+      const nota = (data.nota || '').toString();
+      const subject = `Nuova data proposta per il tuo appuntamento - ${officinaNome}`;
+      const body = `
+        <h1 style="margin:0 0 16px;font-size:22px;color:${BRAND_COLOR};">Nuova data proposta</h1>
+        <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
+          Gentile <strong>${clienteNome}</strong>, l'officina <strong>${officinaNome}</strong> ti propone una data diversa per l'appuntamento che hai richiesto.
+        </p>
+        ${infoBox([
+          { label: 'Nuova data', value: dataApp },
+          { label: 'Nuova ora', value: ora },
+          { label: 'Officina', value: officinaNome },
+          ...(data.veicolo ? [{ label: 'Veicolo', value: data.veicolo }] : []),
+        ])}
+        ${nota ? `<div style="background-color:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:16px;margin:16px 0;">
+          <p style="margin:0;font-size:14px;color:#92400e;"><strong>Nota dall'officina:</strong> ${nota}</p>
+        </div>` : ''}
+        <p style="margin:16px 0 0;font-size:14px;color:#6b7280;line-height:1.6;">
+          Accedi all'app per accettare la nuova data o contattare l'officina.
         </p>`;
       return { subject, html: wrapHtml(subject, body) };
     }

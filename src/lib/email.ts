@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 export type EmailTemplate =
   | 'benvenuto'
   | 'appuntamento_confermato'
+  | 'controproposta_data'
   | 'preventivo_inviato'
   | 'stato_aggiornato'
   | 'fattura_emessa'
@@ -67,6 +68,23 @@ export async function sendAppointmentConfirmation(
     veicolo?: string;
   }
 ): Promise<boolean> {
+  return sendEmail(email, 'appuntamento_confermato', data);
+}
+
+export async function sendProposalChange(
+  email: string,
+  data: {
+    clienteNome: string;
+    data: string;
+    ora: string;
+    officinaNome: string;
+    veicolo?: string;
+    nota?: string;
+  }
+): Promise<boolean> {
+  // Fallback to appuntamento_confermato wording if backend template isn't deployed yet
+  const ok = await sendEmail(email, 'controproposta_data', data);
+  if (ok) return true;
   return sendEmail(email, 'appuntamento_confermato', data);
 }
 

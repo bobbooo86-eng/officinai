@@ -10,7 +10,9 @@ import { WhatsAppPanel } from '@/features/notifications/WhatsAppPanel';
 import { AIDiagnostics } from '@/features/ai/AIDiagnostics';
 import { PDFExport } from '@/features/estimates/PDFExport';
 import { ShareDocument } from '@/components/ShareDocument';
-import { sendStatusUpdate, sendAppointmentConfirmation } from '@/lib/email';
+import { sendStatusUpdate, sendAppointmentConfirmation, sendProposalChange } from '@/lib/email';
+import { format, parseISO } from 'date-fns';
+import { it as itLocale } from 'date-fns/locale';
 import { AccettazioneVeicolo } from './AccettazioneVeicolo';
 import { StoricoVeicolo } from './StoricoVeicolo';
 import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, RicambioUsato, Difetto, PagamentoInfo, PagamentoStato } from '@/types/database';
@@ -400,10 +402,11 @@ function TabStato({ app }: { app: Appuntamento }) {
     // Send confirmation email
     const email = app.clienti?.email;
     if (email) {
+      const d = parseISO(app.data_ora);
       sendAppointmentConfirmation(email, {
         clienteNome: app.clienti?.nome || 'Cliente',
-        data: fmtDataOra(app.data_ora).split(' ')[0] || '',
-        ora: fmtDataOra(app.data_ora).split(' ')[1] || '',
+        data: format(d, 'dd/MM/yyyy', { locale: itLocale }),
+        ora: format(d, 'HH:mm'),
         officinaNome: officina?.nome || 'OfficinAI',
         veicolo: app.veicoli ? `${app.veicoli.marca} ${app.veicoli.modello}` : undefined,
       }).catch(() => {});
@@ -414,13 +417,29 @@ function TabStato({ app }: { app: Appuntamento }) {
   const inviaControproposta = async () => {
     if (!propostaData) return;
     setUpdating(true);
+    const nuovaDataIso = new Date(`${propostaData}T${propostaOra}:00`).toISOString();
     await supabase
       .from('appuntamenti')
       .update({
-        data_proposta: `${propostaData}T${propostaOra}:00`,
+        data_proposta: nuovaDataIso,
         nota_officina: propostaNota.trim() || null,
       })
       .eq('id', app.id);
+
+    // Notify cliente of the proposed new date
+    const email = app.clienti?.email;
+    if (email) {
+      const d = parseISO(nuovaDataIso);
+      sendProposalChange(email, {
+        clienteNome: app.clienti?.nome || 'Cliente',
+        data: format(d, 'dd/MM/yyyy', { locale: itLocale }),
+        ora: format(d, 'HH:mm'),
+        officinaNome: officina?.nome || 'OfficinAI',
+        veicolo: app.veicoli ? `${app.veicoli.marca} ${app.veicoli.modello}` : undefined,
+        nota: propostaNota.trim() || undefined,
+      }).catch(() => {});
+    }
+
     setUpdating(false);
     setShowProposta(false);
   };
