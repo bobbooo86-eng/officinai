@@ -2,6 +2,29 @@ import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import type { Utente, Cliente, Officina } from '@/types/database';
 
+const DEMO_SESSION_KEY = 'officinai_demo_session';
+
+type DemoSession = { email: string; userType: 'officina' | 'cliente' };
+
+const readDemoSession = (): DemoSession | null => {
+  try {
+    const raw = typeof window !== 'undefined' ? window.localStorage.getItem(DEMO_SESSION_KEY) : null;
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeDemoSession = (s: DemoSession | null) => {
+  try {
+    if (typeof window === 'undefined') return;
+    if (s) window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(s));
+    else window.localStorage.removeItem(DEMO_SESSION_KEY);
+  } catch {
+    // ignore storage errors
+  }
+};
+
 interface AuthState {
   // State
   loading: boolean;
@@ -30,16 +53,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialize: async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      const email = session?.user?.email || readDemoSession()?.email;
 
       if (session?.user) {
-        const user = session.user;
-        set({ sessionUser: user });
+        set({ sessionUser: session.user });
+      } else if (email) {
+        set({ sessionUser: { email } });
+      }
 
+      if (email) {
         // Try to find as workshop staff
         const { data: utente } = await supabase
           .from('utenti')
           .select('*')
-          .eq('email', user.email)
+          .eq('email', email)
           .eq('attivo', true)
           .single();
 
@@ -58,13 +85,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const { data: cliente } = await supabase
           .from('clienti')
           .select('*')
-          .eq('email', user.email)
+          .eq('email', email)
           .single();
 
         if (cliente) {
           set({ cliente, userType: 'cliente', loading: false });
           return;
         }
+
+        // Email saved but user not found — clear stale demo session
+        writeDemoSession(null);
       }
 
       set({ loading: false });
@@ -105,6 +135,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             .eq('id', utente.officina_id)
             .single();
 
+          writeDemoSession({ email, userType: 'officina' });
           set({ utente, officina, userType: 'officina', sessionUser: { email } });
           return {};
         }
@@ -119,6 +150,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             .eq('id', utente.officina_id)
             .single();
 
+          writeDemoSession({ email, userType: 'officina' });
           set({ utente, officina, userType: 'officina', sessionUser: { email } });
           return {};
         }
@@ -174,6 +206,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           return { error: 'Email o password non validi' };
         }
 
+        writeDemoSession({ email, userType: 'cliente' });
         set({ cliente, userType: 'cliente', sessionUser: { email } });
         return {};
       }
@@ -207,6 +240,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     await supabase.auth.signOut();
+    writeDemoSession(null);
     set({
       sessionUser: null,
       utente: null,
