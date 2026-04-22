@@ -27,6 +27,11 @@ const TABS = [
   { id: 'agenda', label: 'Appuntamenti', icon: '📅' },
   { id: 'preventivi', label: 'Preventivi', icon: '💰' },
   { id: 'clienti', label: 'Clienti', icon: '👥' },
+  { id: 'calendario', label: 'Calendario', icon: '📆' },
+  { id: 'magazzino', label: 'Magazzino', icon: '📦' },
+  { id: 'analytics', label: 'Analytics', icon: '📊' },
+  { id: 'fatture', label: 'Fatture', icon: '🧾' },
+  { id: 'obd', label: 'OBD', icon: '🔌' },
   { id: 'altro', label: 'Altro', icon: '⚙️' },
 ];
 
@@ -34,7 +39,7 @@ export function AppOfficina() {
   const { officina } = useAuthStore();
   const [activeTab, setActiveTab] = useHistoryState('officina-tab', 'home');
   const [selectedApp, setSelectedApp] = useState<Appuntamento | null>(null);
-  const [subPage, setSubPage] = useState<'calendario' | 'magazzino' | 'analytics' | 'fatture' | 'abbonamento' | 'impostazioni' | 'obd' | 'guida' | null>(null);
+  const [subPage, setSubPage] = useState<'abbonamento' | 'impostazioni' | 'guida' | null>(null);
   const [agendaFiltro, setAgendaFiltro] = useState<string | undefined>(undefined);
   const [agendaView, setAgendaView] = useState<'calendario' | 'lista'>('calendario');
   const [showNewApp, setShowNewApp] = useState(false);
@@ -237,6 +242,11 @@ export function AppOfficina() {
       )}
       {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} onNavigateToCalendar={(date) => { setCalendarDate(date); setAgendaView('calendario'); setActiveTab('agenda'); }} externalSearch={preventiviSearch} /></Suspense>}
       {activeTab === 'clienti' && <CustomersPage initialClienteId={selectedClienteId} />}
+      {activeTab === 'calendario' && <CalendarView onSelect={handleSelectApp} initialDate={calendarDate} />}
+      {activeTab === 'magazzino' && <Suspense fallback={<PageSkeleton />}><InventoryPage /></Suspense>}
+      {activeTab === 'analytics' && <Suspense fallback={<PageSkeleton />}><AnalyticsPage /></Suspense>}
+      {activeTab === 'fatture' && <Suspense fallback={<PageSkeleton />}><InvoicePage /></Suspense>}
+      {activeTab === 'obd' && <Suspense fallback={<PageSkeleton />}><OBDScansPage /></Suspense>}
       {activeTab === 'altro' && !subPage && (
         <div className="p-4 space-y-3">
           <h2 className="text-lg font-bold text-gray-900">Altro</h2>
@@ -254,58 +264,6 @@ export function AppOfficina() {
             </svg>
           </button>
           <button
-            onClick={() => setSubPage('calendario')}
-            className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-xl">📆</div>
-            <div className="text-left">
-              <div className="font-semibold text-sm text-gray-900">Calendario</div>
-              <div className="text-xs text-gray-500">Vista calendario appuntamenti</div>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setSubPage('magazzino')}
-            className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-xl">📦</div>
-            <div className="text-left">
-              <div className="font-semibold text-sm text-gray-900">Magazzino</div>
-              <div className="text-xs text-gray-500">Gestisci inventario ricambi</div>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setSubPage('analytics')}
-            className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-xl">📊</div>
-            <div className="text-left">
-              <div className="font-semibold text-sm text-gray-900">Analytics</div>
-              <div className="text-xs text-gray-500">Statistiche e report</div>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setSubPage('fatture')}
-            className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-xl">🧾</div>
-            <div className="text-left">
-              <div className="font-semibold text-sm text-gray-900">Fatturazione</div>
-              <div className="text-xs text-gray-500">Gestisci fatture e incassi</div>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-          <button
             onClick={() => setSubPage('abbonamento')}
             className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
           >
@@ -313,19 +271,6 @@ export function AppOfficina() {
             <div className="text-left">
               <div className="font-semibold text-sm text-gray-900">Abbonamento</div>
               <div className="text-xs text-gray-500">Piano, pagamenti, fatturazione</div>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setSubPage('obd')}
-            className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-xl">🔌</div>
-            <div className="text-left">
-              <div className="font-semibold text-sm text-gray-900">Scansioni OBD</div>
-              <div className="text-xs text-gray-500">Codici errore ricevuti dai clienti</div>
             </div>
             <svg className="w-5 h-5 text-gray-400 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -346,50 +291,6 @@ export function AppOfficina() {
           </button>
         </div>
       )}
-      {activeTab === 'altro' && subPage === 'calendario' && (
-        <div>
-          <button
-            onClick={() => setSubPage(null)}
-            className="flex items-center gap-1 px-4 pt-4 text-sm text-blue-600 hover:underline cursor-pointer"
-          >
-            ← Indietro
-          </button>
-          <CalendarView onSelect={handleSelectApp} initialDate={calendarDate} />
-        </div>
-      )}
-      {activeTab === 'altro' && subPage === 'magazzino' && (
-        <div>
-          <button
-            onClick={() => setSubPage(null)}
-            className="flex items-center gap-1 px-4 pt-4 text-sm text-blue-600 hover:underline cursor-pointer"
-          >
-            ← Indietro
-          </button>
-          <Suspense fallback={<PageSkeleton />}><InventoryPage /></Suspense>
-        </div>
-      )}
-      {activeTab === 'altro' && subPage === 'analytics' && (
-        <div>
-          <button
-            onClick={() => setSubPage(null)}
-            className="flex items-center gap-1 px-4 pt-4 text-sm text-blue-600 hover:underline cursor-pointer"
-          >
-            ← Indietro
-          </button>
-          <Suspense fallback={<PageSkeleton />}><AnalyticsPage /></Suspense>
-        </div>
-      )}
-      {activeTab === 'altro' && subPage === 'fatture' && (
-        <div>
-          <button
-            onClick={() => setSubPage(null)}
-            className="flex items-center gap-1 px-4 pt-4 text-sm text-blue-600 hover:underline cursor-pointer"
-          >
-            ← Indietro
-          </button>
-          <Suspense fallback={<PageSkeleton />}><InvoicePage /></Suspense>
-        </div>
-      )}
       {activeTab === 'altro' && subPage === 'abbonamento' && (
         <div>
           <button
@@ -399,17 +300,6 @@ export function AppOfficina() {
             ← Indietro
           </button>
           <Suspense fallback={<PageSkeleton />}><SubscriptionPage /></Suspense>
-        </div>
-      )}
-      {activeTab === 'altro' && subPage === 'obd' && (
-        <div>
-          <button
-            onClick={() => setSubPage(null)}
-            className="flex items-center gap-1 px-4 pt-4 text-sm text-blue-600 hover:underline cursor-pointer"
-          >
-            ← Indietro
-          </button>
-          <Suspense fallback={<PageSkeleton />}><OBDScansPage /></Suspense>
         </div>
       )}
       {activeTab === 'altro' && subPage === 'impostazioni' && (
