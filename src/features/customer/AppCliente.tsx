@@ -240,20 +240,26 @@ function ClienteHome() {
   const accettaProposta = async () => {
     if (!appAttivo.data_proposta) return;
     setActionError(null);
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('appuntamenti')
       .update({ data_ora: appAttivo.data_proposta, stato: 'prenotato', data_proposta: null, nota_officina: null })
-      .eq('id', appAttivo.id);
-    if (error) setActionError('Errore nell\'accettazione della proposta. Riprova.');
+      .eq('id', appAttivo.id)
+      .select('id');
+    if (error || !data || data.length === 0) {
+      setActionError('Errore nell\'accettazione della proposta. Riprova.');
+    }
   };
 
   const rifiutaProposta = async () => {
     setActionError(null);
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('appuntamenti')
       .update({ data_proposta: null, nota_officina: null })
-      .eq('id', appAttivo.id);
-    if (error) setActionError('Errore nel rifiuto della proposta. Riprova.');
+      .eq('id', appAttivo.id)
+      .select('id');
+    if (error || !data || data.length === 0) {
+      setActionError('Errore nel rifiuto della proposta. Riprova.');
+    }
   };
 
   return (
