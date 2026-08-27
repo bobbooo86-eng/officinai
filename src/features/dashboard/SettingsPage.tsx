@@ -24,6 +24,8 @@ export function SettingsPage() {
   const [tel, setTel] = useState(officina?.tel || '');
   const [email, setEmail] = useState(officina?.email || '');
   const [pIva, setPIva] = useState(officina?.p_iva || '');
+  const [logoUrl, setLogoUrl] = useState(officina?.logo_url || '');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const [team, setTeam] = useState<Utente[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(true);
@@ -122,11 +124,44 @@ export function SettingsPage() {
     setSaving(true);
     await supabase
       .from('officine')
-      .update({ nome, indirizzo, tel, email, p_iva: pIva })
+      .update({ nome, indirizzo, tel, email, p_iva: pIva, logo_url: logoUrl || null })
       .eq('id', officina.id);
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  };
+
+  const uploadLogo = async (file: File) => {
+    if (!officina) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Il file supera i 2MB. Riduci la dimensione del logo.');
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const ext = file.name.split('.').pop() || 'png';
+      const path = `${officina.id}/logo-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('logos')
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) {
+        // Fallback: leggi come data URL se lo storage non e configurato
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const dataUrl = String(reader.result);
+          setLogoUrl(dataUrl);
+          await supabase.from('officine').update({ logo_url: dataUrl }).eq('id', officina.id);
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+      const { data: pub } = supabase.storage.from('logos').getPublicUrl(path);
+      const url = pub.publicUrl;
+      setLogoUrl(url);
+      await supabase.from('officine').update({ logo_url: url }).eq('id', officina.id);
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   return (
@@ -196,6 +231,33 @@ export function SettingsPage() {
           <div className="text-sm font-semibold text-emerald-800">✅ Salvato con successo!</div>
         </Card>
       )}
+
+      <Card>
+        <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Logo officina</h3>
+        <div className="flex items-center gap-4 mb-3">
+          <div className="w-20 h-20 rounded-2xl bg-gray-100 dark:bg-gray-700 border-2 border-dashed border-gray-300 dark:border-gray-600 overflow-hidden flex items-center justify-center">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            ) : (
+              <span className="text-3xl">🔧</span>
+            )}
+          </div>
+          <div className="flex-1 space-y-2">
+            <label className="block w-full">
+              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1 block">Carica dal tuo dispositivo</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadLogo(f); }}
+                disabled={uploadingLogo}
+                className="w-full text-xs file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white file:font-semibold file:cursor-pointer hover:file:bg-blue-700 cursor-pointer disabled:opacity-50"
+              />
+            </label>
+            <Input label="Oppure incolla un URL" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://..." />
+            {uploadingLogo && <div className="text-xs text-blue-600">Caricamento in corso...</div>}
+          </div>
+        </div>
+      </Card>
 
       <Card>
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Dati officina</h3>
@@ -280,7 +342,7 @@ export function SettingsPage() {
               <div className="flex items-center gap-2">
                 <select
                   value={newRuolo}
-                  onChange={(e) => setNewRuolo(e.target.value as any)}
+                  onChange={(e) => setNewRuolo(e.target.value as 'operaio' | 'reception' | 'titolare')}
                   className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="operaio">Operaio / Meccanico</option>
