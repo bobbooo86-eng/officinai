@@ -27,7 +27,7 @@ const writeDemoSession = (s: DemoSession | null) => {
 
 interface AuthState {
   loading: boolean;
-  sessionUser: any | null;
+  sessionUser: { email?: string; id?: string } | null;
   utente: Utente | null;
   cliente: Cliente | null;
   officina: Officina | null;
@@ -36,7 +36,7 @@ interface AuthState {
   initialize: () => Promise<void>;
   loginOfficina: (email: string, password: string) => Promise<{ error?: string }>;
   loginCliente: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (email: string, password: string, tipo: 'officina' | 'cliente') => Promise<{ error?: string }>;
+  signUp: (email: string, password: string) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
 }
 
@@ -179,8 +179,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         userType: 'officina',
       });
       return {};
-    } catch (err: any) {
-      return { error: err.message || 'Errore di connessione' };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Errore di connessione';
+      return { error: msg };
     }
   },
 
@@ -223,12 +224,13 @@ export const useAuthStore = create<AuthState>((set) => ({
         userType: 'cliente',
       });
       return {};
-    } catch (err: any) {
-      return { error: err.message || 'Errore di connessione' };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Errore di connessione';
+      return { error: msg };
     }
   },
 
-  signUp: async (email: string, password: string, _tipo: 'officina' | 'cliente') => {
+  signUp: async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) return { error: error.message };
     return {};
