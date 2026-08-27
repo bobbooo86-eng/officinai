@@ -10,7 +10,7 @@ import { PageSkeleton } from '@/components/ui/PageSkeleton';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
-import type { Appuntamento } from '@/types/database';
+import type { Appuntamento, MovimentoTipo } from '@/types/database';
 
 const AnalyticsPage = lazy(() => import('./AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
 const InvoicePage = lazy(() => import('@/features/invoices/InvoicePage').then(m => ({ default: m.InvoicePage })));
@@ -19,6 +19,7 @@ const InventoryPage = lazy(() => import('@/features/inventory/InventoryPage').th
 const SettingsPage = lazy(() => import('./SettingsPage').then(m => ({ default: m.SettingsPage })));
 const OBDScansPage = lazy(() => import('./OBDScansPage').then(m => ({ default: m.OBDScansPage })));
 const GuidaPage = lazy(() => import('@/features/guide/GuidaPage').then(m => ({ default: m.GuidaPage })));
+const CassaPage = lazy(() => import('@/features/cassa/CassaPage').then(m => ({ default: m.CassaPage })));
 
 const PreventiviPage = lazy(() => import('@/features/estimates/PreventiviPage').then(m => ({ default: m.PreventiviPage })));
 
@@ -27,6 +28,7 @@ const TABS = [
   { id: 'agenda', label: 'Appuntamenti', icon: '📅' },
   { id: 'preventivi', label: 'Preventivi', icon: '💰' },
   { id: 'clienti', label: 'Clienti', icon: '👥' },
+  { id: 'cassa', label: 'Cassa', icon: '📒' },
   { id: 'calendario', label: 'Calendario', icon: '📆' },
   { id: 'magazzino', label: 'Magazzino', icon: '📦' },
   { id: 'analytics', label: 'Analytics', icon: '📊' },
@@ -48,6 +50,8 @@ export function AppOfficina() {
   const [preventiviSearch, setPreventiviSearch] = useState<string>('');
   const [selectedClienteId, setSelectedClienteId] = useState<string | undefined>(undefined);
   const [richiesteCount, setRichiesteCount] = useState(0);
+  const [showFabMenu, setShowFabMenu] = useState(false);
+  const [cassaOpenTipo, setCassaOpenTipo] = useState<MovimentoTipo | null>(null);
 
   // Load pending requests count (with realtime)
   const loadRichiesteCount = useCallback(async () => {
@@ -71,12 +75,26 @@ export function AppOfficina() {
     return () => { supabase.removeChannel(channel); };
   }, [loadRichiesteCount]);
 
-  // FAB: open new appointment (navigate to agenda + showNewApp)
+  // FAB: apri menu di scelta (nuovo appuntamento / incasso extra / spesa)
   const handleFab = () => {
+    setShowFabMenu(true);
+  };
+
+  const fabNuovoAppuntamento = () => {
+    setShowFabMenu(false);
     setActiveTab('agenda');
     setSubPage(null);
     setSelectedApp(null);
     setShowNewApp(true);
+  };
+
+  const fabApriCassaConTipo = (tipo: MovimentoTipo) => {
+    setShowFabMenu(false);
+    setCassaOpenTipo(tipo);
+    setSubPage(null);
+    setSelectedApp(null);
+    setShowNewApp(false);
+    setActiveTab('cassa');
   };
 
   // Tabs with badge
@@ -108,7 +126,6 @@ export function AppOfficina() {
 
   // Handle global search result selection
   const handleSearchSelect = async (type: string, id: string) => {
-    // If we're on preventivi tab and searching a cliente, filter preventivi list
     if (activeTab === 'preventivi' && type === 'cliente') {
       const { data: cl } = await supabase.from('clienti').select('nome').eq('id', id).single();
       if (cl) {
@@ -123,7 +140,6 @@ export function AppOfficina() {
       const { data } = await supabase.from('appuntamenti').select('*').eq('id', id).single();
       appData = data;
     } else if (type === 'cliente') {
-      // Navigate to Clienti tab with this client's detail
       setSelectedClienteId(id);
       setActiveTab('clienti');
       return;
@@ -148,7 +164,6 @@ export function AppOfficina() {
     }
   };
 
-  // Appointment detail view
   if (selectedApp) {
     return (
       <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSelectedApp(null); setSubPage(null); }} onSearchSelect={handleSearchSelect} showSearch>
@@ -185,9 +200,7 @@ export function AppOfficina() {
           />
         ) : (
           <div>
-            {/* Search + Toggle + Nuovo */}
             <div className="px-4 pt-4 space-y-3">
-              {/* Search bar */}
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -200,7 +213,6 @@ export function AppOfficina() {
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
                 />
               </div>
-              {/* Toggle + Nuovo */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <button
@@ -247,6 +259,11 @@ export function AppOfficina() {
       {activeTab === 'analytics' && <Suspense fallback={<PageSkeleton />}><AnalyticsPage /></Suspense>}
       {activeTab === 'fatture' && <Suspense fallback={<PageSkeleton />}><InvoicePage /></Suspense>}
       {activeTab === 'obd' && <Suspense fallback={<PageSkeleton />}><OBDScansPage /></Suspense>}
+      {activeTab === 'cassa' && (
+        <Suspense fallback={<PageSkeleton />}>
+          <CassaPage initialOpen={cassaOpenTipo} onOpenHandled={() => setCassaOpenTipo(null)} />
+        </Suspense>
+      )}
       {activeTab === 'altro' && !subPage && (
         <div className="p-4 space-y-3">
           <h2 className="text-lg font-bold text-gray-900">Altro</h2>
@@ -323,6 +340,49 @@ export function AppOfficina() {
           </button>
           <Suspense fallback={<PageSkeleton />}><GuidaPage /></Suspense>
         </div>
+      )}
+
+      {/* FAB menu di scelta */}
+      {showFabMenu && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-[60] animate-fade-in"
+            onClick={() => setShowFabMenu(false)}
+          />
+          <div className="fixed left-1/2 -translate-x-1/2 bottom-24 w-[92%] max-w-sm bg-white dark:bg-gray-800 rounded-3xl shadow-2xl z-[61] p-3 animate-fade-in">
+            <div className="text-center text-xs font-semibold text-gray-500 uppercase tracking-wide py-1.5">
+              Cosa vuoi creare?
+            </div>
+            {([
+              { id: 'app', icon: '📅', label: 'Nuovo appuntamento', desc: 'Prenota lavoro per un cliente', onClick: fabNuovoAppuntamento, color: 'from-blue-50 to-indigo-50 border-blue-200' },
+              { id: 'incasso', icon: '💵', label: 'Incasso extra', desc: 'Vendita al banco, entrata fuori appuntamento', onClick: () => fabApriCassaConTipo('incasso_extra'), color: 'from-emerald-50 to-green-50 border-emerald-200' },
+              { id: 'spesa_off', icon: '🧾', label: 'Spesa officina', desc: 'Fattura fornitore, materiali, bollette', onClick: () => fabApriCassaConTipo('spesa_officina'), color: 'from-red-50 to-rose-50 border-red-200' },
+              { id: 'spesa_tit', icon: '👔', label: 'Spesa titolare', desc: 'Prelievo cassa, spesa personale', onClick: () => fabApriCassaConTipo('spesa_titolare'), color: 'from-purple-50 to-fuchsia-50 border-purple-200' },
+              { id: 'anticipo', icon: '💶', label: 'Anticipo dipendente', desc: 'Anticipo stipendio o cassa dipendente', onClick: () => fabApriCassaConTipo('anticipo_dipendente'), color: 'from-amber-50 to-yellow-50 border-amber-200' },
+            ]).map((opt) => (
+              <button
+                key={opt.id}
+                onClick={opt.onClick}
+                className={`w-full flex items-center gap-3 p-3 mb-1.5 last:mb-0 rounded-2xl border bg-gradient-to-r ${opt.color} hover:shadow-sm transition-all active:scale-98 cursor-pointer text-left`}
+              >
+                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
+                  {opt.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-gray-900">{opt.label}</div>
+                  <div className="text-[11px] text-gray-500 truncate">{opt.desc}</div>
+                </div>
+                <span className="text-gray-300">›</span>
+              </button>
+            ))}
+            <button
+              onClick={() => setShowFabMenu(false)}
+              className="w-full text-center py-2 text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
+            >
+              Annulla
+            </button>
+          </div>
+        </>
       )}
     </Layout>
   );
