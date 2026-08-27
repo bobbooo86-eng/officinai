@@ -9,10 +9,11 @@ import { LandingPage } from '@/features/landing/LandingPage';
 import { AppOfficina } from '@/features/dashboard/AppOfficina';
 import { AppCliente } from '@/features/customer/AppCliente';
 import { RegisterClientePage } from '@/features/auth/RegisterClientePage';
+import { JoinOfficinaPage } from '@/features/auth/JoinOfficinaPage';
 import { OnboardingWizard } from '@/features/onboarding/OnboardingWizard';
 import { Loader } from '@/components/ui';
 
-type Page = 'landing' | 'login' | 'register' | 'register-cliente' | 'choose-register';
+type Page = 'landing' | 'login' | 'register' | 'register-cliente' | 'join-officina' | 'choose-register';
 
 export default function App() {
   const { loading, userType, officina, initialize } = useAuthStore();
@@ -105,6 +106,16 @@ export default function App() {
                 </div>
               </button>
               <button
+                onClick={() => navigateTo('join-officina')}
+                className="w-full flex items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 border-gray-200 dark:border-gray-600 hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-all group cursor-pointer"
+              >
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-amber-100 flex items-center justify-center text-2xl group-hover:bg-amber-200 transition-colors shrink-0">👷</div>
+                <div className="text-left">
+                  <div className="font-bold text-gray-900 dark:text-white text-base sm:text-lg">Lavoro in un'officina</div>
+                  <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Sono titolare, operaio o reception di un'officina già registrata</div>
+                </div>
+              </button>
+              <button
                 onClick={() => navigateTo('register-cliente')}
                 className="w-full flex items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 border-gray-200 dark:border-gray-600 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all group cursor-pointer"
               >
@@ -135,6 +146,15 @@ export default function App() {
 
     if (page === 'register-cliente') {
       return <RegisterClientePage onGoLogin={() => navigateTo('login')} />;
+    }
+
+    if (page === 'join-officina') {
+      return (
+        <JoinOfficinaPage
+          onGoLogin={() => navigateTo('login')}
+          onGoBack={() => navigateTo('choose-register')}
+        />
+      );
     }
 
     return <LoginPage onGoRegister={() => navigateTo('register')} onGoRegisterCliente={() => navigateTo('register-cliente')} onGoLanding={() => navigateTo('landing')} />;
