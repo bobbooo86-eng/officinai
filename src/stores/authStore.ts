@@ -26,15 +26,13 @@ const writeDemoSession = (s: DemoSession | null) => {
 };
 
 interface AuthState {
-  // State
   loading: boolean;
-  sessionUser: any | null; // Supabase auth user
-  utente: Utente | null;   // Workshop staff user
-  cliente: Cliente | null;  // Customer user
+  sessionUser: any | null;
+  utente: Utente | null;
+  cliente: Cliente | null;
   officina: Officina | null;
   userType: 'officina' | 'cliente' | null;
 
-  // Actions
   initialize: () => Promise<void>;
   loginOfficina: (email: string, password: string) => Promise<{ error?: string }>;
   loginCliente: (email: string, password: string) => Promise<{ error?: string }>;
@@ -42,7 +40,7 @@ interface AuthState {
   logout: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   loading: true,
   sessionUser: null,
   utente: null,
@@ -62,7 +60,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       if (email) {
-        // Try to find as workshop staff
         const { data: utente } = await supabase
           .from('utenti')
           .select('*')
@@ -81,7 +78,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           return;
         }
 
-        // Try to find as customer
         const { data: cliente } = await supabase
           .from('clienti')
           .select('*')
@@ -93,7 +89,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           return;
         }
 
-        // Email saved but user not found — clear stale demo session
         writeDemoSession(null);
       }
 
@@ -106,14 +101,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   loginOfficina: async (email: string, password: string) => {
     try {
-      // First try Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (authError) {
-        // Fallback: check if user exists in utenti table (for demo/migration)
         const { data: utente } = await supabase
           .from('utenti')
           .select('*')
@@ -125,10 +118,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           return { error: 'Email o password non validi' };
         }
 
-        // Auto-create auth account for existing demo users
         const { error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError && !signUpError.message.includes('already registered')) {
-          // If can't create, try simple login for demo
           const { data: officina } = await supabase
             .from('officine')
             .select('*')
@@ -140,10 +131,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           return {};
         }
 
-        // Retry login after signup
         const { error: retryError } = await supabase.auth.signInWithPassword({ email, password });
         if (retryError) {
-          // Fallback to direct DB access for demo
           const { data: officina } = await supabase
             .from('officine')
             .select('*')
@@ -156,15 +145,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
 
-      // Fetch staff profile
       const { data: utente } = await supabase
         .from('utenti')
         .select('*')
         .eq('email', email)
         .eq('attivo', true)
-        .single();
+        .maybeSingle();
 
       if (!utente) {
+        const { data: pending } = await supabase
+          .from('utenti')
+          .select('id')
+          .eq('email', email)
+          .eq('attivo', false)
+          .maybeSingle();
+        if (pending) {
+          await supabase.auth.signOut().catch(() => {});
+          return { error: 'Il tuo account è in attesa di approvazione da parte del titolare dell\'officina.' };
+        }
         return { error: 'Utente non trovato nel sistema' };
       }
 
@@ -188,14 +186,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   loginCliente: async (email: string, password: string) => {
     try {
-      // Try Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (authError) {
-        // Fallback for demo customers
         const { data: cliente } = await supabase
           .from('clienti')
           .select('*')
