@@ -19,14 +19,12 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Officina form
   const [nome, setNome] = useState(officina?.nome || '');
   const [indirizzo, setIndirizzo] = useState(officina?.indirizzo || '');
   const [tel, setTel] = useState(officina?.tel || '');
   const [email, setEmail] = useState(officina?.email || '');
   const [pIva, setPIva] = useState(officina?.p_iva || '');
 
-  // Team management
   const [team, setTeam] = useState<Utente[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(true);
   const [showAddMember, setShowAddMember] = useState(false);
@@ -93,11 +91,11 @@ export function SettingsPage() {
 
   const toggleAttivo = async (id: string, current: boolean) => {
     if (id === utente?.id) return;
-    const action = current ? 'disattivare' : 'riattivare';
+    const action = current ? 'disattivare' : 'approvare/riattivare';
     if (!confirm(`Vuoi ${action} questo membro del team?`)) return;
     await supabase.from('utenti').update({ attivo: !current }).eq('id', id);
     setTeam(team.map((m) => (m.id === id ? { ...m, attivo: !current } : m)));
-    showTeamToast(current ? 'Membro disattivato' : 'Membro riattivato');
+    showTeamToast(current ? 'Membro disattivato' : 'Membro attivato');
   };
 
   const updateMemberRole = async (id: string, ruolo: string) => {
@@ -135,7 +133,6 @@ export function SettingsPage() {
     <div className="p-4 space-y-4">
       <h2 className="text-lg font-bold text-gray-900 dark:text-white">Impostazioni</h2>
 
-      {/* Theme selector */}
       <Card>
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Tema</h3>
         <div className="grid grid-cols-3 gap-2">
@@ -164,7 +161,6 @@ export function SettingsPage() {
         </div>
       </Card>
 
-      {/* Language selector */}
       <Card>
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Lingua</h3>
         <div className="grid grid-cols-2 gap-2">
@@ -195,14 +191,12 @@ export function SettingsPage() {
         </div>
       </Card>
 
-      {/* Success message */}
       {saved && (
         <Card className="!p-3 bg-emerald-50 !border-emerald-200">
           <div className="text-sm font-semibold text-emerald-800">✅ Salvato con successo!</div>
         </Card>
       )}
 
-      {/* Officina info */}
       <Card>
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Dati officina</h3>
         <div className="space-y-3">
@@ -219,7 +213,6 @@ export function SettingsPage() {
         </div>
       </Card>
 
-      {/* User info */}
       <Card>
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Il tuo profilo</h3>
         <div className="space-y-2 text-sm">
@@ -242,7 +235,6 @@ export function SettingsPage() {
         </div>
       </Card>
 
-      {/* Team management — solo titolare */}
       {isTitolare && (
         <Card>
           <div className="flex items-center justify-between mb-3">
@@ -261,7 +253,6 @@ export function SettingsPage() {
             </div>
           )}
 
-          {/* Form nuovo membro */}
           {showAddMember && (
             <div className="mb-4 p-3 bg-blue-50 rounded-xl space-y-2">
               <div className="text-xs font-semibold text-blue-900 mb-1">Nuovo membro</div>
@@ -301,7 +292,6 @@ export function SettingsPage() {
             </div>
           )}
 
-          {/* Lista team */}
           {loadingTeam ? (
             <div className="text-center py-3 text-xs text-gray-400">Caricamento team...</div>
           ) : (
@@ -326,11 +316,18 @@ export function SettingsPage() {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold text-gray-900 truncate">{m.nome}</span>
                             {isMe && <span className="text-[9px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">Tu</span>}
-                            {!m.attivo && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">Disattivato</span>}
+                            {!m.attivo && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">In attesa di approvazione</span>}
                           </div>
                           <div className="text-[11px] text-gray-500 truncate">{m.email}</div>
                         </div>
                         <Badge color={rCfg.color} bg={rCfg.bg}>{rCfg.label}</Badge>
+                        {!isMe && !m.attivo && (
+                          <button
+                            onClick={() => toggleAttivo(m.id, m.attivo)}
+                            className="text-[10px] px-2 py-1 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 cursor-pointer"
+                            title="Approva l'iscrizione di questo membro"
+                          >✓ Approva</button>
+                        )}
                         {!isMe && (
                           <button
                             onClick={() => setEditingMember(m.id)}
@@ -381,7 +378,7 @@ export function SettingsPage() {
                               m.attivo ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                             }`}
                           >
-                            {m.attivo ? 'Disattiva' : 'Riattiva'}
+                            {m.attivo ? 'Disattiva' : '✓ Approva'}
                           </button>
                           <button
                             onClick={() => deleteMember(m.id, m.nome)}
@@ -403,7 +400,6 @@ export function SettingsPage() {
         </Card>
       )}
 
-      {/* Subscription */}
       <Card>
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Abbonamento</h3>
         <div className="bg-blue-50 rounded-xl p-4 text-center mb-3">
@@ -432,7 +428,6 @@ export function SettingsPage() {
         </div>
       </Card>
 
-      {/* Danger zone */}
       <Card className="!border-red-200">
         <h3 className="font-semibold text-red-600 mb-3">Zona pericolosa</h3>
         <Button variant="danger" fullWidth onClick={logout}>
@@ -440,7 +435,6 @@ export function SettingsPage() {
         </Button>
       </Card>
 
-      {/* App version */}
       <div className="text-center text-xs text-gray-300 pt-4">
         OfficinAI v2.0 • React + TypeScript + Supabase
       </div>
