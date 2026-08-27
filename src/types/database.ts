@@ -84,7 +84,7 @@ export type PagamentoStato = 'pagato' | 'acconto' | 'non_pagato';
 
 export interface PagamentoInfo {
   stato: PagamentoStato;
-  importo_pagato?: number;   // per acconto: quanto ha già pagato
+  importo_pagato?: number;   // per acconto: quanto ha gia pagato
   importo_totale?: number;   // importo totale da pagare
   note?: string;
 }
@@ -262,4 +262,35 @@ export interface Recensione {
   voto: number;
   commento?: string;
   created_at?: string;
+}
+
+export type MovimentoTipo =
+  | 'incasso_extra'
+  | 'spesa_officina'
+  | 'spesa_titolare'
+  | 'anticipo_dipendente'
+  | 'spesa_dipendente';
+
+export type MetodoPagamento =
+  | 'contanti'
+  | 'carta'
+  | 'bonifico'
+  | 'paypal'
+  | 'assegno'
+  | 'altro';
+
+export interface Movimento {
+  id: string;
+  officina_id: string;
+  tipo: MovimentoTipo;
+  importo: number;
+  descrizione: string;
+  metodo_pagamento?: MetodoPagamento | null;
+  data: string;
+  dipendente_id?: string | null;
+  created_by?: string | null;
+  note?: string | null;
+  created_at?: string;
+  // Relations (joined)
+  dipendente?: Utente | null;
 }
