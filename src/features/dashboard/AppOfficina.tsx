@@ -53,7 +53,6 @@ export function AppOfficina() {
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [cassaOpenTipo, setCassaOpenTipo] = useState<MovimentoTipo | null>(null);
 
-  // Load pending requests count (with realtime)
   const loadRichiesteCount = useCallback(async () => {
     if (!officina) return;
     const { count } = await supabase
@@ -65,17 +64,17 @@ export function AppOfficina() {
   }, [officina]);
 
   useEffect(() => {
-    loadRichiesteCount();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadRichiesteCount();
     const channel = supabase
       .channel('richieste-badge')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'appuntamenti' }, () => {
-        loadRichiesteCount();
+        void loadRichiesteCount();
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { void supabase.removeChannel(channel); };
   }, [loadRichiesteCount]);
 
-  // FAB: apri menu di scelta (nuovo appuntamento / incasso extra / spesa)
   const handleFab = () => {
     setShowFabMenu(true);
   };
@@ -97,7 +96,6 @@ export function AppOfficina() {
     setActiveTab('cassa');
   };
 
-  // Tabs with badge
   const tabsWithBadge = TABS.map((t) => ({
     ...t,
     badge: t.id === 'agenda' ? richiesteCount : undefined,
@@ -113,7 +111,6 @@ export function AppOfficina() {
     window.history.pushState({ ...window.history.state, selectedAppId: null }, '');
   };
 
-  // Listen for back button to clear selected app
   useEffect(() => {
     const handlePop = (e: PopStateEvent) => {
       if (!e.state?.selectedAppId) {
@@ -124,7 +121,6 @@ export function AppOfficina() {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
-  // Handle global search result selection
   const handleSearchSelect = async (type: string, id: string) => {
     if (activeTab === 'preventivi' && type === 'cliente') {
       const { data: cl } = await supabase.from('clienti').select('nome').eq('id', id).single();
@@ -134,7 +130,7 @@ export function AppOfficina() {
       return;
     }
 
-    let appData: any = null;
+    let appData: Appuntamento | null = null;
 
     if (type === 'appuntamento') {
       const { data } = await supabase.from('appuntamenti').select('*').eq('id', id).single();
@@ -342,7 +338,6 @@ export function AppOfficina() {
         </div>
       )}
 
-      {/* FAB menu di scelta */}
       {showFabMenu && (
         <>
           <div
