@@ -38,7 +38,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
     try {
       setError(null);
 
-      const meseCorrente = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+      const meseCorrente = new Date().toISOString().slice(0, 7);
 
       const [appsResult, magazzinoResult, obdResult, prevResult, fattureResult] = await Promise.all([
         supabase
@@ -77,20 +77,18 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
       setObdCount(obdResult.count || 0);
       setPreventiviBozzaCount(prevResult.count || 0);
 
-      // Monthly stats from fatture
       const fatture = fattureResult.data || [];
       const fatturatoPagato = fatture
-        .filter((f: any) => f.stato === 'pagata' || f.stato === 'emessa')
-        .reduce((sum: number, f: any) => sum + (f.totale || 0), 0);
+        .filter((f: { stato: string }) => f.stato === 'pagata' || f.stato === 'emessa')
+        .reduce((sum: number, f: { totale?: number }) => sum + (f.totale || 0), 0);
 
-      // Non-invoiced jobs: pronto/consegnato with no fattura
-      const fattureAppIds = new Set(fatture.map((f: any) => f.appuntamento_id).filter(Boolean));
+      const fattureAppIds = new Set(fatture.map((f: { appuntamento_id?: string }) => f.appuntamento_id).filter(Boolean));
       const nonFatturati = apps.filter(
         (a) => (a.stato === 'pronto' || a.stato === 'consegnato') && !fattureAppIds.has(a.id)
       ).length;
 
       setMeseStats({ fatturato: fatturatoPagato, lavori: fatture.length, nonFatturati });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Dashboard fetch error:', err);
       setError('Errore nel caricamento dei dati. Riprova.');
     } finally {
@@ -138,14 +136,10 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
     .filter((a) => a.data_ora?.startsWith(oggi))
     .sort((a, b) => a.data_ora.localeCompare(b.data_ora));
   const richieste = appuntamenti.filter((a) => a.stato === 'richiesta');
-  const inCorso = appuntamenti.filter((a) => a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi');
   const autoInOfficina = appuntamenti.filter((a) => a.stato !== 'consegnato' && a.stato !== 'annullato' && a.stato !== 'richiesta');
-  const nonInLavorazione = appuntamenti.filter((a) => a.stato === 'prenotato');
   const pronti = appuntamenti.filter((a) => a.stato === 'pronto');
-  const consegnati = appuntamenti.filter((a) => a.stato === 'consegnato');
   const recenti = appuntamenti.slice(0, 8);
 
-  // Crediti: consegnati con pagamento non completo
   const crediti = appuntamenti.filter((a) =>
     a.stato === 'consegnato' && a.pagamento && a.pagamento.stato !== 'pagato'
   );
@@ -160,7 +154,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
 
   return (
     <div className="p-4 space-y-5">
-      {/* Welcome banner for new users */}
       {isNuovoUtente && (
         <Card className="!p-6 bg-gradient-to-r from-blue-600 to-indigo-700 border-0 text-white animate-fade-in">
           <div className="text-center">
@@ -181,7 +174,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         </Card>
       )}
 
-      {/* Header with dynamic greeting and quick actions */}
       <div className="flex items-center justify-between animate-fade-in">
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -191,13 +183,10 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
             {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
-        {/* Buttons removed — use tabs instead */}
       </div>
 
-      {/* Monthly stats — 3 cards */}
       {meseStats !== null && (
         <div className="grid grid-cols-3 gap-2 animate-fade-in">
-          {/* Fatturato mese */}
           <Card className="!p-3 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 !border-emerald-200 dark:!border-emerald-700">
             <div className="text-[10px] text-emerald-600 font-semibold mb-1">💶 Fatturato</div>
             <div className="text-lg font-black text-emerald-700 tabular-nums leading-tight">
@@ -208,14 +197,12 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
             <div className="text-[10px] text-emerald-500 mt-0.5">questo mese</div>
           </Card>
 
-          {/* Lavori fatturati */}
           <Card className="!p-3 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 !border-blue-200 dark:!border-blue-700">
             <div className="text-[10px] text-blue-600 font-semibold mb-1">🧾 Fatturati</div>
             <div className="text-lg font-black text-blue-700 tabular-nums leading-tight">{meseStats.lavori}</div>
             <div className="text-[10px] text-blue-500 mt-0.5">lavori</div>
           </Card>
 
-          {/* Non fatturati — giallo/arancio se > 0 */}
           <button onClick={() => onNavigateToAgenda?.('non_fatturati')} className="text-left cursor-pointer">
             <Card hover className={`!p-3 ${meseStats.nonFatturati > 0 ? 'bg-gradient-to-br from-yellow-50 to-amber-50 !border-yellow-300' : 'bg-gray-50 !border-gray-200'}`}>
               <div className={`text-[10px] font-semibold mb-1 ${meseStats.nonFatturati > 0 ? 'text-yellow-700' : 'text-gray-500'}`}>
@@ -232,7 +219,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         </div>
       )}
 
-      {/* Pending requests alert */}
       {richieste.length > 0 && (
         <Card className="!p-4 bg-purple-50 dark:bg-purple-900/20 !border-purple-200 dark:!border-purple-700 animate-fade-in">
           <div className="flex items-center gap-2 mb-2">
@@ -278,9 +264,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         </Card>
       )}
 
-      {/* KPIs — larger, with colored borders */}
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-        {/* Auto in officina — special KPI */}
         <button onClick={() => onNavigateToAgenda?.('tutti')} className="text-left cursor-pointer col-span-3 sm:col-span-5">
           <Card hover className="!p-4 border-l-4 !border-l-blue-500 flex items-center gap-4">
             <div className="text-3xl">🚗</div>
@@ -290,7 +274,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
             </div>
           </Card>
         </button>
-        {/* All status filters */}
         {Object.entries(STATO_CONFIG).map(([key, cfg]) => {
           const count = appuntamenti.filter((a) => a.stato === key).length;
           return (
@@ -303,7 +286,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
             </button>
           );
         })}
-        {/* Non fatturati KPI */}
         {meseStats !== null && (
           <button onClick={() => onNavigateToAgenda?.('non_fatturati')} className="text-left cursor-pointer">
             <Card hover className="text-center !p-3" style={{ borderColor: meseStats.nonFatturati > 0 ? '#ea580c' : undefined }}>
@@ -317,7 +299,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         )}
       </div>
 
-      {/* Auto pronte — prominent alert */}
       {pronti.length > 0 && (
         <button
           onClick={() => onNavigateToAgenda?.('pronto')}
@@ -345,7 +326,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         </button>
       )}
 
-      {/* Crediti da incassare */}
       {crediti.length > 0 && (
         <Card className="!p-4 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/20 !border-red-300 dark:!border-red-700 animate-fade-in">
           <div className="flex items-center justify-between mb-3">
@@ -398,7 +378,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         </Card>
       )}
 
-      {/* Secondary alerts row: OBD + Preventivi bozza */}
       {(obdCount > 0 || preventiviBozzaCount > 0) && (
         <div className="grid grid-cols-2 gap-3">
           {obdCount > 0 && (
@@ -436,7 +415,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         </div>
       )}
 
-      {/* Warehouse alerts */}
       {alertMagazzino.length > 0 && (
         <Card className="!p-4 bg-red-50 dark:bg-red-900/20 !border-red-200 dark:!border-red-700">
           <div className="flex items-center gap-2 mb-2">
@@ -455,10 +433,8 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         </Card>
       )}
 
-      {/* Vehicle expiry alerts */}
       <VehicleAlerts />
 
-      {/* Today's appointments */}
       <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white">Appuntamenti di oggi</h2>
@@ -499,8 +475,15 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
                   onClick={() => onSelectAppuntamento(app)}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: stato.bg }}>
+                    <div className="relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: stato.bg }}>
                       <span className="text-xl">{tipoInfo.icon}</span>
+                      {officina?.logo_url && (
+                        <img
+                          src={officina.logo_url}
+                          alt="Logo officina"
+                          className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full object-cover border-2 border-white dark:border-gray-800 shadow"
+                        />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -533,7 +516,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         )}
       </div>
 
-      {/* Recent activity */}
       <div className="animate-fade-in" style={{ animationDelay: '0.3s' }}>
         <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-3">Attività recente</h2>
         {recenti.length === 0 ? (
@@ -556,8 +538,15 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
                   onClick={() => onSelectAppuntamento(app)}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-gray-100 dark:bg-gray-700">
+                    <div className="relative w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-gray-100 dark:bg-gray-700">
                       <span className="text-lg">{tipoInfo.icon}</span>
+                      {officina?.logo_url && (
+                        <img
+                          src={officina.logo_url}
+                          alt="Logo officina"
+                          className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full object-cover border-2 border-white dark:border-gray-800 shadow"
+                        />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
