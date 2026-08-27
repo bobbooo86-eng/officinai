@@ -21,18 +21,15 @@ export function JoinOfficinaPage({ onGoLogin, onGoBack }: JoinOfficinaPageProps)
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // Account
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Persona
   const [nome, setNome] = useState('');
   const [cognome, setCognome] = useState('');
   const [telefono, setTelefono] = useState('');
   const [ruolo, setRuolo] = useState<'titolare' | 'operaio' | 'reception'>('operaio');
 
-  // Officina
   const [officine, setOfficine] = useState<Officina[]>([]);
   const [loadingOfficine, setLoadingOfficine] = useState(true);
   const [search, setSearch] = useState('');
@@ -87,19 +84,16 @@ export function JoinOfficinaPage({ onGoLogin, onGoBack }: JoinOfficinaPageProps)
     setLoading(true);
 
     try {
-      // 1) Create Supabase Auth account
       const { error: authError } = await supabase.auth.signUp({
         email,
         password,
       });
       if (authError) {
-        // If already registered → still try to insert utente record
         if (!authError.message.toLowerCase().includes('already')) {
           throw new Error(authError.message);
         }
       }
 
-      // 2) Check email doesn't already have an active utente in this officina
       const { data: existing } = await supabase
         .from('utenti')
         .select('id, attivo')
@@ -115,7 +109,6 @@ export function JoinOfficinaPage({ onGoLogin, onGoBack }: JoinOfficinaPageProps)
         }
       }
 
-      // 3) Insert utente record with attivo=false (waiting for approval)
       const { error: userErr } = await supabase.from('utenti').insert({
         officina_id: selectedOfficinaId,
         nome: `${nome} ${cognome}`.trim(),
@@ -126,7 +119,6 @@ export function JoinOfficinaPage({ onGoLogin, onGoBack }: JoinOfficinaPageProps)
       });
       if (userErr) throw new Error("Errore nella creazione dell'utente: " + userErr.message);
 
-      // 4) Notify the admin(s) of this officina in-app
       try {
         const { data: adminUtenti } = await supabase
           .from('utenti')
@@ -146,10 +138,9 @@ export function JoinOfficinaPage({ onGoLogin, onGoBack }: JoinOfficinaPageProps)
           await supabase.from('notifiche').insert(rows);
         }
       } catch {
-        // ignore — notification is best-effort
+        // ignore
       }
 
-      // 5) Optional: send email to admin
       supabase.functions
         .invoke('notify-registration', {
           body: {
@@ -165,12 +156,12 @@ export function JoinOfficinaPage({ onGoLogin, onGoBack }: JoinOfficinaPageProps)
 
       setSuccess(true);
 
-      // Auto-attempt initialize so if admin already approved (edge case) user is in
       setTimeout(async () => {
         await initialize();
       }, 3000);
-    } catch (e: any) {
-      setError(e.message || 'Errore durante la registrazione');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Errore durante la registrazione';
+      setError(msg);
     } finally {
       setLoading(false);
     }
