@@ -35,8 +35,21 @@ export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect,
       <header role="banner" className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
         <div className="px-4 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm">
-              <span className="text-lg">🔧</span>
+            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm overflow-hidden">
+              {officina?.logo_url ? (
+                <img
+                  src={officina.logo_url}
+                  alt={officina.nome || 'Logo'}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    img.style.display = 'none';
+                    if (img.parentElement) img.parentElement.innerHTML = '<span class="text-lg">🔧</span>';
+                  }}
+                />
+              ) : (
+                <span className="text-lg">🔧</span>
+              )}
             </div>
             <div>
               <h1 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
