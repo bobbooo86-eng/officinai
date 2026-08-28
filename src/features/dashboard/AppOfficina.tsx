@@ -24,12 +24,12 @@ const CassaPage = lazy(() => import('@/features/cassa/CassaPage').then(m => ({ d
 const PreventiviPage = lazy(() => import('@/features/estimates/PreventiviPage').then(m => ({ default: m.PreventiviPage })));
 
 const TABS = [
-  { id: 'home', label: 'Home', icon: '🏠' },
   { id: 'agenda', label: 'Appuntamenti', icon: '📅' },
   { id: 'preventivi', label: 'Preventivi', icon: '💰' },
   { id: 'clienti', label: 'Clienti', icon: '👥' },
   { id: 'cassa', label: 'Cassa', icon: '📒' },
   { id: 'calendario', label: 'Calendario', icon: '📆' },
+  { id: 'home', label: 'Home', icon: '🏠' },
   { id: 'magazzino', label: 'Magazzino', icon: '📦' },
   { id: 'analytics', label: 'Analytics', icon: '📊' },
   { id: 'fatture', label: 'Fatture', icon: '🧾' },
