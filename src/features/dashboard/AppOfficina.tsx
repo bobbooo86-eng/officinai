@@ -28,7 +28,6 @@ const TABS = [
   { id: 'preventivi', label: 'Preventivi', icon: '💰' },
   { id: 'clienti', label: 'Clienti', icon: '👥' },
   { id: 'cassa', label: 'Cassa', icon: '📒' },
-  { id: 'calendario', label: 'Calendario', icon: '📆' },
   { id: 'home', label: 'Home', icon: '🏠' },
   { id: 'magazzino', label: 'Magazzino', icon: '📦' },
   { id: 'analytics', label: 'Analytics', icon: '📊' },
@@ -52,6 +51,14 @@ export function AppOfficina() {
   const [richiesteCount, setRichiesteCount] = useState(0);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [cassaOpenTipo, setCassaOpenTipo] = useState<MovimentoTipo | null>(null);
+
+  // Se activeTab non e piu valido (es. utente aveva 'calendario' salvato in cronologia), torna ad 'agenda'
+  useEffect(() => {
+    if (!TABS.some((t) => t.id === activeTab)) {
+      setActiveTab('agenda');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadRichiesteCount = useCallback(async () => {
     if (!officina) return;
@@ -241,7 +248,12 @@ export function AppOfficina() {
               </div>
             </div>
             {agendaView === 'calendario' ? (
-              <CalendarView onSelect={handleSelectApp} initialDate={calendarDate} searchQuery={agendaSearch} />
+              <CalendarView
+                onSelect={handleSelectApp}
+                initialDate={calendarDate}
+                searchQuery={agendaSearch}
+                onNuovoAppuntamento={(date) => { setCalendarDate(date); setShowNewApp(true); }}
+              />
             ) : (
               <AppointmentList onSelect={handleSelectApp} initialFiltro={agendaFiltro} searchQuery={agendaSearch} />
             )}
@@ -250,7 +262,6 @@ export function AppOfficina() {
       )}
       {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} onNavigateToCalendar={(date) => { setCalendarDate(date); setAgendaView('calendario'); setActiveTab('agenda'); }} externalSearch={preventiviSearch} /></Suspense>}
       {activeTab === 'clienti' && <CustomersPage initialClienteId={selectedClienteId} />}
-      {activeTab === 'calendario' && <CalendarView onSelect={handleSelectApp} initialDate={calendarDate} />}
       {activeTab === 'magazzino' && <Suspense fallback={<PageSkeleton />}><InventoryPage /></Suspense>}
       {activeTab === 'analytics' && <Suspense fallback={<PageSkeleton />}><AnalyticsPage /></Suspense>}
       {activeTab === 'fatture' && <Suspense fallback={<PageSkeleton />}><InvoicePage /></Suspense>}
