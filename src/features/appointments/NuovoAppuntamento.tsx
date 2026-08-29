@@ -57,14 +57,20 @@ export function NuovoAppuntamento({ onBack, onCreated }: NuovoAppuntamentoProps)
 
   // Fetch veicoli for selected cliente
   useEffect(() => {
-    if (!selectedCliente) { setVeicoli([]); return; }
+    if (!selectedCliente) { setVeicoli([]); setShowNewVeicolo(false); return; }
     (async () => {
       const { data } = await supabase
         .from('veicoli')
         .select('*')
         .eq('cliente_id', selectedCliente.id);
       setVeicoli(data || []);
-      if (data?.length === 1) setSelectedVeicolo(data[0]);
+      if (data?.length === 1) {
+        setSelectedVeicolo(data[0]);
+        setShowNewVeicolo(false);
+      } else if (!data || data.length === 0) {
+        // Cliente senza veicoli: attiva il form nuovo veicolo cosi l'utente puo proseguire
+        setShowNewVeicolo(true);
+      }
     })();
   }, [selectedCliente]);
 
