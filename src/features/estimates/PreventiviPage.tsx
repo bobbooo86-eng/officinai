@@ -4,7 +4,9 @@ import { supabase } from '@/lib/supabase';
 import { fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { generaDatiVeicolo, lookupTargaEsterna, DB_AUTO, type DatiVeicolo } from '@/lib/targaLookup';
-import type { Veicolo, Cliente } from '@/types/database';
+import type { Veicolo, Cliente, Appuntamento } from '@/types/database';
+import { PDFExport } from './PDFExport';
+import { ShareDocument } from '@/components/ShareDocument';
 
 // ============================================================
 // TARIFFARIO STANDARD OFFICINE ITALIANE
@@ -1562,6 +1564,24 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
   const { officina } = useAuthStore();
   const [view, setView] = useState<'list' | 'new' | 'detail'>('list');
   const [selectedPreventivo, setSelectedPreventivo] = useState<PreventivoListItem | null>(null);
+  const [detailAppuntamento, setDetailAppuntamento] = useState<Appuntamento | null>(null);
+
+  useEffect(() => {
+    if (view !== 'detail' || !selectedPreventivo?.appuntamento_id) {
+      setDetailAppuntamento(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('appuntamenti')
+        .select('*, clienti(id,nome,email,tel), veicoli(marca,modello,targa,km)')
+        .eq('id', selectedPreventivo.appuntamento_id)
+        .single();
+      if (!cancelled) setDetailAppuntamento(data as Appuntamento | null);
+    })();
+    return () => { cancelled = true; };
+  }, [view, selectedPreventivo?.appuntamento_id]);
   const [preventivi, setPreventivi] = useState<PreventivoListItem[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [searchQuery, setSearchQuery] = useState(externalSearch || '');
@@ -1741,6 +1761,47 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
             <span>{fmtEuro(p.totale)}</span>
           </div>
         </div>
+
+        {/* Esporta PDF + Invia (email/WhatsApp/SMS) */}
+        {detailAppuntamento && (
+          <div className="space-y-2">
+            <PDFExport
+              appuntamento={detailAppuntamento}
+              preventivo={{
+                id: p.id,
+                appuntamento_id: p.appuntamento_id,
+                righe: p.righe,
+                subtotale: p.subtotale,
+                sconto: p.sconto,
+                iva: p.iva,
+                totale: p.totale,
+                stato: p.stato as 'bozza' | 'inviato' | 'accettato' | 'rifiutato',
+                created_at: p.created_at,
+              }}
+            />
+            <ShareDocument
+              tipo="preventivo"
+              titolo="preventivo"
+              clienteEmail={detailAppuntamento.clienti?.email}
+              clienteTel={detailAppuntamento.clienti?.tel}
+              clienteNome={detailAppuntamento.clienti?.nome}
+              officinaId={officina?.id}
+              clienteId={detailAppuntamento.cliente_id}
+              emailData={{
+                clienteNome: detailAppuntamento.clienti?.nome || 'Cliente',
+                veicolo: detailAppuntamento.veicoli
+                  ? `${detailAppuntamento.veicoli.marca} ${detailAppuntamento.veicoli.modello}`
+                  : '',
+                totale: fmtEuro(p.totale),
+              }}
+              whatsappText={`Buongiorno ${detailAppuntamento.clienti?.nome || ''}, le inviamo il preventivo per il suo ${
+                detailAppuntamento.veicoli
+                  ? `${detailAppuntamento.veicoli.marca} ${detailAppuntamento.veicoli.modello}`
+                  : 'veicolo'
+              }${detailAppuntamento.veicoli?.targa ? ` (${detailAppuntamento.veicoli.targa})` : ''}.\nTotale: ${fmtEuro(p.totale)}\n\nResto a disposizione per qualsiasi chiarimento.\n— ${officina?.nome || 'OfficinAI'}`}
+            />
+          </div>
+        )}
 
         {/* Azioni */}
         <div className="flex gap-2">
