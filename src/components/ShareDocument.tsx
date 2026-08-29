@@ -23,6 +23,10 @@ interface ShareDocumentProps {
   officinaId?: string;
   /** ID cliente */
   clienteId?: string;
+  /** URL al PDF/pagina del documento (viene aggiunto al messaggio) */
+  pdfUrl?: string | null;
+  /** Oggetto email (se non specificato, usa "Il tuo {titolo}") */
+  emailSubject?: string;
   /** Callback dopo invio */
   onSent?: () => void;
 }
@@ -30,7 +34,7 @@ interface ShareDocumentProps {
 export function ShareDocument({
   tipo, titolo, emailData, whatsappText,
   clienteEmail, clienteTel, clienteNome,
-  officinaId, clienteId, onSent,
+  officinaId, clienteId, pdfUrl, emailSubject, onSent,
 }: ShareDocumentProps) {
   const { officina } = useAuthStore();
   const [open, setOpen] = useState(false);
@@ -38,6 +42,22 @@ export function ShareDocument({
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [emailTo, setEmailTo] = useState(clienteEmail || '');
   const [telTo, setTelTo] = useState(clienteTel || '');
+
+  // Aggiungi il link PDF (se presente) ai messaggi
+  const finalWhatsappText = pdfUrl
+    ? `${whatsappText}\n\n📄 Documento in PDF:\n${pdfUrl}`
+    : whatsappText;
+
+  const emailBody = pdfUrl
+    ? `${whatsappText}\n\nDocumento completo (apri il link per scaricare/stampare in PDF):\n${pdfUrl}`
+    : whatsappText;
+
+  const openMailtoFallback = () => {
+    const subject = emailSubject || `Il tuo ${titolo}${officina?.nome ? ' — ' + officina.nome : ''}`;
+    const body = emailBody;
+    const url = `mailto:${encodeURIComponent(emailTo)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(url, '_blank');
+  };
 
   const inviaEmail = async () => {
     if (!emailTo) return;
@@ -51,18 +71,33 @@ export function ShareDocument({
       conto: 'stato_aggiornato',
     };
 
+    // Include il link PDF nei dati (i template lo usano se disponibile)
+    const linkKey = tipo === 'preventivo' ? 'linkPreventivo'
+      : tipo === 'fattura' ? 'linkFattura'
+      : 'linkDocumento';
+
     const ok = await sendEmail(
       emailTo,
       templateMap[tipo] as any,
-      { ...emailData, officinaNome: officina?.nome || 'OfficinAI' }
+      {
+        ...emailData,
+        officinaNome: officina?.nome || 'OfficinAI',
+        ...(pdfUrl ? { [linkKey]: pdfUrl, pdfUrl } : {}),
+      }
     );
 
     setSending(null);
-    setResult(ok
-      ? { ok: true, msg: 'Email inviata con successo!' }
-      : { ok: false, msg: 'Errore invio email. Riprova.' }
-    );
-    if (ok && onSent) onSent();
+    if (ok) {
+      setResult({ ok: true, msg: 'Email inviata con successo!' });
+      if (onSent) onSent();
+    } else {
+      // Fallback: apre il client mail del sistema con body pre-compilato
+      openMailtoFallback();
+      setResult({
+        ok: true,
+        msg: 'Servizio email server non disponibile. Ho aperto il tuo client mail con il testo pronto: premi Invia.',
+      });
+    }
   };
 
   const inviaWhatsApp = async () => {
@@ -75,7 +110,7 @@ export function ShareDocument({
       const { data, error } = await supabase.functions.invoke('send-whatsapp', {
         body: {
           to: telTo,
-          message: whatsappText,
+          message: finalWhatsappText,
           officina_id: officinaId || officina?.id,
           cliente_id: clienteId,
           tipo,
@@ -85,7 +120,7 @@ export function ShareDocument({
       if (data?.fallback) {
         // Twilio not configured, open WhatsApp Web
         const normalizedTel = telTo.replace(/[^0-9+]/g, '');
-        window.open(`https://wa.me/${normalizedTel}?text=${encodeURIComponent(whatsappText)}`, '_blank');
+        window.open(`https://wa.me/${normalizedTel}?text=${encodeURIComponent(finalWhatsappText)}`, '_blank');
         setResult({ ok: true, msg: 'Aperto WhatsApp Web' });
       } else if (data?.success) {
         setResult({ ok: true, msg: 'WhatsApp inviato!' });
@@ -95,7 +130,7 @@ export function ShareDocument({
     } catch {
       // Fallback: open WhatsApp Web directly
       const normalizedTel = telTo.replace(/[^0-9+]/g, '');
-      window.open(`https://wa.me/${normalizedTel}?text=${encodeURIComponent(whatsappText)}`, '_blank');
+      window.open(`https://wa.me/${normalizedTel}?text=${encodeURIComponent(finalWhatsappText)}`, '_blank');
       setResult({ ok: true, msg: 'Aperto WhatsApp Web' });
     }
 
