@@ -51,6 +51,7 @@ export function AppOfficina() {
   const [richiesteCount, setRichiesteCount] = useState(0);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [cassaOpenTipo, setCassaOpenTipo] = useState<MovimentoTipo | null>(null);
+  const [resetSignal, setResetSignal] = useState(0);
 
   // Se activeTab non e piu valido (es. utente aveva 'calendario' salvato in cronologia), torna ad 'agenda'
   useEffect(() => {
@@ -107,6 +108,19 @@ export function AppOfficina() {
     ...t,
     badge: t.id === 'agenda' ? richiesteCount : undefined,
   }));
+
+  // Se l'utente clicca il tab gia' attivo, torna alla lista principale
+  // (invece di restare bloccato nel dettaglio/sotto-pagina).
+  const handleTabChange = (t: string) => {
+    if (t === activeTab) {
+      setResetSignal((c) => c + 1);
+      setShowNewApp(false);
+      setSelectedClienteId(undefined);
+    }
+    setActiveTab(t);
+    setSubPage(null);
+    setSelectedApp(null);
+  };
 
   const handleSelectApp = (app: Appuntamento) => {
     setSelectedApp(app);
@@ -169,14 +183,14 @@ export function AppOfficina() {
 
   if (selectedApp) {
     return (
-      <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSelectedApp(null); setSubPage(null); }} onSearchSelect={handleSearchSelect} showSearch>
+      <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={handleTabChange} onSearchSelect={handleSearchSelect} showSearch>
         <AppointmentDetail appuntamento={selectedApp} onBack={handleBack} />
       </Layout>
     );
   }
 
   return (
-    <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setSubPage(null); }} onSearchSelect={handleSearchSelect} fab={!showNewApp ? { onClick: handleFab } : undefined}>
+    <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={handleTabChange} onSearchSelect={handleSearchSelect} fab={!showNewApp ? { onClick: handleFab } : undefined}>
       {activeTab === 'home' && (
         <Dashboard
           onSelectAppuntamento={handleSelectApp}
@@ -260,8 +274,8 @@ export function AppOfficina() {
           </div>
         )
       )}
-      {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} onNavigateToCalendar={(date) => { setCalendarDate(date); setAgendaView('calendario'); setActiveTab('agenda'); }} externalSearch={preventiviSearch} /></Suspense>}
-      {activeTab === 'clienti' && <CustomersPage initialClienteId={selectedClienteId} />}
+      {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} onNavigateToCalendar={(date) => { setCalendarDate(date); setAgendaView('calendario'); setActiveTab('agenda'); }} externalSearch={preventiviSearch} resetSignal={resetSignal} /></Suspense>}
+      {activeTab === 'clienti' && <CustomersPage initialClienteId={selectedClienteId} resetSignal={resetSignal} />}
       {activeTab === 'magazzino' && <Suspense fallback={<PageSkeleton />}><InventoryPage /></Suspense>}
       {activeTab === 'analytics' && <Suspense fallback={<PageSkeleton />}><AnalyticsPage /></Suspense>}
       {activeTab === 'fatture' && <Suspense fallback={<PageSkeleton />}><InvoicePage /></Suspense>}

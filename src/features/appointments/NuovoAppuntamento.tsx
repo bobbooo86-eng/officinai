@@ -57,21 +57,32 @@ export function NuovoAppuntamento({ onBack, onCreated }: NuovoAppuntamentoProps)
 
   // Fetch veicoli for selected cliente
   useEffect(() => {
-    if (!selectedCliente) { setVeicoli([]); setShowNewVeicolo(false); return; }
+    // Reset sempre lo stato veicolo quando cambia il cliente selezionato,
+    // per evitare che resti agganciato un veicolo del cliente precedente
+    setSelectedVeicolo(null);
+    setShowNewVeicolo(false);
+    setNewTarga('');
+    setNewMarca('');
+    setNewModello('');
+
+    if (!selectedCliente) { setVeicoli([]); return; }
+
+    let cancelled = false;
     (async () => {
       const { data } = await supabase
         .from('veicoli')
         .select('*')
         .eq('cliente_id', selectedCliente.id);
+      if (cancelled) return;
       setVeicoli(data || []);
       if (data?.length === 1) {
         setSelectedVeicolo(data[0]);
-        setShowNewVeicolo(false);
       } else if (!data || data.length === 0) {
         // Cliente senza veicoli: attiva il form nuovo veicolo cosi l'utente puo proseguire
         setShowNewVeicolo(true);
       }
     })();
+    return () => { cancelled = true; };
   }, [selectedCliente]);
 
   const handleSubmit = async () => {
@@ -214,7 +225,7 @@ export function NuovoAppuntamento({ onBack, onCreated }: NuovoAppuntamentoProps)
                 ))}
               </div>
             )}
-            <button onClick={() => setShowNewCliente(true)} className="w-full py-2 text-sm text-blue-600 font-semibold hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors cursor-pointer">
+            <button onClick={() => { setShowNewCliente(true); setShowNewVeicolo(true); }} className="w-full py-2 text-sm text-blue-600 font-semibold hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors cursor-pointer">
               + Crea nuovo cliente
             </button>
           </div>

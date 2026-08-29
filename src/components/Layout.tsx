@@ -55,9 +55,6 @@ export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect,
               <h1 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
                 {officina?.nome || 'OfficinAI'}
               </h1>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                {userName} — <span className="capitalize">{userRole}</span>
-              </p>
             </div>
           </div>
 

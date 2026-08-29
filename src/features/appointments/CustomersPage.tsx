@@ -9,7 +9,7 @@ import type { Cliente, Veicolo, Appuntamento, Preventivo } from '@/types/databas
 
 type View = 'list' | 'add' | 'detail' | 'addVeicolo' | 'storicoVeicolo';
 
-export function CustomersPage({ initialClienteId }: { initialClienteId?: string } = {}) {
+export function CustomersPage({ initialClienteId, resetSignal }: { initialClienteId?: string; resetSignal?: number } = {}) {
   const { officina } = useAuthStore();
   const [clienti, setClienti] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,6 +17,16 @@ export function CustomersPage({ initialClienteId }: { initialClienteId?: string 
   const [view, setView] = useState<View>('list');
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [selectedVeicolo, setSelectedVeicolo] = useState<Veicolo | null>(null);
+
+  // Quando l'utente clicca di nuovo sul tab Clienti mentre e' gia' attivo,
+  // torna alla lista principale invece di restare nel dettaglio.
+  useEffect(() => {
+    if (resetSignal === undefined) return;
+    setView('list');
+    setSelectedCliente(null);
+    setSelectedVeicolo(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal]);
 
   const fetchClienti = async () => {
     if (!officina) return;

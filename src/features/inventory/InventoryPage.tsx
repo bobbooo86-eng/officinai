@@ -26,6 +26,7 @@ export function InventoryPage() {
   const [editItem, setEditItem] = useState<Partial<Magazzino>>(emptyItem);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
+  const [formError, setFormError] = useState('');
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -45,6 +46,7 @@ export function InventoryPage() {
   const saveItem = async () => {
     if (!officina || !editItem.nome?.trim()) return;
     setSaving(true);
+    setFormError('');
     if (editItem.id) {
       // Update
       const { error } = await supabase.from('magazzino')
@@ -57,7 +59,9 @@ export function InventoryPage() {
           prezzo_vend: editItem.prezzo_vend || 0,
         })
         .eq('id', editItem.id);
-      if (!error) {
+      if (error) {
+        setFormError('Errore aggiornamento: ' + error.message);
+      } else {
         showToast('Articolo aggiornato');
         setShowForm(false);
         setEditItem(emptyItem);
@@ -75,7 +79,9 @@ export function InventoryPage() {
           prezzo_acq: editItem.prezzo_acq || 0,
           prezzo_vend: editItem.prezzo_vend || 0,
         });
-      if (!error) {
+      if (error) {
+        setFormError('Errore salvataggio: ' + error.message);
+      } else {
         showToast('Articolo aggiunto');
         setShowForm(false);
         setEditItem(emptyItem);
@@ -228,11 +234,16 @@ export function InventoryPage() {
                 onChange={(e) => setEditItem({ ...editItem, prezzo_vend: parseFloat(e.target.value) || 0 })}
               />
             </div>
+            {formError && (
+              <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">
+                ⚠️ {formError}
+              </div>
+            )}
             <div className="flex gap-2 pt-2">
               <Button onClick={saveItem} disabled={saving || !editItem.nome?.trim()} fullWidth>
                 {saving ? 'Salvataggio...' : editItem.id ? 'Aggiorna' : 'Aggiungi'}
               </Button>
-              <Button variant="secondary" onClick={() => { setShowForm(false); setEditItem(emptyItem); }} fullWidth>
+              <Button variant="secondary" onClick={() => { setShowForm(false); setEditItem(emptyItem); setFormError(''); }} fullWidth>
                 Annulla
               </Button>
             </div>

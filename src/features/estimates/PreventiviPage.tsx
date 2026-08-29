@@ -5,7 +5,7 @@ import { fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { generaDatiVeicolo, lookupTargaEsterna, DB_AUTO, type DatiVeicolo } from '@/lib/targaLookup';
 import type { Veicolo, Cliente, Appuntamento } from '@/types/database';
-import { PDFExport, buildPreventivoHtml } from './PDFExport';
+import { PDFExport, buildPreventivoHtml, extractLogoColor } from './PDFExport';
 import { ShareDocument } from '@/components/ShareDocument';
 
 // ============================================================
@@ -567,13 +567,18 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [savedPdfUrl, setSavedPdfUrl] = useState<string | null>(null);
+  const [uploadingSavedPdf, setUploadingSavedPdf] = useState(false);
 
-  // Manual vehicle selection — 4 dropdown sequenziali
+  // Manual vehicle selection — nome cliente + 4 dropdown sequenziali
   const [manualOpen, setManualOpen] = useState(false);
+  const [selClienteNome, setSelClienteNome] = useState('');
   const [selMarca, setSelMarca] = useState('');
   const [selModello, setSelModello] = useState('');
   const [selCarburante, setSelCarburante] = useState('');
   const [selAnno, setSelAnno] = useState('');
+  // Nome cliente inserito nella selezione manuale (usato per creare il cliente al salvataggio)
+  const [manualClienteNome, setManualClienteNome] = useState('');
 
   const marcheOrdered = useMemo(() => DB_AUTO.map(b => b.marca).sort((a, b) => a.localeCompare(b)), []);
   const marcaObj = useMemo(() => DB_AUTO.find(b => b.marca === selMarca), [selMarca]);
@@ -586,7 +591,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     return anni;
   }, [modelloObj]);
 
-  const canConfirmManual = selMarca && selModello && selCarburante && selAnno;
+  const canConfirmManual = selClienteNome.trim() && selMarca && selModello && selCarburante && selAnno;
 
   const handleConfirmManual = () => {
     if (!modelloObj || !canConfirmManual) return;
@@ -608,6 +613,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     setCliente(null);
     setTarga('');
     setNotFound(false);
+    setManualClienteNome(selClienteNome.trim());
     setDatiEsterni({
       targa: 'MANUALE',
       marca: selMarca,
@@ -625,10 +631,12 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
       daDatabase: false,
     });
     setSaved(false);
+    setSavedPdfUrl(null);
     setManualOpen(false);
   };
 
   const clearManualSelection = () => {
+    setSelClienteNome('');
     setSelMarca('');
     setSelModello('');
     setSelCarburante('');
@@ -655,8 +663,9 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
   }, [tariffario]);
 
   const handleSearch = async () => {
-    const t = targa.trim().toUpperCase().replace(/\s/g, '');
-    if (t.length < 2) return;
+    const raw = targa.trim();
+    const t = raw.toUpperCase().replace(/\s/g, '');
+    if (raw.length < 2) return;
     setSearching(true);
     setNotFound(false);
     setVeicolo(null);
@@ -664,37 +673,66 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     setDatiEsterni(null);
     setRighe([]);
     setSaved(false);
+    setSavedPdfUrl(null);
     clearManualSelection();
     setManualOpen(false);
 
-    // 1. Search in local DB first
-    const { data: veicoli } = await supabase
+    // 1. Search in local DB by targa
+    const { data: veicoliByTarga } = await supabase
       .from('veicoli')
       .select('*')
       .ilike('targa', `%${t}%`)
       .limit(1);
 
-    if (veicoli && veicoli.length > 0) {
-      setVeicolo(veicoli[0]);
-      // Fetch cliente
+    if (veicoliByTarga && veicoliByTarga.length > 0) {
+      setVeicolo(veicoliByTarga[0]);
       const { data: cl } = await supabase
         .from('clienti')
         .select('*')
-        .eq('id', veicoli[0].cliente_id)
+        .eq('id', veicoliByTarga[0].cliente_id)
         .single();
       if (cl) setCliente(cl);
       setSearching(false);
       return;
     }
 
-    // 2. Not in local DB → try real API first, then fallback to generator
-    if (t.length >= 5) {
-      // Try real API (OpenAPI.com / Targa.co.it via /api/targa-lookup)
+    // 2. Search by nome cliente (targa non trovata)
+    if (officina?.id) {
+      const { data: clientiByNome } = await supabase
+        .from('clienti')
+        .select('*')
+        .eq('officina_id', officina.id)
+        .ilike('nome', `%${raw}%`)
+        .limit(1);
+
+      if (clientiByNome && clientiByNome.length > 0) {
+        const cl = clientiByNome[0];
+        const { data: veicoliDelCliente } = await supabase
+          .from('veicoli')
+          .select('*')
+          .eq('cliente_id', cl.id)
+          .limit(1);
+        if (veicoliDelCliente && veicoliDelCliente.length > 0) {
+          setCliente(cl);
+          setVeicolo(veicoliDelCliente[0]);
+          setSearching(false);
+          return;
+        }
+        // Cliente trovato ma senza veicolo: propone la selezione manuale con nome gia noto
+        setCliente(cl);
+        setSelClienteNome(cl.nome);
+        setManualOpen(true);
+        setSearching(false);
+        return;
+      }
+    }
+
+    // 3. Non trovato in locale → prova lookup targa esterno (solo se sembra una targa)
+    if (t.length >= 5 && /^[A-Z0-9]+$/.test(t)) {
       const datiReali = await lookupTargaEsterna(t);
       if (datiReali && datiReali.marca) {
         setDatiEsterni(datiReali);
       } else {
-        // Fallback: generatore deterministico basato su DB modelli italiani
         const dati = generaDatiVeicolo(t);
         setDatiEsterni(dati);
       }
@@ -772,7 +810,9 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
           .from('clienti')
           .insert({
             officina_id: officina.id,
-            nome: datiEsterni.targa === 'MANUALE' ? `Cliente ${datiEsterni.marca} ${datiEsterni.modello}` : `Cliente ${datiEsterni.targa}`,
+            nome: datiEsterni.targa === 'MANUALE'
+              ? (manualClienteNome.trim() || `Cliente ${datiEsterni.marca} ${datiEsterni.modello}`)
+              : `Cliente ${datiEsterni.targa}`,
             email: '',
             tel: '',
             note: datiEsterni.targa === 'MANUALE' ? `Aggiunto da preventivo selezione manuale - ${datiEsterni.marca} ${datiEsterni.modello}` : `Aggiunto da preventivo targa ${datiEsterni.targa}`,
@@ -835,31 +875,105 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     }
 
     if (appuntamentoId) {
-      await supabase.from('preventivi').insert({
-        appuntamento_id: appuntamentoId,
-        righe,
-        subtotale,
-        sconto: scontoEuro,
-        iva,
-        totale,
-        stato: 'bozza',
-      });
+      const { data: newPreventivo } = await supabase
+        .from('preventivi')
+        .insert({
+          appuntamento_id: appuntamentoId,
+          righe,
+          subtotale,
+          sconto: scontoEuro,
+          iva,
+          totale,
+          stato: 'bozza',
+        })
+        .select()
+        .single();
       setSaved(true);
+
+      // Genera l'HTML del preventivo e lo carica su Storage per ottenere un
+      // link condivisibile da usare in WhatsApp/Email (invece del solo testo)
+      if (newPreventivo && officina) {
+        setUploadingSavedPdf(true);
+        try {
+          const veicoloPerPdf: Veicolo | undefined = veicolo || (datiEsterni ? {
+            id: veicoloId || '',
+            cliente_id: clienteId || '',
+            marca: datiEsterni.marca,
+            modello: datiEsterni.modello,
+            targa: datiEsterni.targa === 'MANUALE' ? '' : datiEsterni.targa,
+            anno: datiEsterni.anno,
+            km: 0,
+            carburante: datiEsterni.carburante,
+          } : undefined);
+          const clientePerPdf: Cliente | undefined = cliente || (manualClienteNome.trim() ? {
+            id: clienteId || '',
+            officina_id: officina.id,
+            nome: manualClienteNome.trim(),
+            email: '',
+            tel: '',
+          } : undefined);
+          const appuntamentoPerPdf: Appuntamento = {
+            id: appuntamentoId,
+            officina_id: officina.id,
+            cliente_id: clienteId || '',
+            veicolo_id: veicoloId || '',
+            data_ora: new Date().toISOString(),
+            stato: 'prenotato',
+            priorita: 'normale',
+            problema: 'Preventivo da tariffario',
+            clienti: clientePerPdf,
+            veicoli: veicoloPerPdf,
+          };
+          const accent = await extractLogoColor(officina.logo_url);
+          const html = buildPreventivoHtml(
+            appuntamentoPerPdf,
+            {
+              id: newPreventivo.id,
+              appuntamento_id: appuntamentoId,
+              righe,
+              subtotale,
+              sconto: scontoEuro,
+              iva,
+              totale,
+              stato: 'bozza',
+              created_at: newPreventivo.created_at,
+            },
+            officina,
+            accent
+          );
+          const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+          const path = `${officina.id}/preventivo-${newPreventivo.id}.html`;
+          const { error: upErr } = await supabase.storage
+            .from('preventivi')
+            .upload(path, blob, { upsert: true, contentType: 'text/html; charset=utf-8' });
+          if (!upErr) {
+            const { data: pub } = supabase.storage.from('preventivi').getPublicUrl(path);
+            setSavedPdfUrl(pub.publicUrl);
+          }
+        } finally {
+          setUploadingSavedPdf(false);
+        }
+      }
     }
 
     setSaving(false);
   };
 
-  const handleStampa = () => {
+  const handleStampa = async () => {
+    const accent = await extractLogoColor(officina?.logo_url);
+    const logoBlock = officina?.logo_url
+      ? `<img src="${officina.logo_url}" alt="Logo" style="width:44px;height:44px;border-radius:10px;object-fit:cover;margin-right:12px;" />`
+      : '';
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Preventivo</title>
     <style>
       * { margin:0; padding:0; box-sizing:border-box; }
       body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a; padding: 30px; }
-      .header { display:flex; justify-content:space-between; border-bottom:3px solid #1e40af; padding-bottom:20px; margin-bottom:20px; }
-      .header h1 { color:#1e40af; font-size:24px; }
+      .header { display:flex; justify-content:space-between; border-bottom:3px solid ${accent}; padding-bottom:20px; margin-bottom:20px; }
+      .header .brand { display:flex; align-items:center; }
+      .header h1 { color:${accent}; font-size:24px; }
       .header .info { text-align:right; font-size:12px; color:#555; }
       .section { margin-bottom: 16px; }
-      .section h3 { font-size:13px; color:#1e40af; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; border-bottom:1px solid #e5e7eb; padding-bottom:4px; }
+      .section h3 { font-size:13px; color:${accent}; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; border-bottom:1px solid #e5e7eb; padding-bottom:4px; }
       .veicolo-box { background:#f0f4ff; border:1px solid #c7d2fe; border-radius:8px; padding:12px; font-size:13px; }
       table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
       th { background:#f3f4f6; text-align:left; padding:8px 6px; font-weight:600; border-bottom:2px solid #d1d5db; }
@@ -871,19 +985,22 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
       .totals { margin-top:16px; }
       .totals table { width:250px; margin-left:auto; }
       .totals td { border:none; padding:4px 6px; font-size:13px; }
-      .total-row td { font-weight:bold; font-size:16px; color:#1e40af; border-top:2px solid #1e40af; padding-top:8px; }
+      .total-row td { font-weight:bold; font-size:16px; color:${accent}; border-top:2px solid ${accent}; padding-top:8px; }
       .footer { margin-top:30px; font-size:10px; color:#999; text-align:center; border-top:1px solid #e5e7eb; padding-top:10px; }
       ${note ? '.note { margin-top:16px; padding:10px; background:#fefce8; border:1px solid #fde68a; border-radius:6px; font-size:12px; }' : ''}
     </style></head><body>
       <div class="header">
-        <div>
-          <h1>${officina?.nome || 'Officina'}</h1>
-          <div style="font-size:12px;color:#555;margin-top:4px;">${officina?.indirizzo || ''}</div>
-          <div style="font-size:12px;color:#555;">${officina?.tel || ''} · ${officina?.email || ''}</div>
-          ${officina?.p_iva ? `<div style="font-size:11px;color:#888;margin-top:2px;">P.IVA: ${officina.p_iva}</div>` : ''}
+        <div class="brand">
+          ${logoBlock}
+          <div>
+            <h1>${officina?.nome || 'Officina'}</h1>
+            <div style="font-size:12px;color:#555;margin-top:4px;">${officina?.indirizzo || ''}</div>
+            <div style="font-size:12px;color:#555;">${officina?.tel || ''} · ${officina?.email || ''}</div>
+            ${officina?.p_iva ? `<div style="font-size:11px;color:#888;margin-top:2px;">P.IVA: ${officina.p_iva}</div>` : ''}
+          </div>
         </div>
         <div class="info">
-          <div style="font-size:18px;font-weight:bold;color:#1e40af;">PREVENTIVO</div>
+          <div style="font-size:18px;font-weight:bold;color:${accent};">PREVENTIVO</div>
           <div>Data: ${new Date().toLocaleDateString('it-IT')}</div>
           ${cliente ? `<div>Cliente: ${cliente.nome}</div>` : ''}
           ${cliente?.tel ? `<div>Tel: ${cliente.tel}</div>` : ''}
@@ -982,6 +1099,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                   setNotFound(false);
                   setRighe([]);
                   setSaved(false);
+                  setSavedPdfUrl(null);
                 }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
                 title="Cancella targa"
@@ -1025,6 +1143,17 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
 
         {manualOpen && (
           <div className="px-4 pb-4 border-t border-gray-100 space-y-3 mt-3">
+            {/* Nome cliente */}
+            <div>
+              <label className="block text-[11px] font-bold text-gray-600 mb-1">Nome cliente *</label>
+              <input
+                type="text"
+                value={selClienteNome}
+                onChange={(e) => setSelClienteNome(e.target.value)}
+                placeholder="Nome e cognome del cliente"
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
             {/* Riga 1: Marca + Modello */}
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1109,6 +1238,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                     setDatiEsterni(null);
                     setRighe([]);
                     setSaved(false);
+                    setSavedPdfUrl(null);
                   }}
                   className="text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
                 >
@@ -1433,71 +1563,63 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                 </button>
               </div>
 
-              {/* Invio WhatsApp / Email — genera PDF + apre canale */}
+              {/* Invio WhatsApp / Email — usa il link PDF generato al salvataggio */}
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <button
                   onClick={() => {
-                    // Prima genera il PDF in background
-                    handleStampa();
-                    // Poi apre WhatsApp con messaggio professionale
-                    setTimeout(() => {
-                      const testo = encodeURIComponent(
-                        `Gentile ${cliente?.nome || 'Cliente'},\n\n` +
-                        `da ${officina?.nome || 'Officina'} le inviamo il preventivo per il suo veicolo ${vMarca} ${vModello}${vTarga && vTarga !== 'MANUALE' ? ` (${vTarga})` : ''}.\n\n` +
-                        `Riepilogo:\n` +
-                        righe.map(r => `${r.tipo === 'manodopera' ? '🔧' : '📦'} ${r.desc}: ${fmtEuro(r.qta * r.prezzo)}`).join('\n') +
-                        `\n\n` +
-                        `Subtotale: ${fmtEuro(subtotale)}\n` +
-                        (sconto > 0 ? `Sconto ${sconto}%: -${fmtEuro(scontoEuro)}\n` : '') +
-                        `IVA 22%: ${fmtEuro(iva)}\n` +
-                        `*TOTALE: ${fmtEuro(totale)}*\n\n` +
-                        `Il preventivo completo in PDF è in allegato.\n` +
-                        `Preventivo valido 30 giorni.\n\n` +
-                        `${officina?.nome || 'Officina'}${officina?.tel ? ` — Tel: ${officina.tel}` : ''}${officina?.p_iva ? `\nP.IVA: ${officina.p_iva}` : ''}`
-                      );
-                      const tel = cliente?.tel?.replace(/\D/g, '') || '';
-                      const prefix = tel.startsWith('39') ? tel : `39${tel}`;
-                      window.open(`https://wa.me/${prefix}?text=${testo}`, '_blank');
-                    }, 600);
+                    const messaggioBreve = `Gentile ${cliente?.nome || 'Cliente'}, da ${officina?.nome || 'Officina'} le inviamo il preventivo per il suo veicolo ${vMarca} ${vModello}${vTarga && vTarga !== 'MANUALE' ? ` (${vTarga})` : ''}.\nTotale: ${fmtEuro(totale)}`;
+                    const testo = encodeURIComponent(
+                      savedPdfUrl
+                        ? `${messaggioBreve}\n\n📄 Preventivo completo in PDF:\n${savedPdfUrl}\n\nResto a disposizione per qualsiasi chiarimento.\n${officina?.nome || 'Officina'}${officina?.tel ? ` — Tel: ${officina.tel}` : ''}`
+                        : `${messaggioBreve}\n\nIl preventivo dettagliato verra' inviato a breve in PDF.\n${officina?.nome || 'Officina'}${officina?.tel ? ` — Tel: ${officina.tel}` : ''}`
+                    );
+                    const tel = cliente?.tel?.replace(/\D/g, '') || '';
+                    const prefix = tel.startsWith('39') ? tel : `39${tel}`;
+                    window.open(`https://wa.me/${prefix}?text=${testo}`, '_blank');
                   }}
-                  className="p-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors cursor-pointer"
+                  disabled={!saved || uploadingSavedPdf}
+                  className="p-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors cursor-pointer"
                 >
                   📱 Invia WhatsApp
                 </button>
                 <button
                   onClick={() => {
-                    // Genera PDF
-                    handleStampa();
-                    // Apre email con riepilogo professionale
-                    setTimeout(() => {
-                      const oggetto = encodeURIComponent(`Preventivo ${vMarca} ${vModello}${vTarga && vTarga !== 'MANUALE' ? ` (${vTarga})` : ''} — ${officina?.nome || 'Officina'}`);
-                      const corpo = encodeURIComponent(
-                        `Gentile ${cliente?.nome || 'Cliente'},\n\n` +
-                        `Le inviamo in allegato il preventivo per il suo veicolo ${vMarca} ${vModello}${vTarga && vTarga !== 'MANUALE' ? ` (${vTarga})` : ''}.\n\n` +
-                        `Riepilogo:\n` +
-                        righe.map(r => `- ${r.desc}: ${fmtEuro(r.qta * r.prezzo)} (${r.tipo})`).join('\n') +
-                        `\n\nSubtotale: ${fmtEuro(subtotale)}` +
-                        (sconto > 0 ? `\nSconto ${sconto}%: -${fmtEuro(scontoEuro)}` : '') +
-                        `\nIVA 22%: ${fmtEuro(iva)}` +
-                        `\nTOTALE: ${fmtEuro(totale)}` +
-                        `\n\nIl preventivo dettagliato in PDF è in allegato a questa email.` +
-                        `\nIl preventivo è valido 30 giorni dalla data odierna.` +
-                        `\n\nPer qualsiasi domanda non esiti a contattarci.` +
-                        `\n\nCordiali saluti,\n${officina?.nome || 'Officina'}` +
-                        `${officina?.tel ? `\nTel: ${officina.tel}` : ''}` +
-                        `${officina?.p_iva ? `\nP.IVA: ${officina.p_iva}` : ''}`
-                      );
-                      window.open(`mailto:${cliente?.email || ''}?subject=${oggetto}&body=${corpo}`, '_blank');
-                    }, 600);
+                    const oggetto = encodeURIComponent(`Preventivo ${vMarca} ${vModello}${vTarga && vTarga !== 'MANUALE' ? ` (${vTarga})` : ''} — ${officina?.nome || 'Officina'}`);
+                    const messaggioBreve = `Gentile ${cliente?.nome || 'Cliente'},\n\nLe inviamo il preventivo per il suo veicolo ${vMarca} ${vModello}${vTarga && vTarga !== 'MANUALE' ? ` (${vTarga})` : ''}.\nTotale: ${fmtEuro(totale)}`;
+                    const corpo = encodeURIComponent(
+                      (savedPdfUrl
+                        ? `${messaggioBreve}\n\nIl preventivo completo in PDF e' disponibile qui:\n${savedPdfUrl}`
+                        : `${messaggioBreve}\n\nIl preventivo dettagliato verra' inviato a breve.`
+                      ) +
+                      `\nIl preventivo e' valido 30 giorni dalla data odierna.` +
+                      `\n\nPer qualsiasi domanda non esiti a contattarci.` +
+                      `\n\nCordiali saluti,\n${officina?.nome || 'Officina'}` +
+                      `${officina?.tel ? `\nTel: ${officina.tel}` : ''}` +
+                      `${officina?.p_iva ? `\nP.IVA: ${officina.p_iva}` : ''}`
+                    );
+                    window.open(`mailto:${cliente?.email || ''}?subject=${oggetto}&body=${corpo}`, '_blank');
                   }}
-                  className="p-3 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors cursor-pointer"
+                  disabled={!saved || uploadingSavedPdf}
+                  className="p-3 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-40 transition-colors cursor-pointer"
                 >
                   ✉️ Invia Email
                 </button>
               </div>
-              <div className="text-center text-[10px] text-gray-400 mt-1">
-                WhatsApp e Email generano prima il PDF da allegare, poi aprono il canale di invio
-              </div>
+              {!saved && (
+                <div className="text-center text-[10px] text-amber-600 mt-1">
+                  Salva il preventivo per attivare l'invio con PDF allegato
+                </div>
+              )}
+              {saved && uploadingSavedPdf && (
+                <div className="text-center text-[10px] text-gray-400 mt-1">
+                  Generazione PDF condivisibile in corso…
+                </div>
+              )}
+              {saved && !uploadingSavedPdf && (
+                <div className="text-center text-[10px] text-gray-400 mt-1">
+                  {savedPdfUrl ? 'Il messaggio includera\' il link al preventivo in PDF' : 'PDF non disponibile — controlla il bucket "preventivi" su Supabase Storage'}
+                </div>
+              )}
 
               {saved && (
                 <div className="text-center text-xs text-emerald-600 mt-2">
@@ -1560,13 +1682,27 @@ interface PreventivoListItem {
   veicolo_desc?: string;
 }
 
-export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, externalSearch }: { onSelectAppuntamento?: (app: any) => void; onNavigateToCalendar?: (date: Date) => void; externalSearch?: string }) {
+export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, externalSearch, resetSignal }: { onSelectAppuntamento?: (app: any) => void; onNavigateToCalendar?: (date: Date) => void; externalSearch?: string; resetSignal?: number }) {
   const { officina } = useAuthStore();
   const [view, setView] = useState<'list' | 'new' | 'detail'>('list');
   const [selectedPreventivo, setSelectedPreventivo] = useState<PreventivoListItem | null>(null);
   const [detailAppuntamento, setDetailAppuntamento] = useState<Appuntamento | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editRighe, setEditRighe] = useState<PreventivoListItem['righe']>([]);
+  const [editSconto, setEditSconto] = useState(0);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Quando l'utente clicca di nuovo sul tab Preventivi mentre e' gia' attivo,
+  // torna alla lista principale invece di restare nel dettaglio/creazione.
+  useEffect(() => {
+    if (resetSignal === undefined) return;
+    setView('list');
+    setSelectedPreventivo(null);
+    setEditMode(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal]);
 
   useEffect(() => {
     if (view !== 'detail' || !selectedPreventivo?.appuntamento_id) {
@@ -1593,6 +1729,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
     (async () => {
       setUploadingPdf(true);
       try {
+        const accent = await extractLogoColor(officina?.logo_url);
         const html = buildPreventivoHtml(
           detailAppuntamento,
           {
@@ -1606,7 +1743,8 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
             stato: selectedPreventivo.stato as 'bozza' | 'inviato' | 'accettato' | 'rifiutato',
             created_at: selectedPreventivo.created_at,
           },
-          officina
+          officina,
+          accent
         );
         const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
         const path = `${officina?.id || 'anon'}/preventivo-${selectedPreventivo.id}.html`;
@@ -1725,11 +1863,62 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
     };
     const statoInfo = statoMap[p.stato] || statoMap.bozza;
 
+    const subtotaleView = editMode
+      ? editRighe.reduce((s, r) => s + r.qta * r.prezzo, 0)
+      : p.subtotale;
+    const ivaView = editMode ? (subtotaleView - editSconto) * 0.22 : p.iva;
+    const totaleView = editMode ? (subtotaleView - editSconto) + ivaView : p.totale;
+
+    const startEdit = () => {
+      setEditRighe(p.righe.map((r) => ({ ...r })));
+      setEditSconto(p.sconto);
+      setEditMode(true);
+    };
+
+    const cancelEdit = () => {
+      setEditMode(false);
+      setEditRighe([]);
+      setEditSconto(0);
+    };
+
+    const saveEdit = async () => {
+      setSavingEdit(true);
+      const nuovoSubtotale = editRighe.reduce((s, r) => s + r.qta * r.prezzo, 0);
+      const nuovaIva = (nuovoSubtotale - editSconto) * 0.22;
+      const nuovoTotale = (nuovoSubtotale - editSconto) + nuovaIva;
+      const { error: updErr } = await supabase
+        .from('preventivi')
+        .update({
+          righe: editRighe,
+          subtotale: nuovoSubtotale,
+          sconto: editSconto,
+          iva: nuovaIva,
+          totale: nuovoTotale,
+        })
+        .eq('id', p.id);
+      setSavingEdit(false);
+      if (updErr) {
+        alert('Errore salvataggio modifiche: ' + updErr.message);
+        return;
+      }
+      const updated: PreventivoListItem = {
+        ...p,
+        righe: editRighe,
+        subtotale: nuovoSubtotale,
+        sconto: editSconto,
+        iva: nuovaIva,
+        totale: nuovoTotale,
+      };
+      setSelectedPreventivo(updated);
+      setPreventivi((prev) => prev.map((x) => (x.id === p.id ? updated : x)));
+      setEditMode(false);
+    };
+
     return (
       <div className="p-4 space-y-4 pb-24">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <button onClick={() => { setView('list'); setSelectedPreventivo(null); }} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer">
+          <button onClick={() => { setView('list'); setSelectedPreventivo(null); setEditMode(false); }} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer">
             <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
@@ -1743,6 +1932,14 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
               )}
             </div>
           </div>
+          {!editMode && (
+            <button
+              onClick={startEdit}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800 px-2 py-1 rounded-lg hover:bg-blue-50 cursor-pointer"
+            >
+              ✏️ Modifica
+            </button>
+          )}
           <span className="px-2.5 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: statoInfo.bg, color: statoInfo.color }}>
             {statoInfo.label}
           </span>
@@ -1755,31 +1952,87 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
 
         {/* Voci preventivo */}
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+          <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
             <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Voci preventivo</span>
+            {editMode && (
+              <span className="text-[10px] text-blue-600 font-semibold">Modifica in corso</span>
+            )}
           </div>
-          {p.righe.length === 0 ? (
-            <div className="px-4 py-6 text-center text-sm text-gray-400">Nessuna voce</div>
+          {!editMode ? (
+            p.righe.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-gray-400">Nessuna voce</div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {p.righe.map((r, i) => (
+                  <div key={i} className="px-4 py-3 flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${r.tipo === 'manodopera' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {r.tipo === 'manodopera' ? '🔧 Manodopera' : '📦 Ricambio'}
+                        </span>
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">{r.desc}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {r.qta} × {fmtEuro(r.prezzo)}
+                      </div>
+                    </div>
+                    <div className="text-sm font-bold text-gray-900 shrink-0">
+                      {fmtEuro(r.qta * r.prezzo)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
           ) : (
             <div className="divide-y divide-gray-100">
-              {p.righe.map((r, i) => (
-                <div key={i} className="px-4 py-3 flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
+              {editRighe.length === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-gray-400">Nessuna voce</div>
+              ) : (
+                editRighe.map((r, i) => (
+                  <div key={i} className="px-4 py-3 flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${r.tipo === 'manodopera' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {r.tipo === 'manodopera' ? '🔧 Manodopera' : '📦 Ricambio'}
+                        {r.tipo === 'manodopera' ? '🔧' : '📦'}
                       </span>
+                      <div className="text-sm text-gray-800 mt-0.5 truncate">{r.desc}</div>
                     </div>
-                    <div className="text-sm font-medium text-gray-900">{r.desc}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      {r.qta} × {fmtEuro(r.prezzo)}
-                    </div>
+                    <input
+                      type="number"
+                      value={r.qta}
+                      onChange={(e) => setEditRighe((prev) => prev.map((x, idx) => idx === i ? { ...x, qta: Math.max(1, parseInt(e.target.value) || 1) } : x))}
+                      className="w-12 text-center text-xs border border-gray-200 rounded-lg py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      min={1}
+                    />
+                    <span className="text-[10px] text-gray-400">×</span>
+                    <input
+                      type="number"
+                      value={r.prezzo}
+                      onChange={(e) => setEditRighe((prev) => prev.map((x, idx) => idx === i ? { ...x, prezzo: parseFloat(e.target.value) || 0 } : x))}
+                      className="w-20 text-right text-xs border border-gray-200 rounded-lg py-1 px-2 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      step={0.5}
+                    />
+                    <button
+                      onClick={() => setEditRighe((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="p-1 text-red-400 hover:text-red-600 cursor-pointer"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
-                  <div className="text-sm font-bold text-gray-900 shrink-0">
-                    {fmtEuro(r.qta * r.prezzo)}
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
+              <div className="px-4 py-3 flex items-center gap-2">
+                <span className="text-xs text-gray-500">Sconto (€)</span>
+                <input
+                  type="number"
+                  value={editSconto}
+                  onChange={(e) => setEditSconto(Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="w-24 text-right text-xs border border-gray-200 rounded-lg py-1 px-2 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  step={0.5}
+                  min={0}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -1788,26 +2041,45 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
         <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
           <div className="flex justify-between text-sm text-gray-600">
             <span>Subtotale</span>
-            <span>{fmtEuro(p.subtotale)}</span>
+            <span>{fmtEuro(subtotaleView)}</span>
           </div>
-          {p.sconto > 0 && (
+          {(editMode ? editSconto > 0 : p.sconto > 0) && (
             <div className="flex justify-between text-sm text-green-600">
               <span>Sconto</span>
-              <span>− {fmtEuro(p.sconto)}</span>
+              <span>− {fmtEuro(editMode ? editSconto : p.sconto)}</span>
             </div>
           )}
           <div className="flex justify-between text-sm text-gray-600">
             <span>IVA 22%</span>
-            <span>{fmtEuro(p.iva)}</span>
+            <span>{fmtEuro(ivaView)}</span>
           </div>
           <div className="flex justify-between text-base font-black text-gray-900 pt-2 border-t border-gray-200">
             <span>TOTALE</span>
-            <span>{fmtEuro(p.totale)}</span>
+            <span>{fmtEuro(totaleView)}</span>
           </div>
         </div>
 
+        {editMode && (
+          <div className="flex gap-2">
+            <button
+              onClick={saveEdit}
+              disabled={savingEdit}
+              className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors"
+            >
+              {savingEdit ? 'Salvataggio...' : '💾 Salva modifiche'}
+            </button>
+            <button
+              onClick={cancelEdit}
+              disabled={savingEdit}
+              className="px-5 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 cursor-pointer transition-colors"
+            >
+              Annulla
+            </button>
+          </div>
+        )}
+
         {/* Esporta PDF + Invia (email/WhatsApp/SMS) */}
-        {detailAppuntamento && (
+        {!editMode && detailAppuntamento && (
           <div className="space-y-2">
             <PDFExport
               appuntamento={detailAppuntamento}
@@ -1869,17 +2141,19 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
         )}
 
         {/* Azioni */}
-        <div className="flex gap-2">
-          <button
-            onClick={async () => {
-              const { data } = await supabase.from('appuntamenti').select('*, clienti(nome,tel), veicoli(marca,modello,targa)').eq('id', p.appuntamento_id).single();
-              if (data && onSelectAppuntamento) onSelectAppuntamento(data);
-            }}
-            className="flex-1 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold text-sm hover:bg-blue-50 cursor-pointer transition-colors"
-          >
-            📅 Vai all'appuntamento
-          </button>
-        </div>
+        {!editMode && (
+          <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                const { data } = await supabase.from('appuntamenti').select('*, clienti(nome,tel), veicoli(marca,modello,targa)').eq('id', p.appuntamento_id).single();
+                if (data && onSelectAppuntamento) onSelectAppuntamento(data);
+              }}
+              className="flex-1 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold text-sm hover:bg-blue-50 cursor-pointer transition-colors"
+            >
+              📅 Vai all'appuntamento
+            </button>
+          </div>
+        )}
       </div>
     );
   }
