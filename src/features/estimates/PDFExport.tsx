@@ -2,21 +2,23 @@ import { useState } from 'react';
 import { Button, Card } from '@/components/ui';
 import { fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
-import type { Appuntamento, Preventivo } from '@/types/database';
+import type { Appuntamento, Officina, Preventivo } from '@/types/database';
 
 interface PDFExportProps {
   appuntamento: Appuntamento;
   preventivo: Preventivo;
 }
 
-export function PDFExport({ appuntamento, preventivo }: PDFExportProps) {
-  const { officina } = useAuthStore();
-  const [generating, setGenerating] = useState(false);
-
-  const generatePDF = () => {
-    setGenerating(true);
-
-    const html = `
+/**
+ * Costruisce l'HTML del preventivo (standalone, pronto per stampa/upload).
+ * Usato sia dal bottone "Esporta PDF" che dall'upload su Storage per condivisione.
+ */
+export function buildPreventivoHtml(
+  appuntamento: Appuntamento,
+  preventivo: Preventivo,
+  officina?: Officina | null
+): string {
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -138,13 +140,21 @@ export function PDFExport({ appuntamento, preventivo }: PDFExportProps) {
   </div>
 </body>
 </html>`;
+}
+
+export function PDFExport({ appuntamento, preventivo }: PDFExportProps) {
+  const { officina } = useAuthStore();
+  const [generating, setGenerating] = useState(false);
+
+  const generatePDF = () => {
+    setGenerating(true);
+    const html = buildPreventivoHtml(appuntamento, preventivo, officina);
 
     // Open in new window for printing/saving as PDF
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(html);
       printWindow.document.close();
-      // Auto-trigger print dialog
       setTimeout(() => {
         printWindow.print();
       }, 500);
