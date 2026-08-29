@@ -5,7 +5,7 @@ import { fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { generaDatiVeicolo, lookupTargaEsterna, DB_AUTO, type DatiVeicolo } from '@/lib/targaLookup';
 import type { Veicolo, Cliente, Appuntamento } from '@/types/database';
-import { PDFExport } from './PDFExport';
+import { PDFExport, buildPreventivoHtml } from './PDFExport';
 import { ShareDocument } from '@/components/ShareDocument';
 
 // ============================================================
@@ -1565,10 +1565,13 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
   const [view, setView] = useState<'list' | 'new' | 'detail'>('list');
   const [selectedPreventivo, setSelectedPreventivo] = useState<PreventivoListItem | null>(null);
   const [detailAppuntamento, setDetailAppuntamento] = useState<Appuntamento | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
 
   useEffect(() => {
     if (view !== 'detail' || !selectedPreventivo?.appuntamento_id) {
       setDetailAppuntamento(null);
+      setPdfUrl(null);
       return;
     }
     let cancelled = false;
@@ -1582,6 +1585,47 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
     })();
     return () => { cancelled = true; };
   }, [view, selectedPreventivo?.appuntamento_id]);
+
+  // Genera HTML del preventivo e lo carica su Supabase Storage per condivisione
+  useEffect(() => {
+    if (view !== 'detail' || !selectedPreventivo || !detailAppuntamento) return;
+    let cancelled = false;
+    (async () => {
+      setUploadingPdf(true);
+      try {
+        const html = buildPreventivoHtml(
+          detailAppuntamento,
+          {
+            id: selectedPreventivo.id,
+            appuntamento_id: selectedPreventivo.appuntamento_id,
+            righe: selectedPreventivo.righe,
+            subtotale: selectedPreventivo.subtotale,
+            sconto: selectedPreventivo.sconto,
+            iva: selectedPreventivo.iva,
+            totale: selectedPreventivo.totale,
+            stato: selectedPreventivo.stato as 'bozza' | 'inviato' | 'accettato' | 'rifiutato',
+            created_at: selectedPreventivo.created_at,
+          },
+          officina
+        );
+        const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+        const path = `${officina?.id || 'anon'}/preventivo-${selectedPreventivo.id}.html`;
+        const { error: upErr } = await supabase.storage
+          .from('preventivi')
+          .upload(path, blob, { upsert: true, contentType: 'text/html; charset=utf-8' });
+        if (!upErr) {
+          const { data: pub } = supabase.storage.from('preventivi').getPublicUrl(path);
+          if (!cancelled) setPdfUrl(pub.publicUrl);
+        } else if (!cancelled) {
+          // Bucket "preventivi" non esiste — proseguo senza link pubblico
+          setPdfUrl(null);
+        }
+      } finally {
+        if (!cancelled) setUploadingPdf(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [view, selectedPreventivo, detailAppuntamento, officina]);
   const [preventivi, setPreventivi] = useState<PreventivoListItem[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [searchQuery, setSearchQuery] = useState(externalSearch || '');
@@ -1787,12 +1831,15 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
               clienteNome={detailAppuntamento.clienti?.nome}
               officinaId={officina?.id}
               clienteId={detailAppuntamento.cliente_id}
+              pdfUrl={pdfUrl}
+              emailSubject={`Preventivo ${detailAppuntamento.veicoli ? detailAppuntamento.veicoli.marca + ' ' + detailAppuntamento.veicoli.modello : ''}${detailAppuntamento.veicoli?.targa ? ' (' + detailAppuntamento.veicoli.targa + ')' : ''} — ${officina?.nome || 'OfficinAI'}`}
               emailData={{
                 clienteNome: detailAppuntamento.clienti?.nome || 'Cliente',
                 veicolo: detailAppuntamento.veicoli
                   ? `${detailAppuntamento.veicoli.marca} ${detailAppuntamento.veicoli.modello}`
                   : '',
                 totale: fmtEuro(p.totale),
+                linkPreventivo: pdfUrl || undefined,
               }}
               whatsappText={`Buongiorno ${detailAppuntamento.clienti?.nome || ''}, le inviamo il preventivo per il suo ${
                 detailAppuntamento.veicoli
@@ -1800,6 +1847,24 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
                   : 'veicolo'
               }${detailAppuntamento.veicoli?.targa ? ` (${detailAppuntamento.veicoli.targa})` : ''}.\nTotale: ${fmtEuro(p.totale)}\n\nResto a disposizione per qualsiasi chiarimento.\n— ${officina?.nome || 'OfficinAI'}`}
             />
+            {uploadingPdf && (
+              <div className="text-[11px] text-gray-400 text-center">Generazione link preventivo…</div>
+            )}
+            {!uploadingPdf && !pdfUrl && (
+              <div className="text-[11px] text-amber-600 text-center">
+                Suggerimento: crea il bucket <code className="font-mono bg-amber-50 px-1 rounded">preventivi</code> (pubblico) su Supabase Storage per allegare il PDF automaticamente ai messaggi.
+              </div>
+            )}
+            {pdfUrl && (
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center text-xs text-blue-600 hover:underline"
+              >
+                📎 Apri preventivo condivisibile (pagina web)
+              </a>
+            )}
           </div>
         )}
 
