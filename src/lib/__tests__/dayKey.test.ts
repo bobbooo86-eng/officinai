@@ -1,9 +1,12 @@
-// Il fuso va impostato prima di importare il modulo sotto test, cosi' le
-// operazioni su Date usano l'ora italiana come sull'app in produzione.
-process.env.TZ = 'Europe/Rome';
-
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { dayKey, todayKey } from '../format';
+
+// Le date vanno valutate in ora italiana, come in produzione: altrimenti in
+// un ambiente UTC questi test non distinguerebbero il giorno locale da quello
+// UTC ed il bug che verificano resterebbe invisibile.
+// (process non e' tipizzato senza @types/node, da cui l'accesso via globalThis)
+(globalThis as unknown as { process: { env: Record<string, string | undefined> } })
+  .process.env.TZ = 'Europe/Rome';
 
 afterEach(() => {
   vi.useRealTimers();
