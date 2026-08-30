@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Card, Input, Badge } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { DatabaseStatus } from './DatabaseStatus';
 import { useThemeStore } from '@/stores/themeStore';
 import type { Utente } from '@/types/database';
 
@@ -255,6 +256,8 @@ export function SettingsPage() {
           <div className="text-sm font-semibold text-red-800">⚠️ {saveError}</div>
         </Card>
       )}
+
+      <DatabaseStatus />
 
       <Card>
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Logo officina</h3>
