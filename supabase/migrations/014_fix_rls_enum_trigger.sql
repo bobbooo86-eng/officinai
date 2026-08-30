@@ -98,7 +98,15 @@ ALTER TABLE appuntamenti ADD COLUMN IF NOT EXISTS pagamento jsonb;
 -- ---- 4. Vincolo di unicita' sulle email dello staff ----
 -- L'onboarding usa upsert(onConflict: 'email'), che senza indice unico
 -- fallisce con errore 42P10 e perde i membri del team inseriti.
-CREATE UNIQUE INDEX IF NOT EXISTS utenti_email_unique ON utenti (email);
+-- Se in tabella esistono gia' email duplicate l'indice non puo' essere
+-- creato: in quel caso si prosegue senza interrompere il resto dello
+-- script, e le altre correzioni vengono comunque applicate.
+DO $$
+BEGIN
+  CREATE UNIQUE INDEX IF NOT EXISTS utenti_email_unique ON utenti (email);
+EXCEPTION WHEN others THEN
+  RAISE NOTICE 'Indice unico su utenti.email non creato (probabili email duplicate): %', SQLERRM;
+END $$;
 
 -- ---- 5. Tabelle scritte dall'app ma mai create ----
 CREATE TABLE IF NOT EXISTS contatti_landing (
