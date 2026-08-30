@@ -67,6 +67,18 @@ export function aggiungiLocale(
   return movimento;
 }
 
+/** Aggiorna un movimento gia' presente nell'archivio locale. */
+export function aggiornaLocale(
+  officinaId: string,
+  id: string,
+  patch: Partial<Movimento>
+): void {
+  scrivi(
+    officinaId,
+    leggiLocali(officinaId).map((m) => (m.id === id ? { ...m, ...patch } : m))
+  );
+}
+
 export function rimuoviLocale(officinaId: string, id: string): void {
   scrivi(
     officinaId,

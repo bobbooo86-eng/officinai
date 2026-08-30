@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  aggiungiLocale, isLocale, leggiLocali, perSupabase, rimuoviLocale, svuotaLocali,
+  aggiornaLocale, aggiungiLocale, isLocale, leggiLocali, perSupabase, rimuoviLocale, svuotaLocali,
 } from '../cassaLocale';
 import type { Movimento } from '@/types/database';
 
@@ -60,6 +60,24 @@ describe('archivio locale della cassa', () => {
     aggiungiLocale(OFF, dati());
     expect(leggiLocali(ALTRA)).toEqual([]);
     expect(leggiLocali(OFF)).toHaveLength(1);
+  });
+
+  it('aggiorna un movimento esistente mantenendo id e marcatore', () => {
+    const creato = aggiungiLocale(OFF, dati({ descrizione: 'vecchia', importo: 50 }));
+    aggiornaLocale(OFF, creato.id, { descrizione: 'nuova', importo: 80 });
+    const [letto] = leggiLocali(OFF);
+    expect(letto.id).toBe(creato.id);
+    expect(letto.descrizione).toBe('nuova');
+    expect(letto.importo).toBe(80);
+    expect(isLocale(letto)).toBe(true);
+  });
+
+  it('aggiorna solo il movimento indicato', () => {
+    const a = aggiungiLocale(OFF, dati({ descrizione: 'a' }));
+    aggiungiLocale(OFF, dati({ descrizione: 'b' }));
+    aggiornaLocale(OFF, a.id, { descrizione: 'modificato' });
+    const descrizioni = leggiLocali(OFF).map((m) => m.descrizione).sort();
+    expect(descrizioni).toEqual(['b', 'modificato']);
   });
 
   it('rimuove un singolo movimento lasciando gli altri', () => {

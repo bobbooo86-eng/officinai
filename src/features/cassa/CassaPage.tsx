@@ -3,7 +3,7 @@ import { Card, Button } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { insertTolerant, isMissingTable } from '@/lib/resilientDb';
 import {
-  aggiungiLocale, isLocale, leggiLocali, perSupabase, rimuoviLocale, svuotaLocali,
+  aggiornaLocale, aggiungiLocale, isLocale, leggiLocali, perSupabase, rimuoviLocale, svuotaLocali,
 } from '@/lib/cassaLocale';
 import { useAuthStore } from '@/stores/authStore';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente } from '@/types/database';
@@ -69,6 +69,8 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
 
   // Nuovo movimento
   const [showForm, setShowForm] = useState(false);
+  // Id del movimento in modifica; null quando se ne sta creando uno nuovo.
+  const [editId, setEditId] = useState<string | null>(null);
   const [newTipo, setNewTipo] = useState<MovimentoTipo>('incasso_extra');
   const [newImporto, setNewImporto] = useState('');
   const [newDescrizione, setNewDescrizione] = useState('');
@@ -210,6 +212,26 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialOpen]);
 
+  /** Apre il modulo gia' compilato con i dati di un movimento esistente. */
+  const iniziaModifica = (m: Movimento) => {
+    setEditId(m.id);
+    setNewTipo(m.tipo);
+    setNewImporto(String(m.importo).replace('.', ','));
+    setNewDescrizione(m.descrizione || '');
+    setNewMetodo((m.metodo_pagamento as MetodoPagamento) || 'contanti');
+    setNewData(m.data);
+    setNewDipendenteId(m.dipendente_id || '');
+    setNewNote(m.note || '');
+    setError('');
+    setShowForm(true);
+  };
+
+  const annullaModifica = () => {
+    setEditId(null);
+    resetForm();
+    setShowForm(false);
+  };
+
   const resetForm = (tipo: MovimentoTipo = newTipo) => {
     setNewTipo(tipo);
     setNewImporto('');
@@ -219,6 +241,7 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
     setNewDipendenteId('');
     setNewNote('');
     setError('');
+    setEditId(null);
   };
 
   const salvaMovimento = async () => {
@@ -243,6 +266,28 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
       created_by: utente?.id || null,
       note: newNote.trim() || null,
     };
+
+    // --- Modifica di un movimento esistente ---
+    if (editId) {
+      const inLocale = movimenti.some((m) => m.id === editId && isLocale(m));
+      if (inLocale) {
+        aggiornaLocale(officinaId, editId, dati as Partial<Movimento>);
+        setMovimenti((prev) => prev.map((m) => (m.id === editId ? { ...m, ...dati } as Movimento : m)));
+      } else {
+        const { error: updErr } = await supabase.from('movimenti').update(dati).eq('id', editId);
+        if (updErr) {
+          setSaving(false);
+          setError('Modifica non salvata: ' + updErr.message);
+          return;
+        }
+        setMovimenti((prev) => prev.map((m) => (m.id === editId ? { ...m, ...dati } as Movimento : m)));
+      }
+      setSaving(false);
+      resetForm();
+      setShowForm(false);
+      showToast('Movimento aggiornato');
+      return;
+    }
 
     // Salvataggio sul dispositivo quando il database non ha ancora la tabella.
     const salvaInLocale = () => {
@@ -371,7 +416,9 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
       {/* Form nuovo movimento */}
       {showForm && (
         <Card className="!p-4 space-y-3 !border-blue-200 !bg-blue-50/40">
-          <div className="text-sm font-bold text-gray-900">Nuovo movimento</div>
+          <div className="text-sm font-bold text-gray-900">
+            {editId ? 'Modifica movimento' : 'Nuovo movimento'}
+          </div>
 
           {/* Tipo */}
           <div>
@@ -492,8 +539,13 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
 
           <div className="flex gap-2">
             <Button onClick={salvaMovimento} loading={saving} fullWidth>
-              💾 Salva movimento
+              {editId ? '💾 Salva modifiche' : '💾 Salva movimento'}
             </Button>
+            {editId && (
+              <Button variant="secondary" onClick={annullaModifica} disabled={saving}>
+                Annulla
+              </Button>
+            )}
           </div>
         </Card>
       )}
@@ -636,8 +688,15 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
                           {cfg.sign === 1 ? '+' : '−'}{fmtEuro(Number(m.importo))}
                         </div>
                         <button
+                          onClick={() => iniziaModifica(m)}
+                          className="text-gray-400 hover:text-blue-600 cursor-pointer text-xs px-1"
+                          title="Modifica"
+                        >
+                          ✏️
+                        </button>
+                        <button
                           onClick={() => eliminaMovimento(m.id)}
-                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 cursor-pointer text-xs"
+                          className="text-gray-400 hover:text-red-600 cursor-pointer text-xs px-1"
                           title="Elimina"
                         >
                           🗑️
