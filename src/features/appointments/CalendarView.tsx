@@ -381,6 +381,11 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
                               <div className="text-[10px] text-gray-500 truncate">
                                 {app.veicoli?.marca} {app.veicoli?.modello} {app.veicoli?.targa && `• ${app.veicoli.targa}`}
                               </div>
+                              {app.problema && (
+                                <div className="text-[11px] text-gray-700 mt-1 font-medium line-clamp-2">
+                                  🔧 {app.problema}
+                                </div>
+                              )}
                             </div>
                             <Badge color={stato.color} bg={stato.bg}>{stato.icon}</Badge>
                           </div>
@@ -483,6 +488,11 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
                           <div className="text-[10px] text-gray-500 truncate">
                             {app.veicoli?.marca} {app.veicoli?.modello}
                           </div>
+                          {app.problema && (
+                            <div className="text-[11px] text-gray-700 mt-1 font-medium line-clamp-2">
+                              🔧 {app.problema}
+                            </div>
+                          )}
                         </div>
                         <Badge color={stato.color} bg={stato.bg}>{stato.icon}</Badge>
                       </div>
