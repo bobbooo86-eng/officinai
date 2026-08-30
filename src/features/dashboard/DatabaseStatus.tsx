@@ -64,11 +64,19 @@ async function eseguiControlli(): Promise<Controllo[]> {
   return esiti;
 }
 
+/** Identificativo del progetto Supabase ricavato dall'URL configurato. */
+function refProgetto(): string {
+  const url = import.meta.env.VITE_SUPABASE_URL || '';
+  const m = url.match(/https?:\/\/([^.]+)\./);
+  return m ? m[1] : url;
+}
+
 export function DatabaseStatus() {
   const [controlli, setControlli] = useState<Controllo[] | null>(null);
   const [verificando, setVerificando] = useState(false);
   const [copiato, setCopiato] = useState(false);
   const [mostraSql, setMostraSql] = useState(false);
+  const progettoRef = refProgetto();
 
   const verifica = async () => {
     setVerificando(true);
@@ -97,6 +105,18 @@ export function DatabaseStatus() {
         Controlla che il database Supabase sia allineato con l'app. Se qualcosa manca,
         Cassa, Magazzino o i preventivi possono dare errore in salvataggio.
       </p>
+
+      {/* Il progetto collegato: se le correzioni vengono applicate su un
+          progetto Supabase diverso, l'app continua a vedere lo schema vecchio. */}
+      <div className="mb-3 p-2 rounded-lg bg-slate-100 dark:bg-gray-800">
+        <div className="text-[10px] text-slate-500 dark:text-gray-400">Progetto Supabase collegato</div>
+        <div className="text-xs font-mono font-semibold text-slate-800 dark:text-gray-200 break-all">
+          {progettoRef || 'non configurato'}
+        </div>
+        <div className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5">
+          Le modifiche al database vanno fatte su <strong>questo</strong> progetto.
+        </div>
+      </div>
 
       <Button variant="secondary" onClick={verifica} loading={verificando} fullWidth>
         🔍 Verifica database
