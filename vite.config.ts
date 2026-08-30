@@ -11,6 +11,10 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registrazione manuale in main.tsx: serve per controllare
+      // periodicamente se c'e' una versione piu' recente (vedi li' per il
+      // perche').
+      injectRegister: false,
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'OfficinAI - Gestione Officina',

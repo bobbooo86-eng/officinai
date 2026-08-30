@@ -103,5 +103,3 @@ jobs:
           verifica "SELECT count(*) FROM movimenti;"
           echo "== Tabella impostazioni_email =="
           verifica "SELECT count(*) FROM impostazioni_email;"
-          echo "== DIAGNOSI: ultimi preventivi e lo stato del loro appuntamento =="
-          verifica "SELECT p.id AS preventivo_id, p.stato AS stato_preventivo, p.created_at AS preventivo_creato, a.id AS appuntamento_id, a.stato AS stato_appuntamento, a.problema, a.data_ora, a.created_at AS appuntamento_creato FROM preventivi p JOIN appuntamenti a ON a.id = p.appuntamento_id ORDER BY p.created_at DESC LIMIT 8;"
