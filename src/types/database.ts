@@ -10,7 +10,14 @@ export type AppuntamentoStato =
   | 'attesa_ricambi'
   | 'pronto'
   | 'consegnato'
-  | 'annullato';
+  | 'annullato'
+  // Segnaposto creato automaticamente al salvataggio di un nuovo preventivo
+  // (la riga in appuntamenti e' obbligatoria per il vincolo di chiave
+  // esterna di preventivi.appuntamento_id): non e' un appuntamento reale
+  // finche' "Conferma appuntamento" non lo trasforma in 'prenotato' con
+  // data, ora e lavorazione vere. Va escluso da agenda, calendario,
+  // dashboard e ricerca.
+  | 'bozza_preventivo';
 
 export type PreventivoStato = 'bozza' | 'inviato' | 'accettato' | 'rifiutato';
 

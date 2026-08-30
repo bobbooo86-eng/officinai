@@ -112,6 +112,7 @@ export function GlobalSearch({ onSelect }: GlobalSearchProps) {
           .from('appuntamenti')
           .select('id, data_ora, problema, codici_obd, clienti(nome)')
           .eq('officina_id', officinaId)
+          .neq('stato', 'bozza_preventivo')
           .or(`problema.ilike.${pattern},codici_obd.ilike.${pattern}`)
           .limit(5);
 

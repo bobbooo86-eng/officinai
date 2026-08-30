@@ -44,6 +44,9 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
           .from('appuntamenti')
           .select('*, clienti(nome,tel,email), veicoli(marca,modello,targa,km)')
           .eq('officina_id', officina.id)
+          // Segnaposto di un preventivo non ancora confermato: non deve
+          // contare ne' apparire tra i lavori della dashboard.
+          .neq('stato', 'bozza_preventivo')
           .order('data_ora', { ascending: false }),
         supabase
           .from('magazzino')
@@ -284,7 +287,9 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
             </div>
           </Card>
         </button>
-        {Object.entries(STATO_CONFIG).map(([key, cfg]) => {
+        {Object.entries(STATO_CONFIG)
+          .filter(([key]) => key !== 'bozza_preventivo')
+          .map(([key, cfg]) => {
           const count = appuntamenti.filter((a) => a.stato === key).length;
           return (
             <button key={key} onClick={() => onNavigateToAgenda?.(key)} className="text-left cursor-pointer">

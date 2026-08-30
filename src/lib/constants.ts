@@ -10,6 +10,7 @@ export const STATO_CONFIG: Record<AppuntamentoStato, { label: string; color: str
   pronto: { label: 'Pronto', color: '#10b981', bg: '#d1fae5', icon: '✅' },
   consegnato: { label: 'Consegnato', color: '#64748b', bg: '#f1f5f9', icon: '🏁' },
   annullato: { label: 'Annullato', color: '#6b7280', bg: '#f3f4f6', icon: '🚫' },
+  bozza_preventivo: { label: 'In attesa di conferma', color: '#a855f7', bg: '#f3e8ff', icon: '📝' },
 };
 
 export const STATI_ORDINE: AppuntamentoStato[] = [

@@ -899,6 +899,9 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
 
     // Se non c'è appuntamento aperto, creane uno
     if (!appuntamentoId) {
+      // Segnaposto, non un appuntamento reale: la riga serve solo perche'
+      // preventivi.appuntamento_id e' obbligatorio. Resta invisibile in
+      // agenda/calendario finche' non si preme "Conferma appuntamento".
       const { data: newApp, error: appErr } = await supabase
         .from('appuntamenti')
         .insert({
@@ -906,9 +909,9 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
           cliente_id: clienteId,
           veicolo_id: veicoloId,
           data_ora: new Date().toISOString(),
-          stato: 'prenotato',
+          stato: 'bozza_preventivo',
           priorita: 'normale',
-          problema: 'Preventivo da tariffario',
+          problema: 'In attesa di conferma dal cliente',
         })
         .select()
         .single();
@@ -2381,7 +2384,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
         {/* Conferma appuntamento: il cliente ha accettato, si fissano data/ora vere */}
         {!editMode && showConferma && (
           <div className="border-2 border-emerald-200 bg-emerald-50/40 rounded-xl p-3 space-y-2.5">
-            <div className="text-sm font-bold text-emerald-900">✅ Conferma appuntamento</div>
+            <div className="text-sm font-bold text-emerald-900">🗓️ Genera appuntamento</div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[11px] font-semibold text-gray-600 mb-1">Data</label>
@@ -2437,23 +2440,24 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
         {/* Azioni */}
         {!editMode && !showConferma && (
           <div className="flex gap-2">
-            {p.stato !== 'accettato' && (
+            {p.stato !== 'accettato' ? (
               <button
                 onClick={apriConferma}
                 className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 cursor-pointer transition-colors"
               >
-                ✅ Conferma appuntamento
+                🗓️ Genera appuntamento
+              </button>
+            ) : (
+              <button
+                onClick={async () => {
+                  const { data } = await supabase.from('appuntamenti').select('*, clienti(nome,tel), veicoli(marca,modello,targa)').eq('id', p.appuntamento_id).single();
+                  if (data && onSelectAppuntamento) onSelectAppuntamento(data);
+                }}
+                className="flex-1 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold text-sm hover:bg-blue-50 cursor-pointer transition-colors"
+              >
+                📅 Vai all'appuntamento
               </button>
             )}
-            <button
-              onClick={async () => {
-                const { data } = await supabase.from('appuntamenti').select('*, clienti(nome,tel), veicoli(marca,modello,targa)').eq('id', p.appuntamento_id).single();
-                if (data && onSelectAppuntamento) onSelectAppuntamento(data);
-              }}
-              className="flex-1 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold text-sm hover:bg-blue-50 cursor-pointer transition-colors"
-            >
-              📅 Vai all'appuntamento
-            </button>
           </div>
         )}
       </div>

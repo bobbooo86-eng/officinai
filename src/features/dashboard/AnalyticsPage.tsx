@@ -22,6 +22,7 @@ export function AnalyticsPage() {
           .from('appuntamenti')
           .select('*')
           .eq('officina_id', officina.id)
+          .neq('stato', 'bozza_preventivo')
           .order('data_ora', { ascending: false }),
         supabase
           .from('preventivi')

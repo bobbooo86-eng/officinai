@@ -159,6 +159,9 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
         .from('appuntamenti')
         .select('*, clienti(nome,tel), veicoli(marca,modello,targa)')
         .eq('officina_id', officina.id)
+        // Segnaposto di un preventivo non ancora confermato dal cliente:
+        // non e' un appuntamento reale, non deve comparire in calendario.
+        .neq('stato', 'bozza_preventivo')
         .order('data_ora', { ascending: true });
       setAppuntamenti(data || []);
       setLoading(false);

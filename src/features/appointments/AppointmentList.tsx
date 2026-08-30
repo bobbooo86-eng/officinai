@@ -21,6 +21,9 @@ export function AppointmentList({ onSelect, initialFiltro, searchQuery = '' }: {
         .from('appuntamenti')
         .select('*, clienti(nome,tel,email), veicoli(marca,modello,targa,km)')
         .eq('officina_id', officina.id)
+        // Segnaposto di un preventivo non ancora confermato: non e' un
+        // appuntamento reale, resta fuori dall'agenda.
+        .neq('stato', 'bozza_preventivo')
         .order('data_ora', { ascending: false }),
       supabase
         .from('fatture')
