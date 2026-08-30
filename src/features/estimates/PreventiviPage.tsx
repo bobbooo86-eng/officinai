@@ -1692,6 +1692,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
   const [editMode, setEditMode] = useState(false);
   const [editRighe, setEditRighe] = useState<PreventivoListItem['righe']>([]);
   const [editSconto, setEditSconto] = useState(0);
+  const [editClienteNome, setEditClienteNome] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Quando l'utente clicca di nuovo sul tab Preventivi mentre e' gia' attivo,
@@ -1872,6 +1873,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
     const startEdit = () => {
       setEditRighe(p.righe.map((r) => ({ ...r })));
       setEditSconto(p.sconto);
+      setEditClienteNome(p.cliente_nome || '');
       setEditMode(true);
     };
 
@@ -1879,6 +1881,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
       setEditMode(false);
       setEditRighe([]);
       setEditSconto(0);
+      setEditClienteNome('');
     };
 
     const saveEdit = async () => {
@@ -1896,11 +1899,33 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
           totale: nuovoTotale,
         })
         .eq('id', p.id);
-      setSavingEdit(false);
       if (updErr) {
+        setSavingEdit(false);
         alert('Errore salvataggio modifiche: ' + updErr.message);
         return;
       }
+
+      // Il nome cliente vive sulla tabella clienti, collegata tramite l'appuntamento.
+      const nuovoNome = editClienteNome.trim();
+      const clienteId = detailAppuntamento?.cliente_id;
+      const nomeCambiato = !!nuovoNome && nuovoNome !== (p.cliente_nome || '');
+      if (nomeCambiato && clienteId) {
+        const { error: cliErr } = await supabase
+          .from('clienti')
+          .update({ nome: nuovoNome })
+          .eq('id', clienteId);
+        if (cliErr) {
+          setSavingEdit(false);
+          alert('Preventivo salvato, ma il nome cliente non e stato aggiornato: ' + cliErr.message);
+          return;
+        }
+        setDetailAppuntamento((prev) =>
+          prev ? { ...prev, clienti: prev.clienti ? { ...prev.clienti, nome: nuovoNome } : prev.clienti } : prev
+        );
+      }
+      setSavingEdit(false);
+
+      const nomeFinale = nomeCambiato && clienteId ? nuovoNome : p.cliente_nome;
       const updated: PreventivoListItem = {
         ...p,
         righe: editRighe,
@@ -1908,9 +1933,19 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
         sconto: editSconto,
         iva: nuovaIva,
         totale: nuovoTotale,
+        cliente_nome: nomeFinale,
       };
       setSelectedPreventivo(updated);
-      setPreventivi((prev) => prev.map((x) => (x.id === p.id ? updated : x)));
+      setPreventivi((prev) =>
+        prev.map((x) => {
+          if (x.id === p.id) return updated;
+          // Rinominare il cliente si riflette su tutti i suoi preventivi.
+          if (nomeCambiato && clienteId && x.cliente_nome === p.cliente_nome) {
+            return { ...x, cliente_nome: nuovoNome };
+          }
+          return x;
+        })
+      );
       setEditMode(false);
     };
 
@@ -1924,7 +1959,17 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
             </svg>
           </button>
           <div className="flex-1">
-            <h2 className="font-bold text-gray-900 text-base">{p.cliente_nome}</h2>
+            {editMode ? (
+              <input
+                value={editClienteNome}
+                onChange={(e) => setEditClienteNome(e.target.value)}
+                placeholder="Nome cliente"
+                aria-label="Nome cliente"
+                className="w-full font-bold text-gray-900 text-base border border-blue-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            ) : (
+              <h2 className="font-bold text-gray-900 text-base">{p.cliente_nome}</h2>
+            )}
             <div className="flex items-center gap-2 mt-0.5">
               {p.veicolo_desc && <span className="text-xs text-gray-500">{p.veicolo_desc}</span>}
               {p.veicolo_targa && (
