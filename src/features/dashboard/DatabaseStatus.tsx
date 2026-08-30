@@ -140,8 +140,18 @@ export function DatabaseStatus() {
             <li>Apri <span className="font-semibold">supabase.com</span> ed entra nel progetto.</li>
             <li>Menu a sinistra: <span className="font-semibold">SQL Editor</span> → <span className="font-semibold">New query</span>.</li>
             <li>Incolla e premi <span className="font-semibold">Run</span>.</li>
+            <li>
+              Sempre su Supabase: <span className="font-semibold">Settings → API →
+              Restart server</span>, poi attendi circa 30 secondi.
+            </li>
             <li>Torna qui e premi di nuovo «Verifica database».</li>
           </ol>
+          <p className="text-[11px] text-amber-800 dark:text-amber-200 mb-2">
+            Il passaggio 5 serve perché, subito dopo aver creato tabelle o colonne,
+            Supabase può continuare a dichiararle inesistenti finché non riavvia
+            le API: in quel caso l'errore resta identico anche se lo script è
+            andato a buon fine.
+          </p>
           <p className="text-[11px] text-amber-800 dark:text-amber-200 mb-2">
             Lo script aggiunge solo cio' che manca: non cancella né modifica dati esistenti,
             e puo' essere eseguito più volte senza rischi.

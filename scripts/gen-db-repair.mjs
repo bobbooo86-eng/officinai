@@ -7,6 +7,7 @@ const SOURCES = [
   'supabase/migrations/013_fix_schema_drift.sql',
   'supabase/migrations/014_fix_rls_enum_trigger.sql',
   'supabase/migrations/015_stato_consegnato.sql',
+  'supabase/migrations/016_movimenti_minimale.sql',
 ];
 const TARGET = 'src/lib/dbRepairSql.ts';
 
