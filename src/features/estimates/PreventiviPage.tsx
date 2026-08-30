@@ -886,42 +886,31 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
       return;
     }
 
-    // Cerca se esiste un appuntamento aperto per questo veicolo
-    const { data: apps } = await supabase
+    // Ogni preventivo ha il suo segnaposto, mai un appuntamento reale
+    // gia' esistente per il veicolo: riusare un appuntamento aperto lo
+    // avrebbe reso visibile subito in agenda/calendario, che e' esattamente
+    // quello che non deve succedere finche' non si preme "Genera
+    // appuntamento". La riga serve solo perche' preventivi.appuntamento_id
+    // e' obbligatorio.
+    const { data: newApp, error: appErr } = await supabase
       .from('appuntamenti')
-      .select('id')
-      .eq('veicolo_id', veicoloId)
-      .in('stato', ['richiesta', 'prenotato', 'in_diagnosi', 'in_lavorazione', 'attesa_ricambi'])
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    let appuntamentoId = apps?.[0]?.id;
-
-    // Se non c'è appuntamento aperto, creane uno
-    if (!appuntamentoId) {
-      // Segnaposto, non un appuntamento reale: la riga serve solo perche'
-      // preventivi.appuntamento_id e' obbligatorio. Resta invisibile in
-      // agenda/calendario finche' non si preme "Conferma appuntamento".
-      const { data: newApp, error: appErr } = await supabase
-        .from('appuntamenti')
-        .insert({
-          officina_id: officina.id,
-          cliente_id: clienteId,
-          veicolo_id: veicoloId,
-          data_ora: new Date().toISOString(),
-          stato: 'bozza_preventivo',
-          priorita: 'normale',
-          problema: 'In attesa di conferma dal cliente',
-        })
-        .select()
-        .single();
-      if (appErr || !newApp) {
-        setSaving(false);
-        setSaveError('Appuntamento non creato: ' + (appErr?.message || 'errore sconosciuto'));
-        return;
-      }
-      appuntamentoId = newApp.id;
+      .insert({
+        officina_id: officina.id,
+        cliente_id: clienteId,
+        veicolo_id: veicoloId,
+        data_ora: new Date().toISOString(),
+        stato: 'bozza_preventivo',
+        priorita: 'normale',
+        problema: 'In attesa di conferma dal cliente',
+      })
+      .select()
+      .single();
+    if (appErr || !newApp) {
+      setSaving(false);
+      setSaveError('Appuntamento non creato: ' + (appErr?.message || 'errore sconosciuto'));
+      return;
     }
+    const appuntamentoId = newApp.id;
 
     if (appuntamentoId) {
       const { data: newPreventivo, error: prevErr } = await supabase
