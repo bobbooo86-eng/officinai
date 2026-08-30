@@ -54,6 +54,88 @@ const appDay = (dataOra?: string | null): string => (dataOra ? dateStr(new Date(
 /** Ora locale (0-23) dell'appuntamento. */
 const appHour = (dataOra?: string | null): number => (dataOra ? new Date(dataOra).getHours() : 9);
 
+/** Minuti dalla mezzanotte, in ora locale. */
+const appMinuti = (dataOra?: string | null): number => {
+  if (!dataOra) return 9 * 60;
+  const d = new Date(dataOra);
+  return d.getHours() * 60 + d.getMinutes();
+};
+
+// Griglia oraria della vista settimana
+const ORA_INIZIO = 7;
+const ORA_FINE = 20;
+const ALTEZZA_ORA = 56; // px per ora
+// Gli appuntamenti non hanno una durata memorizzata: si assume un'ora.
+const DURATA_DEFAULT = 60;
+
+export interface BloccoCalendario {
+  app: Appuntamento;
+  top: number;
+  altezza: number;
+  /** Posizione orizzontale entro la colonna del giorno, per gli orari sovrapposti. */
+  colonna: number;
+  colonneTotali: number;
+}
+
+/**
+ * Dispone gli appuntamenti di un giorno come blocchi posizionati sull'orario.
+ * Gli appuntamenti che si sovrappongono vengono affiancati dividendo la
+ * larghezza della colonna, invece di coprirsi a vicenda.
+ */
+export function disponiBlocchi(apps: Appuntamento[]): BloccoCalendario[] {
+  const primoMinuto = ORA_INIZIO * 60;
+  const ultimoMinuto = (ORA_FINE + 1) * 60;
+  const eventi = apps
+    .map((app) => {
+      // Un orario fuori dalla fascia mostrata verrebbe disegnato sopra o
+      // sotto la griglia: viene riportato dentro i limiti.
+      const inizio = Math.min(
+        Math.max(appMinuti(app.data_ora), primoMinuto),
+        ultimoMinuto - DURATA_DEFAULT
+      );
+      return { app, inizio, fine: inizio + DURATA_DEFAULT };
+    })
+    .sort((a, b) => a.inizio - b.inizio);
+
+  const blocchi: BloccoCalendario[] = [];
+  let gruppo: typeof eventi = [];
+
+  const chiudiGruppo = () => {
+    if (gruppo.length === 0) return;
+    // Assegna a ogni evento del gruppo la prima corsia libera.
+    const corsie: number[] = []; // fine dell'ultimo evento per corsia
+    const assegnate = gruppo.map((e) => {
+      let idx = corsie.findIndex((fine) => fine <= e.inizio);
+      if (idx === -1) { idx = corsie.length; }
+      corsie[idx] = e.fine;
+      return idx;
+    });
+    const totali = corsie.length;
+    gruppo.forEach((e, i) => {
+      const minutiDaInizio = e.inizio - ORA_INIZIO * 60;
+      blocchi.push({
+        app: e.app,
+        top: (minutiDaInizio / 60) * ALTEZZA_ORA,
+        altezza: (DURATA_DEFAULT / 60) * ALTEZZA_ORA,
+        colonna: assegnate[i],
+        colonneTotali: totali,
+      });
+    });
+    gruppo = [];
+  };
+
+  eventi.forEach((e) => {
+    // Un evento che inizia dopo la fine di tutti i precedenti apre un nuovo gruppo.
+    if (gruppo.length > 0 && e.inizio >= Math.max(...gruppo.map((g) => g.fine))) {
+      chiudiGruppo();
+    }
+    gruppo.push(e);
+  });
+  chiudiGruppo();
+
+  return blocchi;
+}
+
 const dayNames = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const dayNamesShort = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
 const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
@@ -369,60 +451,115 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
         </div>
       )}
 
-      {/* Vista SETTIMANA — un'unica colonna verticale di appuntamenti, giorni vuoti nascosti */}
+      {/* Vista SETTIMANA — griglia oraria: ore in verticale, giorni in colonna */}
       {viewMode === 'settimana' && (
-        <div className="space-y-3">
-          {weekApps.length === 0 && (
-            <div className="text-center py-8 text-sm text-gray-400">Nessun appuntamento questa settimana</div>
-          )}
-          {weekDates.map((d, i) => {
-            const ds = dateStr(d);
-            const dApps = weekApps.filter((a) => appDay(a.data_ora) === ds);
-            if (dApps.length === 0) return null;
-            const isToday = ds === todayStr;
-            return (
-              <div key={i}>
-                <div className={`text-xs font-bold mb-1 px-0.5 ${isToday ? 'text-blue-700' : 'text-gray-500'}`}>
-                  {dayNames[i]} {d.getDate()} {monthNamesShort[d.getMonth()]}
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          {/* Su telefono 7 colonne non ci stanno: la griglia scorre in orizzontale */}
+          <div className="overflow-x-auto">
+            <div className="min-w-[680px]">
+              {/* Intestazione giorni */}
+              <div className="flex sticky top-0 z-20 bg-white border-b border-gray-200">
+                <div className="w-12 shrink-0 border-r border-gray-100" />
+                {weekDates.map((d, i) => {
+                  const ds = dateStr(d);
+                  const isToday = ds === todayStr;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => { setSelectedDate(d); setViewMode('giorno'); }}
+                      className={`flex-1 py-1.5 text-center cursor-pointer border-r border-gray-100 last:border-r-0 transition-colors ${
+                        isToday ? 'bg-blue-50' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className={`text-[10px] font-medium ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>
+                        {dayNames[i]}
+                      </div>
+                      <div className={`text-sm font-bold ${isToday ? 'text-blue-700' : 'text-gray-700'}`}>
+                        {d.getDate()}/{d.getMonth() + 1}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Corpo: fascia oraria + colonne giorno */}
+              <div className="flex">
+                {/* Colonna delle ore */}
+                <div className="w-12 shrink-0 border-r border-gray-100">
+                  {Array.from({ length: ORA_FINE - ORA_INIZIO + 1 }, (_, i) => (
+                    <div
+                      key={i}
+                      className="text-[10px] text-gray-400 text-right pr-1.5 -translate-y-1.5"
+                      style={{ height: ALTEZZA_ORA }}
+                    >
+                      {(ORA_INIZIO + i).toString().padStart(2, '0')}:00
+                    </div>
+                  ))}
                 </div>
-                <div className="space-y-1.5">
-                  {dApps.map((app) => {
-                    const c = colorForApp(app.id);
-                    const stato = STATO_CONFIG[app.stato];
-                    return (
-                      <Card
-                        key={app.id}
-                        hover
-                        className="!p-2 !border-0"
-                        style={{ backgroundColor: bgForColor(c), borderLeft: `4px solid ${c}` }}
-                        onClick={() => onSelect(app)}
-                      >
-                        <div className="flex items-start gap-2">
-                          <div className="text-xs font-bold w-11 shrink-0 pt-0.5" style={{ color: c }}>
-                            {fmtOra(app.data_ora)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-semibold text-gray-900 truncate">
+
+                {weekDates.map((d, i) => {
+                  const ds = dateStr(d);
+                  const isToday = ds === todayStr;
+                  const blocchi = disponiBlocchi(weekApps.filter((a) => appDay(a.data_ora) === ds));
+                  return (
+                    <div
+                      key={i}
+                      className={`flex-1 relative border-r border-gray-100 last:border-r-0 ${isToday ? 'bg-blue-50/30' : ''}`}
+                      style={{ height: (ORA_FINE - ORA_INIZIO + 1) * ALTEZZA_ORA }}
+                    >
+                      {/* Righe orarie di sfondo */}
+                      {Array.from({ length: ORA_FINE - ORA_INIZIO + 1 }, (_, h) => (
+                        <div
+                          key={h}
+                          className="border-b border-gray-100"
+                          style={{ height: ALTEZZA_ORA }}
+                        />
+                      ))}
+
+                      {blocchi.map(({ app, top, altezza, colonna, colonneTotali }) => {
+                        const c = colorForApp(app.id);
+                        const larghezza = 100 / colonneTotali;
+                        return (
+                          <button
+                            key={app.id}
+                            onClick={() => onSelect(app)}
+                            title={`${fmtOra(app.data_ora)} — ${app.clienti?.nome || ''}${app.problema ? ` — ${app.problema}` : ''}`}
+                            className="absolute rounded-md px-1 py-0.5 text-left overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                            style={{
+                              top: top + 1,
+                              height: altezza - 2,
+                              left: `calc(${colonna * larghezza}% + 2px)`,
+                              width: `calc(${larghezza}% - 4px)`,
+                              backgroundColor: bgForColor(c),
+                              borderLeft: `3px solid ${c}`,
+                            }}
+                          >
+                            <div className="text-[9px] font-bold leading-tight" style={{ color: c }}>
+                              {fmtOra(app.data_ora)}
+                            </div>
+                            <div className="text-[10px] font-semibold text-gray-900 leading-tight truncate">
                               {app.clienti?.nome}
                             </div>
-                            <div className="text-[10px] text-gray-500 truncate">
-                              {app.veicoli?.marca} {app.veicoli?.modello} {app.veicoli?.targa && `• ${app.veicoli.targa}`}
-                            </div>
                             {app.problema && (
-                              <div className="text-[11px] text-gray-700 mt-1 font-medium line-clamp-2">
-                                🔧 {app.problema}
+                              <div className="text-[9px] text-gray-600 leading-tight truncate">
+                                {app.problema}
                               </div>
                             )}
-                          </div>
-                          <Badge color={stato.color} bg={stato.bg}>{stato.icon}</Badge>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          </div>
+
+          {weekApps.length === 0 && (
+            <div className="text-center py-4 text-xs text-gray-400 border-t border-gray-100">
+              Nessun appuntamento questa settimana
+            </div>
+          )}
         </div>
       )}
 
