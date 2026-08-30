@@ -343,57 +343,57 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
         </div>
       )}
 
-      {/* Vista SETTIMANA — colonne per giorno con card colorate */}
+      {/* Vista SETTIMANA — un'unica colonna verticale di appuntamenti, giorni vuoti nascosti */}
       {viewMode === 'settimana' && (
-        <div className="space-y-2">
+        <div className="space-y-3">
+          {weekApps.length === 0 && (
+            <div className="text-center py-8 text-sm text-gray-400">Nessun appuntamento questa settimana</div>
+          )}
           {weekDates.map((d, i) => {
             const ds = dateStr(d);
             const dApps = weekApps.filter((a) => a.data_ora?.startsWith(ds));
+            if (dApps.length === 0) return null;
             const isToday = ds === todayStr;
             return (
-              <div key={i} className={`rounded-xl border ${isToday ? 'border-blue-300 bg-blue-50/30' : 'border-gray-100'}`}>
-                <div className={`px-3 py-1.5 text-xs font-bold ${isToday ? 'text-blue-700' : 'text-gray-500'}`}>
+              <div key={i}>
+                <div className={`text-xs font-bold mb-1 px-0.5 ${isToday ? 'text-blue-700' : 'text-gray-500'}`}>
                   {dayNames[i]} {d.getDate()} {monthNamesShort[d.getMonth()]}
                 </div>
-                {dApps.length === 0 ? (
-                  <div className="px-3 pb-2 text-[11px] text-gray-400">Nessun appuntamento</div>
-                ) : (
-                  <div className="px-2 pb-2 space-y-1">
-                    {dApps.map((app) => {
-                      const c = colorForApp(app.id);
-                      const stato = STATO_CONFIG[app.stato];
-                      return (
-                        <Card
-                          key={app.id}
-                          hover
-                          className="!p-2 !border-0"
-                          style={{ backgroundColor: bgForColor(c), borderLeft: `4px solid ${c}` }}
-                          onClick={() => onSelect(app)}
-                        >
-                          <div className="flex items-start gap-2">
-                            <div className="text-xs font-bold w-11 shrink-0 pt-0.5" style={{ color: c }}>
-                              {fmtOra(app.data_ora)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-semibold text-gray-900 truncate">
-                                {app.clienti?.nome}
-                              </div>
-                              <div className="text-[10px] text-gray-500 truncate">
-                                {app.veicoli?.marca} {app.veicoli?.modello} {app.veicoli?.targa && `• ${app.veicoli.targa}`}
-                              </div>
-                              {app.problema && (
-                                <div className="text-[11px] text-gray-700 mt-1 font-medium line-clamp-2">
-                                  🔧 {app.problema}
-                                </div>
-                              )}
-                            </div>
-                            <Badge color={stato.color} bg={stato.bg}>{stato.icon}</Badge>
+                <div className="space-y-1.5">
+                  {dApps.map((app) => {
+                    const c = colorForApp(app.id);
+                    const stato = STATO_CONFIG[app.stato];
+                    return (
+                      <Card
+                        key={app.id}
+                        hover
+                        className="!p-2 !border-0"
+                        style={{ backgroundColor: bgForColor(c), borderLeft: `4px solid ${c}` }}
+                        onClick={() => onSelect(app)}
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="text-xs font-bold w-11 shrink-0 pt-0.5" style={{ color: c }}>
+                            {fmtOra(app.data_ora)}
                           </div>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                )}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold text-gray-900 truncate">
+                              {app.clienti?.nome}
+                            </div>
+                            <div className="text-[10px] text-gray-500 truncate">
+                              {app.veicoli?.marca} {app.veicoli?.modello} {app.veicoli?.targa && `• ${app.veicoli.targa}`}
+                            </div>
+                            {app.problema && (
+                              <div className="text-[11px] text-gray-700 mt-1 font-medium line-clamp-2">
+                                🔧 {app.problema}
+                              </div>
+                            )}
+                          </div>
+                          <Badge color={stato.color} bg={stato.bg}>{stato.icon}</Badge>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}

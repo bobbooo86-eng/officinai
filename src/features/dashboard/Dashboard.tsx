@@ -14,16 +14,8 @@ interface DashboardProps {
   onNavigateToGuida?: () => void;
 }
 
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 6) return 'Buonanotte';
-  if (h < 13) return 'Buongiorno';
-  if (h < 18) return 'Buon pomeriggio';
-  return 'Buonasera';
-}
-
 export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigateToPreventivi, onNavigateToGuida }: DashboardProps) {
-  const { officina, utente } = useAuthStore();
+  const { officina } = useAuthStore();
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [alertMagazzino, setAlertMagazzino] = useState<Magazzino[]>([]);
   const [obdCount, setObdCount] = useState(0);
@@ -176,9 +168,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
 
       <div className="flex items-center justify-between animate-fade-in">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-            {getGreeting()}, {utente?.nome?.split(' ')[0] || 'Officina'}
-          </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
