@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Card, Badge, Loader } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
-import { fmtEuro } from '@/lib/format';
+import { fmtEuro, dayKey } from '@/lib/format';
 import { STATO_CONFIG } from '@/lib/constants';
 import { useAuthStore } from '@/stores/authStore';
 import type { Appuntamento, Preventivo, Recensione } from '@/types/database';
@@ -72,7 +72,7 @@ export function AnalyticsPage() {
       dailyApps[key] = 0;
     }
     appsInPeriod.forEach((a) => {
-      const key = a.data_ora?.slice(0, 10);
+      const key = a.data_ora ? dayKey(a.data_ora) : undefined;
       if (key && dailyApps[key] !== undefined) {
         dailyApps[key]++;
       }
@@ -104,7 +104,7 @@ export function AnalyticsPage() {
 
     const header = 'Data,Stato,Problema,Cliente ID,Veicolo ID\n';
     const rows = appsInPeriod.map((a) =>
-      `${a.data_ora?.slice(0, 10)},${a.stato},"${(a.problema || '').replace(/"/g, '""')}",${a.cliente_id},${a.veicolo_id}`
+      `${a.data_ora ? dayKey(a.data_ora) : ''},${a.stato},"${(a.problema || '').replace(/"/g, '""')}",${a.cliente_id},${a.veicolo_id}`
     ).join('\n');
 
     const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });

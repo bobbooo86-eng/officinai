@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Card, Badge, Button, Loader } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG, TIPO_LAVORAZIONE, detectTipoLavorazione } from '@/lib/constants';
-import { fmtData, fmtOra } from '@/lib/format';
+import { fmtData, fmtOra, dayKey, todayKey } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { VehicleAlerts } from './VehicleAlerts';
 import type { Appuntamento, Magazzino } from '@/types/database';
@@ -30,9 +30,16 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
     try {
       setError(null);
 
-      const meseCorrente = new Date().toISOString().slice(0, 7);
+      // Mese in ora locale: con toISOString(), tra le 00:00 e le 02:00 del
+      // primo giorno del mese la query puntava ancora al mese precedente.
+      const oggiDate = new Date();
+      const meseCorrente = todayKey().slice(0, 7);
+      // Primo giorno del mese successivo: "${mese}-31" non esiste ad aprile,
+      // febbraio, giugno, settembre e novembre e Postgres rifiutava la query,
+      // azzerando il fatturato per 5 mesi l'anno.
+      const inizioMeseProssimo = dayKey(new Date(oggiDate.getFullYear(), oggiDate.getMonth() + 1, 1));
 
-      const [appsResult, magazzinoResult, obdResult, prevResult, fattureResult] = await Promise.all([
+      const [appsResult, magazzinoResult, obdResult, prevResult, fattureResult, tutteFattureResult] = await Promise.all([
         supabase
           .from('appuntamenti')
           .select('*, clienti(nome,tel,email), veicoli(marca,modello,targa,km)')
@@ -56,10 +63,17 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
           .select('totale, stato, appuntamento_id')
           .eq('officina_id', officina.id)
           .gte('data_emissione', `${meseCorrente}-01`)
-          .lte('data_emissione', `${meseCorrente}-31`),
+          .lt('data_emissione', inizioMeseProssimo),
+        // Serve l'elenco completo: i lavori "non fatturati" vanno confrontati
+        // con tutte le fatture, non solo con quelle del mese corrente.
+        supabase
+          .from('fatture')
+          .select('appuntamento_id')
+          .eq('officina_id', officina.id),
       ]);
 
       if (appsResult.error) throw appsResult.error;
+      if (fattureResult.error) throw fattureResult.error;
 
       const apps = appsResult.data || [];
       setAppuntamenti(apps);
@@ -74,7 +88,11 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         .filter((f: { stato: string }) => f.stato === 'pagata' || f.stato === 'emessa')
         .reduce((sum: number, f: { totale?: number }) => sum + (f.totale || 0), 0);
 
-      const fattureAppIds = new Set(fatture.map((f: { appuntamento_id?: string }) => f.appuntamento_id).filter(Boolean));
+      const fattureAppIds = new Set(
+        (tutteFattureResult.data || [])
+          .map((f: { appuntamento_id?: string }) => f.appuntamento_id)
+          .filter(Boolean)
+      );
       const nonFatturati = apps.filter(
         (a) => (a.stato === 'pronto' || a.stato === 'consegnato') && !fattureAppIds.has(a.id)
       ).length;
@@ -123,14 +141,17 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
     );
   }
 
-  const oggi = new Date().toISOString().slice(0, 10);
+  const oggi = todayKey();
   const appOggi = appuntamenti
-    .filter((a) => a.data_ora?.startsWith(oggi))
+    .filter((a) => a.data_ora && dayKey(a.data_ora) === oggi)
     .sort((a, b) => a.data_ora.localeCompare(b.data_ora));
   const richieste = appuntamenti.filter((a) => a.stato === 'richiesta');
   const autoInOfficina = appuntamenti.filter((a) => a.stato !== 'consegnato' && a.stato !== 'annullato' && a.stato !== 'richiesta');
   const pronti = appuntamenti.filter((a) => a.stato === 'pronto');
-  const recenti = appuntamenti.slice(0, 8);
+  // La lista e' ordinata per data decrescente: senza filtrare il futuro,
+  // "Attivita recente" mostrava le prenotazioni piu' lontane nel tempo.
+  const adesso = Date.now();
+  const recenti = appuntamenti.filter((a) => new Date(a.data_ora).getTime() <= adesso).slice(0, 8);
 
   const crediti = appuntamenti.filter((a) =>
     a.stato === 'consegnato' && a.pagamento && a.pagamento.stato !== 'pagato'

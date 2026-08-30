@@ -28,16 +28,21 @@ export function InventoryPage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [formError, setFormError] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
   const fetchItems = async () => {
-    if (!officina) return;
-    const { data } = await supabase
+    // Anche senza officina il loader va spento, altrimenti resta bloccato.
+    if (!officina) { setLoading(false); return; }
+    const { data, error } = await supabase
       .from('magazzino')
       .select('*')
       .eq('officina_id', officina.id)
       .order('nome');
+    // Un errore di lettura mostrato come "Magazzino vuoto" invita a
+    // reinserire articoli che in realta' esistono gia'.
+    setLoadError(error ? 'Errore nel caricamento del magazzino: ' + error.message : '');
     setItems(data || []);
     setLoading(false);
   };
@@ -82,17 +87,31 @@ export function InventoryPage() {
 
   const deleteItem = async (id: string, nome: string) => {
     if (!confirm(`Eliminare "${nome}" dal magazzino?`)) return;
-    await supabase.from('magazzino').delete().eq('id', id);
-    setItems(items.filter(i => i.id !== id));
+    const { error } = await supabase.from('magazzino').delete().eq('id', id);
+    if (error) {
+      setLoadError('Articolo non eliminato: ' + error.message);
+      return;
+    }
+    setItems((prev) => prev.filter(i => i.id !== id));
     showToast('Articolo eliminato');
   };
 
   const adjustQty = async (id: string, delta: number) => {
-    const item = items.find(i => i.id === id);
-    if (!item) return;
-    const newQty = Math.max(0, item.quantita + delta);
-    await supabase.from('magazzino').update({ quantita: newQty }).eq('id', id);
-    setItems(items.map(i => i.id === id ? { ...i, quantita: newQty } : i));
+    // Aggiorna partendo dallo stato corrente, non da quello catturato alla
+    // creazione dell'handler: con clic rapidi gli incrementi si perdevano.
+    let nuovaQta: number | null = null;
+    setItems((prev) => prev.map((i) => {
+      if (i.id !== id) return i;
+      nuovaQta = Math.max(0, i.quantita + delta);
+      return { ...i, quantita: nuovaQta };
+    }));
+    if (nuovaQta === null) return;
+    const { error } = await supabase.from('magazzino').update({ quantita: nuovaQta }).eq('id', id);
+    if (error) {
+      setLoadError('Quantita non aggiornata: ' + error.message);
+      // Riallinea con il database invece di lasciare a schermo un valore falso.
+      fetchItems();
+    }
   };
 
   if (loading) return <Loader text="Caricamento magazzino..." />;
@@ -240,11 +259,19 @@ export function InventoryPage() {
         </Card>
       )}
 
+      {loadError && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+          ⚠️ {loadError}
+        </div>
+      )}
+
       {/* Items list */}
       <div className="space-y-2">
         {filtered.length === 0 ? (
           <div className="text-center py-8 text-gray-400 text-sm">
-            {search || catFilter ? 'Nessun risultato' : 'Magazzino vuoto — aggiungi il primo articolo'}
+            {loadError
+              ? 'Impossibile leggere il magazzino.'
+              : search || catFilter ? 'Nessun risultato' : 'Magazzino vuoto — aggiungi il primo articolo'}
           </div>
         ) : (
           filtered.map((item) => {

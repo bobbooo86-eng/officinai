@@ -204,8 +204,10 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
     const { data: cliente, error } = await insertTolerant<Cliente>('clienti', {
       officina_id: officina.id,
       nome: nome.trim(),
-      email: email.trim() || null,
-      tel: tel.trim() || null,
+      // email e tel sono NOT NULL con default '': passare null darebbe
+      // errore 23502 e impedirebbe di salvare un cliente senza contatti.
+      email: email.trim(),
+      tel: tel.trim(),
       codice_fiscale: codiceFiscale.trim() || null,
       indirizzo: indirizzo.trim() || null,
       note: note.trim() || null,

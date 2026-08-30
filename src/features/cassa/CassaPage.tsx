@@ -40,7 +40,14 @@ const findTipo = (id: MovimentoTipo): TipoConfig =>
 const fmtEuro = (n: number) =>
   new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+// Data odierna in ora locale: con toISOString(), tra le 00:00 e le 02:00
+// italiane un nuovo movimento veniva datato al giorno precedente.
+const todayISO = () => {
+  const d = new Date();
+  const m = (d.getMonth() + 1).toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+};
 const monthKey = (d: string) => d.slice(0, 7);
 const currentMonthKey = () => todayISO().slice(0, 7);
 
@@ -77,12 +84,21 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
   const loadMovimenti = useCallback(async () => {
     if (!officinaId) return;
     setLoading(true);
-    const { data } = await supabase
+    const { data, error: loadErr } = await supabase
       .from('movimenti')
       .select('*')
       .eq('officina_id', officinaId)
       .order('data', { ascending: false })
       .order('created_at', { ascending: false });
+    // Senza questo controllo un errore di lettura veniva mostrato come
+    // "Nessun movimento", con saldo a zero per un mese che invece ne ha.
+    setError(
+      loadErr
+        ? isMissingTable(loadErr)
+          ? 'La tabella della cassa non esiste ancora nel database: applica le migrazioni Supabase e riprova.'
+          : 'Errore nel caricamento dei movimenti: ' + loadErr.message
+        : ''
+    );
     setMovimenti((data as Movimento[]) || []);
     setLoading(false);
   }, [officinaId]);
@@ -179,8 +195,12 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
 
   const eliminaMovimento = async (id: string) => {
     if (!confirm('Eliminare questo movimento?')) return;
-    await supabase.from('movimenti').delete().eq('id', id);
-    setMovimenti(movimenti.filter((m) => m.id !== id));
+    const { error: delErr } = await supabase.from('movimenti').delete().eq('id', id);
+    if (delErr) {
+      setError('Movimento non eliminato: ' + delErr.message);
+      return;
+    }
+    setMovimenti((prev) => prev.filter((m) => m.id !== id));
     showToast('Movimento eliminato');
   };
 
@@ -192,18 +212,26 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
     return movimenti.filter((m) => m.tipo === tab);
   }, [movimenti, tab]);
 
+  // Lista mostrata sotto: rispetta il filtro per tipo selezionato.
   const monthMovimenti = useMemo(
     () => filteredByTab.filter((m) => monthKey(m.data) === selectedMonth),
     [filteredByTab, selectedMonth]
   );
 
+  // Il riepilogo in cima rappresenta la cassa del mese nel suo complesso:
+  // se seguisse il filtro per tipo mostrerebbe incassi o spese sempre a zero.
+  const monthTutti = useMemo(
+    () => movimenti.filter((m) => monthKey(m.data) === selectedMonth),
+    [movimenti, selectedMonth]
+  );
+
   const totalIncassi = useMemo(
-    () => monthMovimenti.filter((m) => findTipo(m.tipo).sign === 1).reduce((a, m) => a + Number(m.importo), 0),
-    [monthMovimenti]
+    () => monthTutti.filter((m) => findTipo(m.tipo).sign === 1).reduce((a, m) => a + Number(m.importo), 0),
+    [monthTutti]
   );
   const totalSpese = useMemo(
-    () => monthMovimenti.filter((m) => findTipo(m.tipo).sign === -1).reduce((a, m) => a + Number(m.importo), 0),
-    [monthMovimenti]
+    () => monthTutti.filter((m) => findTipo(m.tipo).sign === -1).reduce((a, m) => a + Number(m.importo), 0),
+    [monthTutti]
   );
   const saldo = totalIncassi - totalSpese;
 

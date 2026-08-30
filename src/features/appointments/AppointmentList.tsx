@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, Badge, Loader } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG } from '@/lib/constants';
-import { fmtData, fmtOra } from '@/lib/format';
+import { fmtData, fmtOra, dayKey, todayKey } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import type { Appuntamento } from '@/types/database';
 
@@ -61,7 +61,7 @@ export function AppointmentList({ onSelect, initialFiltro, searchQuery = '' }: {
 
   if (loading) return <Loader text="Caricamento agenda..." />;
 
-  const oggi = new Date().toISOString().slice(0, 10);
+  const oggi = todayKey();
   const richieste = appuntamenti.filter((a) => a.stato === 'richiesta');
   const nonFatturatiCount = appuntamenti.filter(
     (a) => (a.stato === 'pronto' || a.stato === 'consegnato') && !fattureAppIds.has(a.id)
@@ -69,7 +69,7 @@ export function AppointmentList({ onSelect, initialFiltro, searchQuery = '' }: {
 
   const filtered = (() => {
     let list = appuntamenti;
-    if (filtro === 'oggi') list = list.filter((a) => a.data_ora?.startsWith(oggi));
+    if (filtro === 'oggi') list = list.filter((a) => a.data_ora && dayKey(a.data_ora) === oggi);
     else if (filtro === 'in_corso') list = list.filter((a) => a.stato === 'in_lavorazione' || a.stato === 'in_diagnosi');
     else if (filtro === 'non_fatturati') list = list.filter((a) => (a.stato === 'pronto' || a.stato === 'consegnato') && !fattureAppIds.has(a.id));
     else if (filtro !== 'tutti') list = list.filter((a) => a.stato === filtro);
