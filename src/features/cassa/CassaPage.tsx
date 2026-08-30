@@ -167,6 +167,23 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
     return () => { supabase.removeChannel(ch); };
   }, [officinaId, loadMovimenti]);
 
+  // Il database puo' diventare disponibile mentre l'app e' aperta, e altri
+  // dispositivi possono aggiungere movimenti: si ricontrolla al rientro
+  // sull'app e, finche' si lavora in locale, anche a intervalli regolari.
+  useEffect(() => {
+    const ricontrolla = () => {
+      if (document.visibilityState === 'visible') loadMovimenti();
+    };
+    window.addEventListener('focus', ricontrolla);
+    document.addEventListener('visibilitychange', ricontrolla);
+    const timer = soloLocale ? setInterval(ricontrolla, 60000) : null;
+    return () => {
+      window.removeEventListener('focus', ricontrolla);
+      document.removeEventListener('visibilitychange', ricontrolla);
+      if (timer) clearInterval(timer);
+    };
+  }, [loadMovimenti, soloLocale]);
+
   // Carica dipendenti (per select anticipo)
   useEffect(() => {
     if (!officinaId) return;
@@ -238,11 +255,9 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
       showToast('Movimento salvato su questo dispositivo');
     };
 
-    if (soloLocale) {
-      salvaInLocale();
-      return;
-    }
-
+    // Si prova sempre il database, anche se l'ultimo tentativo era fallito:
+    // cosi' appena la tabella diventa disponibile il salvataggio torna
+    // condiviso da solo, senza che l'utente debba fare nulla.
     const { error: err, skipped } = await insertTolerant(
       'movimenti', dati, ['officina_id', 'tipo', 'importo']
     );
@@ -494,13 +509,9 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
             >
               💾 Salvataggio su questo dispositivo · {dettagliLocale ? 'nascondi' : 'dettagli'}
             </button>
-            <button
-              onClick={loadMovimenti}
-              disabled={loading}
-              className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 disabled:opacity-50 cursor-pointer shrink-0"
-            >
-              {loading ? 'Verifica…' : '🔄 Sincronizza ora'}
-            </button>
+            <span className="text-[11px] text-slate-400 shrink-0">
+              {loading ? 'verifica…' : 'in attesa del database'}
+            </span>
           </div>
           {dettagliLocale && (
             <div className="text-[11px] text-slate-600 leading-snug mt-1.5">

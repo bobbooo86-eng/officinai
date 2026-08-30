@@ -40,4 +40,19 @@ CREATE POLICY movimenti_staff ON movimenti FOR ALL TO authenticated
   USING (officina_id IN (SELECT officina_id FROM utenti WHERE email = auth.jwt()->>'email'))
   WITH CHECK (officina_id IN (SELECT officina_id FROM utenti WHERE email = auth.jwt()->>'email'));
 
+-- Aggiornamento in tempo reale fra dispositivi. Richiede privilegi che
+-- l'utente della SQL Editor puo' non avere: l'errore viene ignorato, perche'
+-- senza realtime la cassa si aggiorna comunque riaprendo la schermata.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'movimenti'
+  ) THEN
+    EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE movimenti';
+  END IF;
+EXCEPTION WHEN others THEN
+  RAISE NOTICE 'Realtime non attivato su movimenti: %', SQLERRM;
+END $$;
+
 NOTIFY pgrst, 'reload schema';
