@@ -96,13 +96,15 @@ jobs:
           }
           echo "== Tabella movimenti =="
           verifica "SELECT count(*) FROM movimenti;"
-          echo "== Stati appuntamento disponibili =="
-          verifica "SELECT unnest(enum_range(NULL::stato_appuntamento));"
-          echo "== Colonne reali di utenti =="
-          verifica "SELECT column_name, data_type FROM information_schema.columns WHERE table_name='utenti' ORDER BY ordinal_position;"
-          echo "== Tipo reale della colonna appuntamenti.stato =="
-          verifica "SELECT column_name, data_type, udt_name FROM information_schema.columns WHERE table_name='appuntamenti' AND column_name='stato';"
-          echo "== Tipi enum esistenti nel database =="
-          verifica "SELECT typname FROM pg_type WHERE typtype='e';"
+          echo "== Tutte le colonne di tutte le tabelle applicative =="
+          verifica "SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema='public' AND table_name NOT LIKE 'pg_%' ORDER BY table_name, ordinal_position;"
+          echo "== Vincoli CHECK su appuntamenti =="
+          verifica "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'appuntamenti'::regclass AND contype='c';"
+          echo "== Vincoli CHECK su clienti =="
+          verifica "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'clienti'::regclass AND contype='c';"
+          echo "== Policy RLS esistenti =="
+          verifica "SELECT tablename, policyname, cmd FROM pg_policies WHERE schemaname='public' ORDER BY tablename, policyname;"
+          echo "== Funzioni get_user_officina_id / get_client_id esistenti =="
+          verifica "SELECT proname, pg_get_functiondef(oid) FROM pg_proc WHERE proname IN ('get_user_officina_id','get_client_id','get_client_officina_id');"
 
 # Test Management API: 2026-08-30T20:55Z
