@@ -25,8 +25,10 @@ async function eseguiControlli(): Promise<Controllo[]> {
     { tabella: 'movimenti', colonne: 'id,tipo,importo,data', etichetta: 'Cassa (tabella movimenti)' },
     { tabella: 'magazzino', colonne: 'id,nome,codice,categoria,quantita,quantita_minima,prezzo_acq,prezzo_vend', etichetta: 'Magazzino (colonne articoli)' },
     { tabella: 'clienti', colonne: 'id,nome,codice_fiscale,indirizzo,note', etichetta: 'Clienti (anagrafica completa)' },
-    { tabella: 'appuntamenti', colonne: 'id,data_ora,problema', etichetta: 'Appuntamenti' },
+    { tabella: 'appuntamenti', colonne: 'id,data_ora,problema,data_proposta,nota_officina,pagamento', etichetta: 'Appuntamenti (proposte e pagamenti)' },
     { tabella: 'preventivi', colonne: 'id,righe,totale', etichetta: 'Preventivi' },
+    { tabella: 'impostazioni_email', colonne: 'officina_id', etichetta: 'Impostazioni email' },
+    { tabella: 'contatti_landing', colonne: 'id', etichetta: 'Contatti dal sito' },
   ];
 
   for (const { tabella, colonne, etichetta } of tabelle) {
@@ -38,8 +40,19 @@ async function eseguiControlli(): Promise<Controllo[]> {
     });
   }
 
+  // Lo stato 'consegnato' e' usato dall'app per chiudere un lavoro: se manca
+  // dall'enum, la consegna del veicolo fallisce sempre.
+  {
+    const { error } = await supabase.from('appuntamenti').select('id').eq('stato', 'consegnato').limit(1);
+    esiti.push({
+      nome: 'Stato "consegnato" disponibile',
+      esito: error ? 'errore' : 'ok',
+      dettaglio: error ? error.message : 'Tutto a posto',
+    });
+  }
+
   // I bucket Storage servono per il logo e per il link del preventivo.
-  for (const bucket of ['preventivi', 'logos']) {
+  for (const bucket of ['preventivi', 'logos', 'foto-lavorazione']) {
     const { error } = await supabase.storage.from(bucket).list('', { limit: 1 });
     esiti.push({
       nome: `Storage: bucket ${bucket}`,

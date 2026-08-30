@@ -112,6 +112,8 @@ export function RegisterClientePage({ onGoLogin }: RegisterClientePageProps) {
         .from('clienti')
         .insert({
           officina_id: selectedOfficina.id,
+          // Collega la riga all'utente Auth per le policy RLS.
+          auth_id: userId,
           nome: `${nome} ${cognome}`,
           email: email,
           tel: telefono,

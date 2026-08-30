@@ -84,7 +84,7 @@ export function JoinOfficinaPage({ onGoLogin, onGoBack }: JoinOfficinaPageProps)
     setLoading(true);
 
     try {
-      const { error: authError } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
       });
@@ -111,6 +111,8 @@ export function JoinOfficinaPage({ onGoLogin, onGoBack }: JoinOfficinaPageProps)
 
       const { error: userErr } = await supabase.from('utenti').insert({
         officina_id: selectedOfficinaId,
+        // Collega la riga all'utente Auth per le policy RLS.
+        auth_id: authData.user?.id ?? null,
         nome: `${nome} ${cognome}`.trim(),
         email,
         tel: telefono,
