@@ -3,11 +3,14 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 // Migrazioni correttive incluse nello script mostrato dall'app, in ordine.
+// 014 e 015 sono escluse: scritte contro uno schema (001_rls_policies.sql)
+// che non corrisponde al database reale di produzione, verificato tramite
+// la Management API — RLS disattivata ovunque, nessuna delle funzioni o
+// dei trigger che presumevano.
 const SOURCES = [
   'supabase/migrations/013_fix_schema_drift.sql',
-  'supabase/migrations/014_fix_rls_enum_trigger.sql',
-  'supabase/migrations/015_stato_consegnato.sql',
   'supabase/migrations/016_movimenti_minimale.sql',
+  'supabase/migrations/017_impostazioni_email.sql',
 ];
 const TARGET = 'src/lib/dbRepairSql.ts';
 
