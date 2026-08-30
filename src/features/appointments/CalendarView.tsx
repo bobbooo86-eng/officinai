@@ -140,7 +140,7 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
     return slots;
   }, [dayApps]);
 
-  // Month grid (settimane × 7 colonne, Lun–Dom)
+  // Month grid (settimane × 7 colonne, Lun–Dom) — usato per lo strip di navigazione rapida
   const monthGrid = useMemo(() => {
     const y = selectedDate.getFullYear();
     const m = selectedDate.getMonth();
@@ -154,6 +154,21 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
       return d;
     });
   }, [selectedDate]);
+
+  // Tutti i giorni del mese selezionato, per la lista verticale sotto ogni giorno
+  const monthDaysList = useMemo(() => {
+    const y = selectedDate.getFullYear();
+    const m = selectedDate.getMonth();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    return Array.from({ length: daysInMonth }, (_, i) => new Date(y, m, i + 1));
+  }, [selectedDate]);
+
+  const monthApps = useMemo(() => {
+    const y = selectedDate.getFullYear();
+    const m = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
+    const prefix = `${y}-${m}`;
+    return searchFiltered.filter((a) => a.data_ora?.startsWith(prefix));
+  }, [searchFiltered, selectedDate]);
 
   // Year overview: per each of 12 months, count of appointments
   const yearData = useMemo(() => {
@@ -459,49 +474,60 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
             })}
           </div>
 
-          {/* Elenco appuntamenti del giorno selezionato sotto il calendario */}
-          {dayApps.length > 0 && (
-            <div className="mt-4">
-              <div className="text-xs font-bold text-gray-500 uppercase mb-2">
-                {selectedDate.getDate()} {monthNames[selectedDate.getMonth()]}
-              </div>
-              <div className="space-y-1">
-                {dayApps.map((app) => {
-                  const c = colorForApp(app.id);
-                  const stato = STATO_CONFIG[app.stato];
-                  return (
-                    <Card
-                      key={app.id}
-                      hover
-                      className="!p-2 !border-0"
-                      style={{ backgroundColor: bgForColor(c), borderLeft: `4px solid ${c}` }}
-                      onClick={() => onSelect(app)}
-                    >
-                      <div className="flex items-start gap-2">
-                        <div className="text-xs font-bold w-11 shrink-0 pt-0.5" style={{ color: c }}>
-                          {fmtOra(app.data_ora)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-semibold text-gray-900 truncate">
-                            {app.clienti?.nome}
-                          </div>
-                          <div className="text-[10px] text-gray-500 truncate">
-                            {app.veicoli?.marca} {app.veicoli?.modello}
-                          </div>
-                          {app.problema && (
-                            <div className="text-[11px] text-gray-700 mt-1 font-medium line-clamp-2">
-                              🔧 {app.problema}
+          {/* Tutti gli appuntamenti del mese, in colonna verticale sotto ogni giorno */}
+          <div className="mt-4 space-y-3">
+            {monthApps.length === 0 && (
+              <div className="text-center py-8 text-sm text-gray-400">Nessun appuntamento questo mese</div>
+            )}
+            {monthDaysList.map((d, i) => {
+              const ds = dateStr(d);
+              const dApps = monthApps.filter((a) => a.data_ora?.startsWith(ds));
+              if (dApps.length === 0) return null;
+              const isToday = ds === todayStr;
+              return (
+                <div key={i}>
+                  <div className={`text-xs font-bold mb-1 px-0.5 ${isToday ? 'text-blue-700' : 'text-gray-500'}`}>
+                    {dayNames[d.getDay() === 0 ? 6 : d.getDay() - 1]} {d.getDate()} {monthNamesShort[d.getMonth()]}
+                  </div>
+                  <div className="space-y-1.5">
+                    {dApps.map((app) => {
+                      const c = colorForApp(app.id);
+                      const stato = STATO_CONFIG[app.stato];
+                      return (
+                        <Card
+                          key={app.id}
+                          hover
+                          className="!p-2 !border-0"
+                          style={{ backgroundColor: bgForColor(c), borderLeft: `4px solid ${c}` }}
+                          onClick={() => onSelect(app)}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="text-xs font-bold w-11 shrink-0 pt-0.5" style={{ color: c }}>
+                              {fmtOra(app.data_ora)}
                             </div>
-                          )}
-                        </div>
-                        <Badge color={stato.color} bg={stato.bg}>{stato.icon}</Badge>
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-semibold text-gray-900 truncate">
+                                {app.clienti?.nome}
+                              </div>
+                              <div className="text-[10px] text-gray-500 truncate">
+                                {app.veicoli?.marca} {app.veicoli?.modello}
+                              </div>
+                              {app.problema && (
+                                <div className="text-[11px] text-gray-700 mt-1 font-medium line-clamp-2">
+                                  🔧 {app.problema}
+                                </div>
+                              )}
+                            </div>
+                            <Badge color={stato.color} bg={stato.bg}>{stato.icon}</Badge>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
