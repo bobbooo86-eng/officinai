@@ -98,5 +98,11 @@ jobs:
           verifica "SELECT count(*) FROM movimenti;"
           echo "== Stati appuntamento disponibili =="
           verifica "SELECT unnest(enum_range(NULL::stato_appuntamento));"
+          echo "== Colonne reali di utenti =="
+          verifica "SELECT column_name, data_type FROM information_schema.columns WHERE table_name='utenti' ORDER BY ordinal_position;"
+          echo "== Tipo reale della colonna appuntamenti.stato =="
+          verifica "SELECT column_name, data_type, udt_name FROM information_schema.columns WHERE table_name='appuntamenti' AND column_name='stato';"
+          echo "== Tipi enum esistenti nel database =="
+          verifica "SELECT typname FROM pg_type WHERE typtype='e';"
 
 # Test Management API: 2026-08-30T20:55Z
