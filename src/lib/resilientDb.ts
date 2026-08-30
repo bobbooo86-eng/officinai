@@ -21,13 +21,23 @@ function missingColumn(error: { message?: string } | null): string | null {
   return match ? match[1] : null;
 }
 
-/** True se l'errore indica che l'intera tabella non esiste nello schema. */
-export function isMissingTable(error: { message?: string } | null): boolean {
-  return !!error?.message && /Could not find the table/i.test(error.message);
+/**
+ * True se l'errore indica che l'intera tabella non esiste.
+ *
+ * PostgREST usa formulazioni diverse a seconda che il problema sia la cache
+ * dello schema (PGRST205) o direttamente Postgres (42P01, "relation ... does
+ * not exist"): vanno riconosciute entrambe, altrimenti il ripiego locale non
+ * si attiva e l'utente resta con un errore e basta.
+ */
+export function isMissingTable(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === 'PGRST205' || error.code === '42P01') return true;
+  const m = error.message || '';
+  return /Could not find the table/i.test(m) || /relation .* does not exist/i.test(m);
 }
 
 type Payload = Record<string, unknown>;
-type DbError = { message: string } | null;
+type DbError = { message: string; code?: string } | null;
 
 /**
  * Insert che riprova scartando le colonne non presenti nel database.

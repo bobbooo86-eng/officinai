@@ -143,4 +143,14 @@ describe('isMissingTable', () => {
     expect(isMissingTable(missingCol('prezzo_acq', 'magazzino'))).toBe(false);
     expect(isMissingTable(null)).toBe(false);
   });
+
+  it('riconosce anche il messaggio di Postgres', () => {
+    expect(isMissingTable({ message: 'relation "public.movimenti" does not exist' })).toBe(true);
+  });
+
+  it('riconosce i codici di errore, qualunque sia il messaggio', () => {
+    expect(isMissingTable({ message: 'errore generico', code: 'PGRST205' })).toBe(true);
+    expect(isMissingTable({ message: 'errore generico', code: '42P01' })).toBe(true);
+    expect(isMissingTable({ message: 'errore generico', code: '23505' })).toBe(false);
+  });
 });
