@@ -61,3 +61,5 @@ jobs:
           echo "Tutte le migrazioni correttive sono state applicate."
 
 # Ultima verifica: 2026-08-30T13:35Z
+
+# Test secret configurato: 2026-08-30T19:50Z
