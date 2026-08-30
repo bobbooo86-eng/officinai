@@ -75,13 +75,21 @@ const FILTRI: { id: Filtro; label: string }[] = [
 
 type View = 'list' | 'detail' | 'create';
 
-export function InvoicePage() {
+export function InvoicePage({ resetSignal }: { resetSignal?: number } = {}) {
   const { officina } = useAuthStore();
   const [view, setView] = useState<View>('list');
   const [fatture, setFatture] = useState<Fattura[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<Filtro>('tutte');
   const [selectedFattura, setSelectedFattura] = useState<Fattura | null>(null);
+
+  // Un nuovo tocco sul tab Fatture gia' attivo riporta alla lista.
+  useEffect(() => {
+    if (resetSignal === undefined) return;
+    setView('list');
+    setSelectedFattura(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal]);
 
   const fetchFatture = async () => {
     if (!officina) return;

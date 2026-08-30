@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { NotificationBell } from '@/features/notifications/NotificationBell';
 import { GlobalSearch } from '@/features/search/GlobalSearch';
@@ -17,6 +17,10 @@ interface LayoutProps {
 export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect, showSearch = false, fab }: LayoutProps) {
   const { utente, officina, cliente, userType, logout } = useAuthStore();
   const [showMenu, setShowMenu] = useState(false);
+  const [logoError, setLogoError] = useState(false);
+
+  // Un nuovo logo va ritentato anche se il precedente non si caricava.
+  useEffect(() => { setLogoError(false); }, [officina?.logo_url]);
 
   const userName = userType === 'officina' ? utente?.nome : cliente?.nome;
   const userRole = userType === 'officina' ? utente?.ruolo : 'cliente';
@@ -36,16 +40,12 @@ export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect,
         <div className="px-4 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm overflow-hidden">
-              {officina?.logo_url ? (
+              {officina?.logo_url && !logoError ? (
                 <img
                   src={officina.logo_url}
                   alt={officina.nome || 'Logo'}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    const img = e.target as HTMLImageElement;
-                    img.style.display = 'none';
-                    if (img.parentElement) img.parentElement.innerHTML = '<span class="text-lg">🔧</span>';
-                  }}
+                  onError={() => setLogoError(true)}
                 />
               ) : (
                 <span className="text-lg">🔧</span>

@@ -31,6 +31,7 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
 
   // Veicolo search/create
   const [veicoli, setVeicoli] = useState<Veicolo[]>([]);
+  const [loadingVeicoli, setLoadingVeicoli] = useState(false);
   const [selectedVeicolo, setSelectedVeicolo] = useState<Veicolo | null>(null);
   const [showNewVeicolo, setShowNewVeicolo] = useState(false);
   const [newTarga, setNewTarga] = useState('');
@@ -81,9 +82,13 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
     setNewTarga('');
     setNewMarca('');
     setNewModello('');
+    // Svuota subito la lista: durante il caricamento del nuovo cliente
+    // restavano visibili e cliccabili i veicoli del cliente precedente.
+    setVeicoli([]);
 
-    if (!selectedCliente) { setVeicoli([]); return; }
+    if (!selectedCliente) { setLoadingVeicoli(false); return; }
 
+    setLoadingVeicoli(true);
     let cancelled = false;
     (async () => {
       const { data } = await supabase
@@ -98,6 +103,7 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
         // Cliente senza veicoli: attiva il form nuovo veicolo cosi l'utente puo proseguire
         setShowNewVeicolo(true);
       }
+      setLoadingVeicoli(false);
     })();
     return () => { cancelled = true; };
   }, [selectedCliente]);
@@ -299,7 +305,7 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
       )}
 
       {/* 3. Dettagli appuntamento */}
-      {(selectedCliente || showNewCliente) && (selectedVeicolo || showNewVeicolo) && (
+      {(selectedCliente || showNewCliente) && (selectedVeicolo || showNewVeicolo || (!loadingVeicoli && veicoli.length === 0)) && (
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
           <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">📅 Dettagli</h3>
 
@@ -350,7 +356,7 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
       )}
 
       {/* Submit */}
-      {(selectedCliente || showNewCliente) && (selectedVeicolo || showNewVeicolo) && (
+      {(selectedCliente || showNewCliente) && (selectedVeicolo || showNewVeicolo || (!loadingVeicoli && veicoli.length === 0)) && (
         <button
           onClick={handleSubmit}
           disabled={loading}

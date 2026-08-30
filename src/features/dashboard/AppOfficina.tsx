@@ -38,7 +38,9 @@ const TABS = [
 
 export function AppOfficina() {
   const { officina } = useAuthStore();
-  const [activeTab, setActiveTab] = useHistoryState('officina-tab', 'home');
+  const [activeTab, setActiveTab] = useHistoryState('officina-tab', 'home', (v) =>
+    TABS.some((t) => t.id === v)
+  );
   const [selectedApp, setSelectedApp] = useState<Appuntamento | null>(null);
   const [subPage, setSubPage] = useState<'abbonamento' | 'impostazioni' | 'guida' | null>(null);
   const [agendaFiltro, setAgendaFiltro] = useState<string | undefined>(undefined);
@@ -52,14 +54,6 @@ export function AppOfficina() {
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [cassaOpenTipo, setCassaOpenTipo] = useState<MovimentoTipo | null>(null);
   const [resetSignal, setResetSignal] = useState(0);
-
-  // Se activeTab non e piu valido (es. utente aveva 'calendario' salvato in cronologia), torna ad 'agenda'
-  useEffect(() => {
-    if (!TABS.some((t) => t.id === activeTab)) {
-      setActiveTab('agenda');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const loadRichiesteCount = useCallback(async () => {
     if (!officina) return;
@@ -124,7 +118,7 @@ export function AppOfficina() {
 
   const handleSelectApp = (app: Appuntamento) => {
     setSelectedApp(app);
-    window.history.pushState({ selectedAppId: app.id, ...window.history.state }, '');
+    window.history.pushState({ ...window.history.state, selectedAppId: app.id }, '');
   };
 
   const handleBack = () => {
@@ -183,14 +177,14 @@ export function AppOfficina() {
 
   if (selectedApp) {
     return (
-      <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={handleTabChange} onSearchSelect={handleSearchSelect} showSearch>
+      <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={handleTabChange} onSearchSelect={handleSearchSelect}>
         <AppointmentDetail appuntamento={selectedApp} onBack={handleBack} />
       </Layout>
     );
   }
 
   return (
-    <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={handleTabChange} onSearchSelect={handleSearchSelect} fab={!showNewApp ? { onClick: handleFab } : undefined}>
+    <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={handleTabChange} onSearchSelect={handleSearchSelect} showSearch={activeTab === 'home'} fab={!showNewApp ? { onClick: handleFab } : undefined}>
       {activeTab === 'home' && (
         <Dashboard
           onSelectAppuntamento={handleSelectApp}
@@ -285,7 +279,7 @@ export function AppOfficina() {
       {activeTab === 'clienti' && <CustomersPage initialClienteId={selectedClienteId} resetSignal={resetSignal} />}
       {activeTab === 'magazzino' && <Suspense fallback={<PageSkeleton />}><InventoryPage /></Suspense>}
       {activeTab === 'analytics' && <Suspense fallback={<PageSkeleton />}><AnalyticsPage /></Suspense>}
-      {activeTab === 'fatture' && <Suspense fallback={<PageSkeleton />}><InvoicePage /></Suspense>}
+      {activeTab === 'fatture' && <Suspense fallback={<PageSkeleton />}><InvoicePage resetSignal={resetSignal} /></Suspense>}
       {activeTab === 'obd' && <Suspense fallback={<PageSkeleton />}><OBDScansPage /></Suspense>}
       {activeTab === 'cassa' && (
         <Suspense fallback={<PageSkeleton />}>
