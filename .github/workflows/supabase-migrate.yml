@@ -103,5 +103,13 @@ jobs:
           verifica "SELECT count(*) FROM movimenti;"
           echo "== Tabella impostazioni_email =="
           verifica "SELECT count(*) FROM impostazioni_email;"
+          echo "== DIAGNOSI: trigger su appuntamenti =="
+          verifica "SELECT tgname, pg_get_triggerdef(oid) AS def FROM pg_trigger WHERE tgrelid = 'appuntamenti'::regclass AND NOT tgisinternal;"
+          echo "== DIAGNOSI: funzioni dei trigger =="
+          verifica "SELECT p.proname, pg_get_functiondef(p.oid) AS def FROM pg_proc p JOIN pg_trigger t ON t.tgfoid = p.oid WHERE t.tgrelid = 'appuntamenti'::regclass AND NOT t.tgisinternal;"
+          echo "== DIAGNOSI: righe bozza_preventivo recenti =="
+          verifica "SELECT id, stato, problema, created_at FROM appuntamenti WHERE problema = 'In attesa di conferma dal cliente' ORDER BY created_at DESC LIMIT 5;"
+          echo "== DIAGNOSI: esiste vincolo CHECK su stato? =="
+          verifica "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'appuntamenti'::regclass AND contype = 'c';"
 
-# Test Management API: 2026-08-30T20:55Z
+# Test Management API: 2026-08-30T21:10Z (diagnosi trigger stato preventivi)
