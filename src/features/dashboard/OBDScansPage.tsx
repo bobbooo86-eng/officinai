@@ -64,7 +64,10 @@ export function OBDScansPage() {
     // Mark unread as read
     const unread = (data || []).filter(s => !s.letto).map(s => s.id);
     if (unread.length > 0) {
-      await supabase.from('scansioni_obd').update({ letto: true }).in('id', unread);
+      // Errore ignorato di proposito: segnare come lette e' un dettaglio di
+      // comodita', non deve impedire di vedere le scansioni.
+      const { error } = await supabase.from('scansioni_obd').update({ letto: true }).in('id', unread);
+      if (error) console.warn('Scansioni non segnate come lette:', error.message);
     }
   }, [officina]);
 

@@ -97,26 +97,30 @@ export function SettingsPage() {
     if (id === utente?.id) return;
     const action = current ? 'disattivare' : 'approvare/riattivare';
     if (!confirm(`Vuoi ${action} questo membro del team?`)) return;
-    await supabase.from('utenti').update({ attivo: !current }).eq('id', id);
+    const { error } = await supabase.from('utenti').update({ attivo: !current }).eq('id', id);
+    if (error) { showTeamToast('Non riuscito: ' + error.message); return; }
     setTeam(team.map((m) => (m.id === id ? { ...m, attivo: !current } : m)));
     showTeamToast(current ? 'Membro disattivato' : 'Membro attivato');
   };
 
   const updateMemberRole = async (id: string, ruolo: string) => {
-    await supabase.from('utenti').update({ ruolo }).eq('id', id);
+    const { error } = await supabase.from('utenti').update({ ruolo }).eq('id', id);
+    if (error) { showTeamToast('Ruolo non aggiornato: ' + error.message); return; }
     setTeam(team.map((m) => (m.id === id ? { ...m, ruolo: ruolo as Utente['ruolo'] } : m)));
     showTeamToast('Ruolo aggiornato');
   };
 
   const updateMemberField = async (id: string, field: string, value: string) => {
-    await supabase.from('utenti').update({ [field]: value }).eq('id', id);
+    const { error } = await supabase.from('utenti').update({ [field]: value }).eq('id', id);
+    if (error) { showTeamToast('Modifica non salvata: ' + error.message); return; }
     setTeam(team.map((m) => (m.id === id ? { ...m, [field]: value } : m)));
   };
 
   const deleteMember = async (id: string, nome: string) => {
     if (id === utente?.id) return;
     if (!confirm(`Eliminare definitivamente ${nome} dal team? Questa azione è irreversibile.`)) return;
-    await supabase.from('utenti').delete().eq('id', id);
+    const { error } = await supabase.from('utenti').delete().eq('id', id);
+    if (error) { showTeamToast('Non rimosso: ' + error.message); return; }
     setTeam(team.filter((m) => m.id !== id));
     showTeamToast(`${nome} rimosso dal team`);
   };

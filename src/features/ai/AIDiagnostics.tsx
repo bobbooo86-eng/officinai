@@ -180,7 +180,7 @@ export function AIDiagnostics({ appuntamento }: AIDiagnosticsProps) {
     const subtotale = righe.reduce((s, r) => s + r.qta * r.prezzo, 0);
     const iva = subtotale * 0.22;
 
-    await supabase.from('preventivi').insert({
+    const { error } = await supabase.from('preventivi').insert({
       appuntamento_id: appuntamento.id,
       righe,
       subtotale,
@@ -190,6 +190,12 @@ export function AIDiagnostics({ appuntamento }: AIDiagnosticsProps) {
       stato: 'bozza',
     });
 
+    // L'avviso di riuscita partiva comunque, mandando l'utente a cercare
+    // un preventivo che non era stato creato.
+    if (error) {
+      alert('Preventivo non generato: ' + error.message);
+      return;
+    }
     alert('Preventivo generato! Vai al tab Preventivo per vederlo.');
   };
 

@@ -298,11 +298,14 @@ export function FatturaElettronica({ fattura, officina, onUpdate }: FatturaElett
       .select()
       .single();
 
-    if (!error && data && onUpdate) {
-      onUpdate(data as FatturaData);
-    }
-
     setSending(false);
+    // Il messaggio di invio riuscito compariva anche quando l'aggiornamento
+    // falliva, facendo credere che la fattura fosse partita.
+    if (error || !data) {
+      showToast('Invio non registrato: ' + (error?.message || 'nessuna riga aggiornata'));
+      return;
+    }
+    if (onUpdate) onUpdate(data as FatturaData);
     showToast('Fattura inviata al Sistema di Interscambio');
   };
 

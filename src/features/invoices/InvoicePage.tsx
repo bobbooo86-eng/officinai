@@ -417,33 +417,46 @@ function DettaglioFattura({
 }) {
   const { officina } = useAuthStore();
   const [updating, setUpdating] = useState(false);
+  const [erroreAggiorna, setErroreAggiorna] = useState('');
   const [generating, setGenerating] = useState(false);
   const [note, setNote] = useState(fattura.note || '');
 
   const cambiaStato = async (nuovoStato: FatturaStato) => {
     setUpdating(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('fatture')
       .update({ stato: nuovoStato })
       .eq('id', fattura.id)
       .select()
       .single();
 
-    if (data) onUpdate(data as Fattura);
     setUpdating(false);
+    // Senza questo controllo il pulsante sembrava inerte: nessun cambiamento
+    // a schermo e nessuna spiegazione.
+    if (error || !data) {
+      setErroreAggiorna('Stato non aggiornato: ' + (error?.message || 'nessuna riga modificata'));
+      return;
+    }
+    setErroreAggiorna('');
+    onUpdate(data as Fattura);
   };
 
   const salvaNote = async () => {
     setUpdating(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('fatture')
       .update({ note })
       .eq('id', fattura.id)
       .select()
       .single();
 
-    if (data) onUpdate(data as Fattura);
     setUpdating(false);
+    if (error || !data) {
+      setErroreAggiorna('Note non salvate: ' + (error?.message || 'nessuna riga modificata'));
+      return;
+    }
+    setErroreAggiorna('');
+    onUpdate(data as Fattura);
   };
 
   const cfg = FATTURA_STATO_CONFIG[fattura.stato];
@@ -589,6 +602,11 @@ function DettaglioFattura({
 
   return (
     <div className="p-4 space-y-4">
+      {erroreAggiorna && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+          ⚠️ {erroreAggiorna}
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer">

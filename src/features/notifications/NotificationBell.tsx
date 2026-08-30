@@ -213,7 +213,10 @@ export function NotificationBell() {
 
   // Mark single notification as read
   const segnaLetta = async (id: string) => {
-    await supabase.from('notifiche').update({ letto: true }).eq('id', id);
+    const { error } = await supabase.from('notifiche').update({ letto: true }).eq('id', id);
+    // Se la scrittura fallisce la notifica tornerebbe non letta al ricarico:
+    // meglio non farla sparire dall'elenco.
+    if (error) return;
     setNotifiche((prev) =>
       prev.map((n) => (n.id === id ? { ...n, letto: true } : n))
     );
@@ -222,13 +225,14 @@ export function NotificationBell() {
   // Mark all as read
   const segnaTuttoLetto = async () => {
     if (!officinaId || !utenteId) return;
-    await supabase
+    const { error } = await supabase
       .from('notifiche')
       .update({ letto: true })
       .eq('officina_id', officinaId)
       .eq(filterColumn, utenteId)
       .eq('letto', false);
 
+    if (error) return;
     setNotifiche((prev) => prev.map((n) => ({ ...n, letto: true })));
   };
 
