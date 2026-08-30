@@ -268,6 +268,11 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
               </div>
               <button onClick={() => setSelectedVeicolo(null)} className="text-xs text-emerald-600 hover:text-emerald-800 cursor-pointer">Cambia</button>
             </div>
+          ) : loadingVeicoli ? (
+            // Senza questo stato il form "nuovo veicolo" comparirebbe subito
+            // mentre il pulsante Salva e' ancora nascosto, ripresentando in
+            // apparenza il vecchio bug del tasto mancante.
+            <div className="py-3 text-center text-xs text-gray-400">Caricamento veicoli…</div>
           ) : showNewVeicolo || veicoli.length === 0 ? (
             <div className="space-y-2">
               {veicoli.length > 0 && (
