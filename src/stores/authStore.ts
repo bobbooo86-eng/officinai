@@ -130,12 +130,17 @@ export const useAuthStore = create<AuthState>((set) => ({
         // una tantum, con la password appena digitata.
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
 
-        if (signUpError?.message.includes('already registered')) {
-          // L'account Auth esiste gia': il fallimento del login sopra
-          // significa che la password digitata e' sbagliata. Mostrarlo
-          // chiaramente invece di procedere con una sessione non reale,
-          // che farebbe fallire in silenzio ogni scrittura protetta piu'
-          // avanti (es. "row-level security policy" nella Cassa).
+        // Quando l'account esiste gia' ed e' confermato, Supabase non
+        // restituisce un errore "already registered" (per non rivelare
+        // quali email sono registrate): risponde con un utente senza
+        // sessione e senza identities. E' cosi', non con l'errore, che va
+        // riconosciuto che il fallimento del login sopra era una password
+        // sbagliata, non un account da creare.
+        const giaRegistrato =
+          signUpError?.message.includes('already registered') ||
+          (!signUpError && signUpData?.user && signUpData.user.identities?.length === 0);
+
+        if (giaRegistrato) {
           return { error: 'Password errata.' };
         }
         if (signUpError) {
@@ -217,10 +222,16 @@ export const useAuthStore = create<AuthState>((set) => ({
 
         // Come per lo staff: un account gia' esistente + login fallito
         // significa password sbagliata, non un cliente da far entrare lo
-        // stesso senza autenticazione reale.
+        // stesso senza autenticazione reale. Supabase non segnala sempre
+        // questo caso con un errore (vedi loginOfficina): va riconosciuto
+        // anche da un utente senza sessione e senza identities.
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
 
-        if (signUpError?.message.includes('already registered')) {
+        const giaRegistrato =
+          signUpError?.message.includes('already registered') ||
+          (!signUpError && signUpData?.user && signUpData.user.identities?.length === 0);
+
+        if (giaRegistrato) {
           return { error: 'Password errata.' };
         }
         if (signUpError) {
