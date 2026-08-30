@@ -106,5 +106,9 @@ jobs:
           verifica "SELECT tablename, policyname, cmd FROM pg_policies WHERE schemaname='public' ORDER BY tablename, policyname;"
           echo "== Funzioni get_user_officina_id / get_client_id esistenti =="
           verifica "SELECT proname, pg_get_functiondef(oid) FROM pg_proc WHERE proname IN ('get_user_officina_id','get_client_id','get_client_officina_id');"
+          echo "== RLS abilitata sulle tabelle principali =="
+          verifica "SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname IN ('utenti','clienti','veicoli','appuntamenti','preventivi','magazzino','foglio_lavoro','ricambi_usati','difetti','foto','messaggi');"
+          echo "== Trigger su appuntamenti =="
+          verifica "SELECT tgname, pg_get_triggerdef(oid) FROM pg_trigger WHERE tgrelid = 'appuntamenti'::regclass AND NOT tgisinternal;"
 
 # Test Management API: 2026-08-30T20:55Z
