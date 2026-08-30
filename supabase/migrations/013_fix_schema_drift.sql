@@ -57,6 +57,10 @@ DROP POLICY IF EXISTS movimenti_staff_delete ON movimenti;
 CREATE POLICY movimenti_staff_delete ON movimenti FOR DELETE TO authenticated
   USING (officina_id IN (SELECT officina_id FROM utenti WHERE email = auth.jwt()->>'email' AND attivo = true));
 
+-- L'aggiunta alla publication richiede privilegi che l'utente della SQL
+-- Editor puo' non avere: senza gestione dell'errore l'intero script si
+-- interromperebbe qui, lasciando non applicato tutto cio' che segue.
+-- L'aggiornamento in tempo reale e' un extra, la tabella funziona comunque.
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -65,6 +69,8 @@ BEGIN
   ) THEN
     EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE movimenti';
   END IF;
+EXCEPTION WHEN others THEN
+  RAISE NOTICE 'Realtime non attivato su movimenti: %', SQLERRM;
 END $$;
 
 -- ---- NOTIFICHE: aggiunge supporto clienti (potrebbe mancare come per magazzino/movimenti) ----

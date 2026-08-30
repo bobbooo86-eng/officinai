@@ -95,7 +95,7 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
     setError(
       loadErr
         ? isMissingTable(loadErr)
-          ? 'La tabella della cassa non esiste ancora nel database: applica le migrazioni Supabase e riprova.'
+          ? 'La tabella della cassa non esiste ancora nel database. Vai su Altro > Impostazioni > Stato database e premi "Copia SQL di riparazione": lo script va incollato ed eseguito nel SQL Editor di Supabase.'
           : 'Errore nel caricamento dei movimenti: ' + loadErr.message
         : ''
     );
@@ -178,7 +178,7 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
     if (err) {
       setError(
         isMissingTable(err)
-          ? 'La tabella della cassa non esiste ancora nel database: applica le migrazioni Supabase (supabase/migrations/013_fix_schema_drift.sql) e riprova.'
+          ? 'La tabella della cassa non esiste ancora nel database. Vai su Altro > Impostazioni > Stato database e premi "Copia SQL di riparazione": lo script va incollato ed eseguito nel SQL Editor di Supabase.'
           : 'Errore: ' + err.message
       );
       return;
