@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, Badge, Button, Loader, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
+import { insertTolerant, updateTolerant, isMissingTable } from '@/lib/resilientDb';
 import { fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import type { Magazzino } from '@/types/database';
@@ -47,46 +48,34 @@ export function InventoryPage() {
     if (!officina || !editItem.nome?.trim()) return;
     setSaving(true);
     setFormError('');
-    if (editItem.id) {
-      // Update
-      const { error } = await supabase.from('magazzino')
-        .update({
-          nome: editItem.nome, codice: editItem.codice || '',
-          categoria: editItem.categoria || 'Altro',
-          quantita: editItem.quantita || 0,
-          quantita_minima: editItem.quantita_minima || 0,
-          prezzo_acq: editItem.prezzo_acq || 0,
-          prezzo_vend: editItem.prezzo_vend || 0,
-        })
-        .eq('id', editItem.id);
-      if (error) {
-        setFormError('Errore aggiornamento: ' + error.message);
-      } else {
-        showToast('Articolo aggiornato');
-        setShowForm(false);
-        setEditItem(emptyItem);
-        fetchItems();
-      }
+    const campi = {
+      nome: editItem.nome, codice: editItem.codice || '',
+      categoria: editItem.categoria || 'Altro',
+      quantita: editItem.quantita || 0,
+      quantita_minima: editItem.quantita_minima || 0,
+      prezzo_acq: editItem.prezzo_acq || 0,
+      prezzo_vend: editItem.prezzo_vend || 0,
+    };
+
+    const { error, skipped } = editItem.id
+      ? await updateTolerant('magazzino', campi, { column: 'id', value: editItem.id }, ['nome'])
+      : await insertTolerant('magazzino', { officina_id: officina.id, ...campi }, ['nome', 'officina_id']);
+
+    if (error) {
+      setFormError(
+        isMissingTable(error)
+          ? 'La tabella magazzino non esiste ancora nel database. Applica le migrazioni Supabase.'
+          : (editItem.id ? 'Errore aggiornamento: ' : 'Errore salvataggio: ') + error.message
+      );
     } else {
-      // Insert
-      const { error } = await supabase.from('magazzino')
-        .insert({
-          officina_id: officina.id,
-          nome: editItem.nome, codice: editItem.codice || '',
-          categoria: editItem.categoria || 'Altro',
-          quantita: editItem.quantita || 0,
-          quantita_minima: editItem.quantita_minima || 0,
-          prezzo_acq: editItem.prezzo_acq || 0,
-          prezzo_vend: editItem.prezzo_vend || 0,
-        });
-      if (error) {
-        setFormError('Errore salvataggio: ' + error.message);
-      } else {
-        showToast('Articolo aggiunto');
-        setShowForm(false);
-        setEditItem(emptyItem);
-        fetchItems();
-      }
+      showToast(
+        skipped.length > 0
+          ? `Articolo salvato (campi non supportati dal database: ${skipped.join(', ')})`
+          : editItem.id ? 'Articolo aggiornato' : 'Articolo aggiunto'
+      );
+      setShowForm(false);
+      setEditItem(emptyItem);
+      fetchItems();
     }
     setSaving(false);
   };

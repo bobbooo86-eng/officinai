@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, Button } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
+import { insertTolerant, isMissingTable } from '@/lib/resilientDb';
 import { useAuthStore } from '@/stores/authStore';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente } from '@/types/database';
 
@@ -138,29 +139,41 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
 
   const salvaMovimento = async () => {
     if (!officinaId) return;
-    if (!newImporto || parseFloat(newImporto) <= 0) { setError('Inserisci un importo valido'); return; }
+    const importo = parseFloat((newImporto || '').replace(',', '.'));
+    if (!Number.isFinite(importo) || importo <= 0) { setError('Inserisci un importo valido'); return; }
     if (!newDescrizione.trim()) { setError('Inserisci una descrizione'); return; }
     if ((newTipo === 'anticipo_dipendente' || newTipo === 'spesa_dipendente') && !newDipendenteId) {
       setError('Seleziona il dipendente'); return;
     }
     setSaving(true);
     setError('');
-    const { error: err } = await supabase.from('movimenti').insert({
+    const { error: err, skipped } = await insertTolerant('movimenti', {
       officina_id: officinaId,
       tipo: newTipo,
-      importo: parseFloat(newImporto.replace(',', '.')),
+      importo,
       descrizione: newDescrizione.trim(),
       metodo_pagamento: newMetodo,
       data: newData,
       dipendente_id: newDipendenteId || null,
       created_by: utente?.id || null,
       note: newNote.trim() || null,
-    });
+    }, ['officina_id', 'tipo', 'importo']);
     setSaving(false);
-    if (err) { setError('Errore: ' + err.message); return; }
+    if (err) {
+      setError(
+        isMissingTable(err)
+          ? 'La tabella della cassa non esiste ancora nel database: applica le migrazioni Supabase (supabase/migrations/013_fix_schema_drift.sql) e riprova.'
+          : 'Errore: ' + err.message
+      );
+      return;
+    }
     resetForm();
     setShowForm(false);
-    showToast('Movimento registrato');
+    showToast(
+      skipped.length > 0
+        ? `Movimento registrato (campi non supportati dal database: ${skipped.join(', ')})`
+        : 'Movimento registrato'
+    );
     loadMovimenti();
   };
 
