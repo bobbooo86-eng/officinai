@@ -75,7 +75,7 @@ export function PhotoGallery({ appuntamentoId, readOnly = false }: PhotoGalleryP
           .getPublicUrl(fileName);
 
         // Save to database
-        await supabase.from('foto').insert({
+        const { error: dbError } = await supabase.from('foto').insert({
           appuntamento_id: appuntamentoId,
           categoria,
           url: urlData.publicUrl,
@@ -83,6 +83,14 @@ export function PhotoGallery({ appuntamentoId, readOnly = false }: PhotoGalleryP
           visibile_cliente: true,
           tecnico_id: utente?.id || null,
         });
+
+        // Il file finiva su Storage ma senza la riga a database la foto non
+        // compariva mai, pur risultando caricata con successo.
+        if (dbError) {
+          console.error('Foto non registrata:', dbError);
+          failedCount++;
+          await supabase.storage.from('foto-lavorazione').remove([fileName]);
+        }
       } catch (err) {
         console.error('Upload failed:', err);
         failedCount++;

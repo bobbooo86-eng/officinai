@@ -1298,11 +1298,17 @@ function TabFoglioLavoro({ appuntamentoId, statoAppuntamento, veicolo, clienteNo
   }, [appuntamentoId]);
 
   const creaFoglio = async () => {
-    const { data } = await supabase
+    // tecnico_id e' NOT NULL: senza utente in sessione l'insert verrebbe
+    // rifiutato e il pulsante sembrerebbe semplicemente non funzionare.
+    if (!utente?.id) {
+      showToast('Sessione utente non disponibile: rientra e riprova.');
+      return;
+    }
+    const { data, error } = await supabase
       .from('foglio_lavoro')
       .insert({
         appuntamento_id: appuntamentoId,
-        tecnico_id: utente?.id,
+        tecnico_id: utente.id,
         inizio: new Date().toISOString(),
         tempo_lavoro_ms: 0,
         pause: 0,
@@ -1310,7 +1316,11 @@ function TabFoglioLavoro({ appuntamentoId, statoAppuntamento, veicolo, clienteNo
       })
       .select()
       .single();
-    if (data) {
+    if (error || !data) {
+      showToast('Foglio lavoro non creato: ' + (error?.message || 'errore sconosciuto'));
+      return;
+    }
+    {
       setFoglio(data);
       // Auto-set stato to in_lavorazione if currently in_diagnosi
       if (statoAppuntamento === 'in_diagnosi') {

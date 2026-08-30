@@ -281,8 +281,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     if (!officina?.id) return;
     // Save new team members (skip the owner who already exists)
     const newMembers = teamMembers.filter((m) => m.email !== utente?.email);
+    const membriFalliti: string[] = [];
     for (const member of newMembers) {
-      await supabase.from('utenti').upsert(
+      const { error: membroErr } = await supabase.from('utenti').upsert(
         {
           officina_id: officina.id,
           nome: member.nome,
@@ -297,6 +298,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         },
         { onConflict: 'email' }
       );
+      // Senza controllo i membri del team venivano persi in silenzio.
+      if (membroErr) membriFalliti.push(`${member.nome} (${membroErr.message})`);
+    }
+    if (membriFalliti.length > 0) {
+      alert('Alcuni membri del team non sono stati aggiunti:\n' + membriFalliti.join('\n'));
     }
   };
 
