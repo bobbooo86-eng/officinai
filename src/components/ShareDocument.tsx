@@ -25,6 +25,14 @@ interface ShareDocumentProps {
   clienteId?: string;
   /** URL al PDF/pagina del documento (viene aggiunto al messaggio) */
   pdfUrl?: string | null;
+  /**
+   * Contenuto del documento, usato quando non esiste un URL condivisibile
+   * (bucket Storage non configurato): permette di allegare o scaricare il
+   * file invece di inviare un messaggio senza documento.
+   */
+  getDocumentHtml?: () => string | Promise<string>;
+  /** Nome del file proposto per l'allegato/download. */
+  fileName?: string;
   /** Oggetto email (se non specificato, usa "Il tuo {titolo}") */
   emailSubject?: string;
   /** Callback dopo invio */
@@ -35,12 +43,14 @@ export function ShareDocument({
   tipo, titolo, emailData, whatsappText,
   clienteEmail, clienteTel, clienteNome,
   officinaId, clienteId, pdfUrl, emailSubject, onSent,
+  getDocumentHtml, fileName,
 }: ShareDocumentProps) {
   const { officina } = useAuthStore();
   const [open, setOpen] = useState(false);
   const [sending, setSending] = useState<'email' | 'whatsapp' | null>(null);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [emailTo, setEmailTo] = useState(clienteEmail || '');
+  const [condividendo, setCondividendo] = useState(false);
   const [telTo, setTelTo] = useState(clienteTel || '');
 
   // Aggiungi il link PDF (se presente) ai messaggi
@@ -51,6 +61,45 @@ export function ShareDocument({
   const emailBody = pdfUrl
     ? `${whatsappText}\n\nDocumento completo (apri il link per scaricare/stampare in PDF):\n${pdfUrl}`
     : whatsappText;
+
+  /**
+   * Senza URL pubblico il documento viene condiviso come file: sui telefoni
+   * si allega direttamente a WhatsApp o alla mail, altrove viene scaricato
+   * per essere allegato a mano.
+   */
+  const condividiFile = async () => {
+    if (!getDocumentHtml) return;
+    setCondividendo(true);
+    try {
+      const html = await getDocumentHtml();
+      const nome = fileName || `${titolo}.html`;
+      const file = new File([html], nome, { type: 'text/html' });
+
+      const nav = navigator as Navigator & {
+        canShare?: (d: { files?: File[] }) => boolean;
+        share?: (d: { files?: File[]; title?: string; text?: string }) => Promise<void>;
+      };
+      if (nav.share && nav.canShare?.({ files: [file] })) {
+        await nav.share({ files: [file], title: titolo, text: whatsappText });
+        setResult({ ok: true, msg: 'Documento condiviso' });
+      } else {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nome;
+        a.click();
+        URL.revokeObjectURL(url);
+        setResult({ ok: true, msg: 'Documento scaricato: allegalo al messaggio' });
+      }
+    } catch (e) {
+      // L'utente puo' annullare la condivisione: non e' un errore da segnalare.
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        setResult({ ok: false, msg: 'Condivisione non riuscita' });
+      }
+    } finally {
+      setCondividendo(false);
+    }
+  };
 
   const openMailtoFallback = () => {
     const subject = emailSubject || `Il tuo ${titolo}${officina?.nome ? ' — ' + officina.nome : ''}`;
@@ -170,6 +219,18 @@ export function ShareDocument({
             : 'bg-red-50 text-red-700 border border-red-200'
         }`}>
           {result.ok ? '✅' : '❌'} {result.msg}
+        </div>
+      )}
+
+      {/* Allegato: serve quando non c'e' un link pubblico al documento */}
+      {!pdfUrl && getDocumentHtml && (
+        <div className="mb-3">
+          <Button variant="secondary" fullWidth onClick={condividiFile} loading={condividendo}>
+            📎 Allega documento
+          </Button>
+          <div className="text-[11px] text-gray-500 mt-1">
+            Il messaggio non contiene un link: allega il documento da qui.
+          </div>
         </div>
       )}
 

@@ -2203,6 +2203,26 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
               officinaId={officina?.id}
               clienteId={detailAppuntamento.cliente_id}
               pdfUrl={pdfUrl}
+              fileName={`Preventivo-${(p.cliente_nome || 'cliente').replace(/[^\w-]+/g, '_')}.html`}
+              getDocumentHtml={async () => {
+                const accent = await extractLogoColor(officina?.logo_url);
+                return buildPreventivoHtml(
+                  detailAppuntamento,
+                  {
+                    id: p.id,
+                    appuntamento_id: p.appuntamento_id,
+                    righe: p.righe,
+                    subtotale: p.subtotale,
+                    sconto: p.sconto,
+                    iva: p.iva,
+                    totale: p.totale,
+                    stato: p.stato as 'bozza' | 'inviato' | 'accettato' | 'rifiutato',
+                    created_at: p.created_at,
+                  },
+                  officina,
+                  accent
+                );
+              }}
               emailSubject={`Preventivo ${detailAppuntamento.veicoli ? detailAppuntamento.veicoli.marca + ' ' + detailAppuntamento.veicoli.modello : ''}${detailAppuntamento.veicoli?.targa ? ' (' + detailAppuntamento.veicoli.targa + ')' : ''} — ${officina?.nome || 'OfficinAI'}`}
               emailData={{
                 clienteNome: detailAppuntamento.clienti?.nome || 'Cliente',
@@ -2224,7 +2244,8 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
             )}
             {!uploadingPdf && !pdfUrl && (
               <div className="text-[11px] text-amber-600 text-center">
-                Suggerimento: crea il bucket <code className="font-mono bg-amber-50 px-1 rounded">preventivi</code> (pubblico) su Supabase Storage per allegare il PDF automaticamente ai messaggi.
+                Il messaggio non contiene un link: usa «Allega documento» per inviare il preventivo come file.
+                Per avere invece un link automatico, crea il bucket <code className="font-mono bg-amber-50 px-1 rounded">preventivi</code> (pubblico) su Supabase Storage.
               </div>
             )}
             {pdfUrl && (
