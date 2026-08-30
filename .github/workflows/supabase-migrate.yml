@@ -103,5 +103,3 @@ jobs:
           verifica "SELECT count(*) FROM movimenti;"
           echo "== Tabella impostazioni_email =="
           verifica "SELECT count(*) FROM impostazioni_email;"
-          echo "== Reset password temporanea per benci1991@tiscali.it =="
-          verifica "UPDATE auth.users SET encrypted_password = crypt('Garage257Reset!', gen_salt('bf')), updated_at = now() WHERE email ILIKE 'benci1991@tiscali.it' RETURNING id, email;"
