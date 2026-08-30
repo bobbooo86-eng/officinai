@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, Button } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { insertTolerant, isMissingTable } from '@/lib/resilientDb';
+import {
+  aggiungiLocale, isLocale, leggiLocali, perSupabase, rimuoviLocale, svuotaLocali,
+} from '@/lib/cassaLocale';
 import { useAuthStore } from '@/stores/authStore';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente } from '@/types/database';
 
@@ -76,6 +79,9 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  // Vero quando la tabella movimenti non esiste ancora: la Cassa continua a
+  // funzionare salvando sul dispositivo, in attesa di poter sincronizzare.
+  const [soloLocale, setSoloLocale] = useState(false);
 
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2500); };
 
@@ -90,16 +96,55 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
       .eq('officina_id', officinaId)
       .order('data', { ascending: false })
       .order('created_at', { ascending: false });
-    // Senza questo controllo un errore di lettura veniva mostrato come
-    // "Nessun movimento", con saldo a zero per un mese che invece ne ha.
-    setError(
-      loadErr
-        ? isMissingTable(loadErr)
-          ? 'La tabella della cassa non esiste ancora nel database. Vai su Altro > Impostazioni > Stato database e premi "Copia SQL di riparazione": lo script va incollato ed eseguito nel SQL Editor di Supabase.'
-          : 'Errore nel caricamento dei movimenti: ' + loadErr.message
-        : ''
-    );
-    setMovimenti((data as Movimento[]) || []);
+
+    if (loadErr && isMissingTable(loadErr)) {
+      // Il database non e' ancora pronto: si lavora sull'archivio locale.
+      setSoloLocale(true);
+      setError('');
+      setMovimenti(leggiLocali(officinaId));
+      setLoading(false);
+      return;
+    }
+
+    setSoloLocale(false);
+    if (loadErr) {
+      // Senza questo controllo un errore di lettura veniva mostrato come
+      // "Nessun movimento", con saldo a zero per un mese che invece ne ha.
+      setError('Errore nel caricamento dei movimenti: ' + loadErr.message);
+      setMovimenti([]);
+      setLoading(false);
+      return;
+    }
+
+    setError('');
+    const remoti = (data as Movimento[]) || [];
+
+    // La tabella ora esiste: carica i movimenti salvati sul dispositivo.
+    const locali = leggiLocali(officinaId);
+    if (locali.length > 0) {
+      const { error: syncErr } = await supabase
+        .from('movimenti')
+        .insert(locali.map(perSupabase));
+      if (syncErr) {
+        setError('Movimenti salvati sul dispositivo non ancora sincronizzati: ' + syncErr.message);
+        setMovimenti([...locali, ...remoti]);
+        setLoading(false);
+        return;
+      }
+      svuotaLocali(officinaId);
+      showToast(`${locali.length} movimenti sincronizzati con il database`);
+      const { data: aggiornati } = await supabase
+        .from('movimenti')
+        .select('*')
+        .eq('officina_id', officinaId)
+        .order('data', { ascending: false })
+        .order('created_at', { ascending: false });
+      setMovimenti((aggiornati as Movimento[]) || remoti);
+      setLoading(false);
+      return;
+    }
+
+    setMovimenti(remoti);
     setLoading(false);
   }, [officinaId]);
 
@@ -163,7 +208,8 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
     }
     setSaving(true);
     setError('');
-    const { error: err, skipped } = await insertTolerant('movimenti', {
+
+    const dati = {
       officina_id: officinaId,
       tipo: newTipo,
       importo,
@@ -173,14 +219,36 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
       dipendente_id: newDipendenteId || null,
       created_by: utente?.id || null,
       note: newNote.trim() || null,
-    }, ['officina_id', 'tipo', 'importo']);
+    };
+
+    // Salvataggio sul dispositivo quando il database non ha ancora la tabella.
+    const salvaInLocale = () => {
+      const creato = aggiungiLocale(officinaId, dati as Omit<Movimento, 'id' | 'created_at'>);
+      setSoloLocale(true);
+      setMovimenti((prev) => [creato, ...prev]);
+      setSaving(false);
+      resetForm();
+      setShowForm(false);
+      showToast('Movimento salvato su questo dispositivo');
+    };
+
+    if (soloLocale) {
+      salvaInLocale();
+      return;
+    }
+
+    const { error: err, skipped } = await insertTolerant(
+      'movimenti', dati, ['officina_id', 'tipo', 'importo']
+    );
+
+    if (err && isMissingTable(err)) {
+      salvaInLocale();
+      return;
+    }
+
     setSaving(false);
     if (err) {
-      setError(
-        isMissingTable(err)
-          ? 'La tabella della cassa non esiste ancora nel database. Vai su Altro > Impostazioni > Stato database e premi "Copia SQL di riparazione": lo script va incollato ed eseguito nel SQL Editor di Supabase.'
-          : 'Errore: ' + err.message
-      );
+      setError('Errore: ' + err.message);
       return;
     }
     resetForm();
@@ -195,6 +263,14 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
 
   const eliminaMovimento = async (id: string) => {
     if (!confirm('Eliminare questo movimento?')) return;
+    // I movimenti non ancora sincronizzati esistono solo sul dispositivo.
+    const daEliminare = movimenti.find((m) => m.id === id);
+    if (officinaId && daEliminare && isLocale(daEliminare)) {
+      rimuoviLocale(officinaId, id);
+      setMovimenti((prev) => prev.filter((m) => m.id !== id));
+      showToast('Movimento eliminato');
+      return;
+    }
     const { error: delErr } = await supabase.from('movimenti').delete().eq('id', id);
     if (delErr) {
       setError('Movimento non eliminato: ' + delErr.message);
@@ -397,6 +473,22 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
             <Button onClick={salvaMovimento} loading={saving} fullWidth>
               💾 Salva movimento
             </Button>
+          </div>
+        </Card>
+      )}
+
+      {soloLocale && (
+        <Card className="!p-3 bg-amber-50 !border-amber-200">
+          <div className="text-xs font-bold text-amber-900 mb-1">
+            📵 Cassa in modalità locale
+          </div>
+          <div className="text-[11px] text-amber-800 leading-snug">
+            La tabella della cassa non esiste ancora sul database, quindi i movimenti
+            vengono salvati <strong>solo su questo dispositivo</strong>: non si vedono
+            dagli altri telefoni e andrebbero persi svuotando i dati del browser.
+            <br />
+            Appena la tabella verrà creata (Altro → Impostazioni → Stato database)
+            saranno caricati automaticamente e questo avviso sparirà.
           </div>
         </Card>
       )}
