@@ -569,6 +569,11 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
   const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState(false);
   const [savedPdfUrl, setSavedPdfUrl] = useState<string | null>(null);
+  // Documento generato al salvataggio, tenuto anche se il caricamento su
+  // Storage fallisce (es. bucket non configurato): permette comunque di
+  // allegarlo manualmente al messaggio invece di inviarlo senza nulla.
+  const [savedPdfHtml, setSavedPdfHtml] = useState<string | null>(null);
+  const [allegandoPreventivo, setAllegandoPreventivo] = useState(false);
   const [uploadingSavedPdf, setUploadingSavedPdf] = useState(false);
 
   // Manual vehicle selection — nome cliente + 4 dropdown sequenziali
@@ -637,6 +642,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     });
     setSaved(false);
     setSavedPdfUrl(null);
+    setSavedPdfHtml(null);
     setManualOpen(false);
   };
 
@@ -682,6 +688,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     setRighe([]);
     setSaved(false);
     setSavedPdfUrl(null);
+    setSavedPdfHtml(null);
     clearManualSelection();
     setManualOpen(false);
 
@@ -987,6 +994,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
             officina,
             accent
           );
+          setSavedPdfHtml(html);
           const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
           const path = `${officina.id}/preventivo-${newPreventivo.id}.html`;
           const { error: upErr } = await supabase.storage
@@ -1146,6 +1154,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                   setRighe([]);
                   setSaved(false);
                   setSavedPdfUrl(null);
+    setSavedPdfHtml(null);
                 }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
                 title="Cancella ricerca"
@@ -1285,6 +1294,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                     setRighe([]);
                     setSaved(false);
                     setSavedPdfUrl(null);
+    setSavedPdfHtml(null);
                   }}
                   className="text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
                 >
@@ -1667,9 +1677,50 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                   Generazione PDF condivisibile in corso…
                 </div>
               )}
-              {saved && !uploadingSavedPdf && (
+              {saved && !uploadingSavedPdf && savedPdfUrl && (
                 <div className="text-center text-[10px] text-gray-400 mt-1">
-                  {savedPdfUrl ? 'Il messaggio includera\' il link al preventivo in PDF' : 'PDF non disponibile — controlla il bucket "preventivi" su Supabase Storage'}
+                  Il messaggio includera' il link al preventivo in PDF
+                </div>
+              )}
+              {saved && !uploadingSavedPdf && !savedPdfUrl && savedPdfHtml && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setAllegandoPreventivo(true);
+                      try {
+                        const nome = `Preventivo-${(cliente?.nome || manualClienteNome || 'cliente').replace(/[^\w-]+/g, '_')}.html`;
+                        const file = new File([savedPdfHtml], nome, { type: 'text/html' });
+                        const nav = navigator as Navigator & {
+                          canShare?: (d: { files?: File[] }) => boolean;
+                          share?: (d: { files?: File[]; title?: string }) => Promise<void>;
+                        };
+                        if (nav.share && nav.canShare?.({ files: [file] })) {
+                          await nav.share({ files: [file], title: 'Preventivo' });
+                        } else {
+                          const url = URL.createObjectURL(file);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = nome;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }
+                      } catch (e) {
+                        if (!(e instanceof DOMException && e.name === 'AbortError')) {
+                          alert('Condivisione non riuscita');
+                        }
+                      } finally {
+                        setAllegandoPreventivo(false);
+                      }
+                    }}
+                    disabled={allegandoPreventivo}
+                    className="w-full p-2.5 rounded-xl border-2 border-gray-300 text-gray-700 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    {allegandoPreventivo ? '...' : '📎 Allega documento (nessun link disponibile)'}
+                  </button>
+                  <div className="text-center text-[10px] text-gray-400 mt-1">
+                    Il messaggio sopra non contiene un link: allega il documento da qui prima di inviarlo.
+                  </div>
                 </div>
               )}
 
@@ -1744,6 +1795,15 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
   const [editMode, setEditMode] = useState(false);
   const [editRighe, setEditRighe] = useState<PreventivoListItem['righe']>([]);
   const [editSconto, setEditSconto] = useState(0);
+  // Conferma appuntamento: quando il cliente accetta il preventivo, il
+  // titolare fissa qui la data/ora vera e la lavorazione da fare, al posto
+  // del segnaposto creato automaticamente al salvataggio del preventivo.
+  const [showConferma, setShowConferma] = useState(false);
+  const [confData, setConfData] = useState('');
+  const [confOra, setConfOra] = useState('09:00');
+  const [confDescrizione, setConfDescrizione] = useState('');
+  const [confermando, setConfermando] = useState(false);
+  const [confermaErrore, setConfermaErrore] = useState('');
   const [editClienteNome, setEditClienteNome] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -1754,6 +1814,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
     setView('list');
     setSelectedPreventivo(null);
     setEditMode(false);
+    setShowConferma(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetSignal]);
 
@@ -1929,6 +1990,62 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
       setEditMode(true);
     };
 
+    const apriConferma = () => {
+      // Precompila con la data/ora gia' presenti sull'appuntamento, se
+      // valide; altrimenti propone domani alle 9:00.
+      const base = detailAppuntamento?.data_ora ? new Date(detailAppuntamento.data_ora) : null;
+      const domani = new Date();
+      domani.setDate(domani.getDate() + 1);
+      const riferimento = base && !isNaN(base.getTime()) ? base : domani;
+      const y = riferimento.getFullYear();
+      const m = (riferimento.getMonth() + 1).toString().padStart(2, '0');
+      const d = riferimento.getDate().toString().padStart(2, '0');
+      setConfData(`${y}-${m}-${d}`);
+      setConfOra(base ? `${base.getHours().toString().padStart(2, '0')}:${base.getMinutes().toString().padStart(2, '0')}` : '09:00');
+      setConfDescrizione(
+        detailAppuntamento?.problema && detailAppuntamento.problema !== 'Preventivo da tariffario'
+          ? detailAppuntamento.problema
+          : (p.righe || []).map((r) => r.desc).filter(Boolean).join(', ')
+      );
+      setConfermaErrore('');
+      setShowConferma(true);
+    };
+
+    const confermaAppuntamento = async () => {
+      if (!confData || !confDescrizione.trim()) {
+        setConfermaErrore('Inserisci data e descrizione del lavoro.');
+        return;
+      }
+      setConfermando(true);
+      setConfermaErrore('');
+      const dataOraIso = new Date(`${confData}T${confOra}:00`).toISOString();
+      const { data: appAgg, error: appErr } = await supabase
+        .from('appuntamenti')
+        .update({ data_ora: dataOraIso, problema: confDescrizione.trim(), stato: 'prenotato' })
+        .eq('id', p.appuntamento_id)
+        .select('*, clienti(nome,tel,email), veicoli(marca,modello,targa,km)')
+        .single();
+      if (appErr || !appAgg) {
+        setConfermando(false);
+        setConfermaErrore('Appuntamento non aggiornato: ' + (appErr?.message || 'errore sconosciuto'));
+        return;
+      }
+      const { error: prevErr } = await supabase
+        .from('preventivi')
+        .update({ stato: 'accettato' })
+        .eq('id', p.id);
+      setConfermando(false);
+      if (prevErr) {
+        setConfermaErrore('Appuntamento aggiornato, ma lo stato del preventivo non e stato salvato: ' + prevErr.message);
+        return;
+      }
+      setDetailAppuntamento(appAgg as Appuntamento);
+      const aggiornato = { ...p, stato: 'accettato' };
+      setSelectedPreventivo(aggiornato);
+      setPreventivi((prev) => prev.map((x) => (x.id === p.id ? aggiornato : x)));
+      setShowConferma(false);
+    };
+
     const cancelEdit = () => {
       setEditMode(false);
       setEditRighe([]);
@@ -2005,7 +2122,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
       <div className="p-4 space-y-4 pb-24">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <button onClick={() => { setView('list'); setSelectedPreventivo(null); setEditMode(false); }} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer">
+          <button onClick={() => { setView('list'); setSelectedPreventivo(null); setEditMode(false); setShowConferma(false); }} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer">
             <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
@@ -2261,9 +2378,73 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
           </div>
         )}
 
+        {/* Conferma appuntamento: il cliente ha accettato, si fissano data/ora vere */}
+        {!editMode && showConferma && (
+          <div className="border-2 border-emerald-200 bg-emerald-50/40 rounded-xl p-3 space-y-2.5">
+            <div className="text-sm font-bold text-emerald-900">✅ Conferma appuntamento</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-600 mb-1">Data</label>
+                <input
+                  type="date"
+                  value={confData}
+                  onChange={(e) => setConfData(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-600 mb-1">Ora</label>
+                <input
+                  type="time"
+                  value={confOra}
+                  onChange={(e) => setConfOra(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-600 mb-1">Descrizione lavoro</label>
+              <textarea
+                value={confDescrizione}
+                onChange={(e) => setConfDescrizione(e.target.value)}
+                rows={2}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm resize-none"
+                placeholder="Es. Sostituzione pompa acqua e cinghia distribuzione"
+              />
+            </div>
+            {confermaErrore && (
+              <div className="text-xs text-red-600 font-medium">⚠️ {confermaErrore}</div>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={confermaAppuntamento}
+                disabled={confermando}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
+              >
+                {confermando ? 'Salvataggio...' : '✅ Conferma'}
+              </button>
+              <button
+                onClick={() => setShowConferma(false)}
+                disabled={confermando}
+                className="px-4 py-2.5 rounded-xl border border-gray-300 text-gray-600 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
+              >
+                Annulla
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Azioni */}
-        {!editMode && (
+        {!editMode && !showConferma && (
           <div className="flex gap-2">
+            {p.stato !== 'accettato' && (
+              <button
+                onClick={apriConferma}
+                className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 cursor-pointer transition-colors"
+              >
+                ✅ Conferma appuntamento
+              </button>
+            )}
             <button
               onClick={async () => {
                 const { data } = await supabase.from('appuntamenti').select('*, clienti(nome,tel), veicoli(marca,modello,targa)').eq('id', p.appuntamento_id).single();

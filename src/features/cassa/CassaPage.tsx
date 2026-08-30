@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, Button } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
-import { insertTolerant, isMissingTable } from '@/lib/resilientDb';
+import { insertTolerant, isMissingTable, isAuthMismatch } from '@/lib/resilientDb';
 import {
   aggiornaLocale, aggiungiLocale, isLocale, leggiLocali, perSupabase, rimuoviLocale, svuotaLocali,
 } from '@/lib/cassaLocale';
@@ -314,7 +314,14 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
 
     setSaving(false);
     if (err) {
-      setError('Errore: ' + err.message);
+      // Questo dispositivo e' rimasto agganciato a una sessione non
+      // autenticata (es. sessione "demo" di riserva): il rimedio e'
+      // sempre uscire e rientrare qui, non un problema del database.
+      setError(
+        isAuthMismatch(err)
+          ? 'Sessione non valida su questo dispositivo: esci e rientra con email e password, poi riprova.'
+          : 'Errore: ' + err.message
+      );
       return;
     }
     resetForm();

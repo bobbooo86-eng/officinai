@@ -36,6 +36,20 @@ export function isMissingTable(error: { message?: string; code?: string } | null
   return /Could not find the table/i.test(m) || /relation .* does not exist/i.test(m);
 }
 
+/**
+ * True se la scrittura e' stata respinta dalle regole di sicurezza (RLS)
+ * per mancanza di una sessione autenticata valida: succede quando l'app
+ * e' rimasta agganciata alla sessione "demo" di riserva invece che a un
+ * login vero (tipicamente su un dispositivo dove il login non e' stato
+ * rifatto dopo un aggiornamento). Il rimedio e' sempre lo stesso: uscire
+ * e rientrare su quel dispositivo.
+ */
+export function isAuthMismatch(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === '42501') return true;
+  return /row-level security policy/i.test(error.message || '');
+}
+
 type Payload = Record<string, unknown>;
 type DbError = { message: string; code?: string } | null;
 
