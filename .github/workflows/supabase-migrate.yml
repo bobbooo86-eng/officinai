@@ -1,10 +1,19 @@
-name: Applica migrazioni Supabase
+name: Ripara database Supabase
+
+# Applica le migrazioni correttive al database di produzione.
+# Richiede il secret SUPABASE_DB_URL (connection string del progetto).
+#
+# Vengono eseguite solo le migrazioni 013+ perche' sono scritte per essere
+# idempotenti e ripetibili; le precedenti descrivono lo schema iniziale e
+# rieseguirle su un database gia' popolato fallirebbe.
 
 on:
   push:
     branches: [main]
     paths:
-      - 'supabase/migrations/**'
+      - 'supabase/migrations/01[3-9]_*.sql'
+      - 'supabase/migrations/0[2-9][0-9]_*.sql'
+      - '.github/workflows/supabase-migrate.yml'
   workflow_dispatch:
 
 jobs:
@@ -16,15 +25,37 @@ jobs:
       - name: Installa psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Applica tutte le migrazioni (idempotenti)
+      - name: Applica le migrazioni correttive
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "Manca il secret SUPABASE_DB_URL nelle impostazioni del repository." >&2
+            echo "::error::Manca il secret SUPABASE_DB_URL."
+            echo "Impostalo in Settings > Secrets and variables > Actions."
             exit 1
           fi
-          for f in $(ls supabase/migrations/*.sql | sort); do
-            echo "== Applico $f =="
-            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+
+          fallite=0
+          for f in $(ls supabase/migrations/*.sql | sort | awk -F/ '$NF >= "013"'); do
+            echo "::group::$f"
+            # Ogni file viene applicato singolarmente: se uno fallisce si
+            # prosegue con gli altri, cosi' un solo problema non blocca
+            # tutte le correzioni e il log mostra l'errore esatto.
+            if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; then
+              echo "OK: $f"
+            else
+              echo "::error::Fallita: $f"
+              fallite=$((fallite + 1))
+            fi
+            echo "::endgroup::"
           done
+
+          echo "== Verifica finale =="
+          psql "$DATABASE_URL" -c "\d movimenti" || echo "::error::La tabella movimenti non esiste."
+          psql "$DATABASE_URL" -c "SELECT unnest(enum_range(NULL::stato_appuntamento));" || true
+
+          if [ "$fallite" -gt 0 ]; then
+            echo "::error::$fallite migrazioni non applicate: vedi i log sopra."
+            exit 1
+          fi
+          echo "Tutte le migrazioni correttive sono state applicate."
