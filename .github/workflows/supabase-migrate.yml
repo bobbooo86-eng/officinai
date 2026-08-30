@@ -1,0 +1,30 @@
+name: Applica migrazioni Supabase
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installa psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Applica tutte le migrazioni (idempotenti)
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Manca il secret SUPABASE_DB_URL nelle impostazioni del repository." >&2
+            exit 1
+          fi
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            echo "== Applico $f =="
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
