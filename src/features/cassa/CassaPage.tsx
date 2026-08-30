@@ -83,6 +83,9 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
   // funzionare salvando sul dispositivo, in attesa di poter sincronizzare.
   const [soloLocale, setSoloLocale] = useState(false);
   const [dettagliLocale, setDettagliLocale] = useState(false);
+  // Messaggio grezzo del database quando la tabella non e' raggiungibile:
+  // serve a capire se manca davvero o se e' solo la cache delle API.
+  const [ultimoErroreDb, setUltimoErroreDb] = useState('');
 
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2500); };
 
@@ -101,6 +104,7 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
     if (loadErr && isMissingTable(loadErr)) {
       // Il database non e' ancora pronto: si lavora sull'archivio locale.
       setSoloLocale(true);
+      setUltimoErroreDb(loadErr.message || 'tabella non raggiungibile');
       setError('');
       setMovimenti(leggiLocali(officinaId));
       setLoading(false);
@@ -108,6 +112,7 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
     }
 
     setSoloLocale(false);
+    setUltimoErroreDb('');
     if (loadErr) {
       // Senza questo controllo un errore di lettura veniva mostrato come
       // "Nessun movimento", con saldo a zero per un mese che invece ne ha.
@@ -481,28 +486,36 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
       {soloLocale && (
         // Avviso, non errore: la cassa funziona. Va tenuto discreto ma
         // visibile, perche' i dati non sono ancora condivisi tra dispositivi.
-        <button
-          onClick={() => setDettagliLocale((v) => !v)}
-          className="w-full text-left px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
-        >
+        <div className="px-3 py-2 rounded-xl bg-slate-100">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] text-slate-600">
-              💾 Salvataggio su questo dispositivo
-            </span>
-            <span className="text-[11px] text-slate-400">
-              {dettagliLocale ? 'nascondi' : 'dettagli'}
-            </span>
+            <button
+              onClick={() => setDettagliLocale((v) => !v)}
+              className="text-[11px] text-slate-600 cursor-pointer text-left"
+            >
+              💾 Salvataggio su questo dispositivo · {dettagliLocale ? 'nascondi' : 'dettagli'}
+            </button>
+            <button
+              onClick={loadMovimenti}
+              disabled={loading}
+              className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 disabled:opacity-50 cursor-pointer shrink-0"
+            >
+              {loading ? 'Verifica…' : '🔄 Sincronizza ora'}
+            </button>
           </div>
           {dettagliLocale && (
             <div className="text-[11px] text-slate-600 leading-snug mt-1.5">
-              La cassa funziona normalmente, ma la tabella sul database non esiste
-              ancora: i movimenti restano <strong>su questo dispositivo</strong>, non
-              si vedono dagli altri e andrebbero persi svuotando i dati del browser.
-              Appena la tabella verrà creata saranno caricati automaticamente e
-              questo avviso sparirà.
+              La cassa funziona normalmente, ma la tabella sul database non e'
+              raggiungibile: i movimenti restano <strong>su questo dispositivo</strong>,
+              non si vedono dagli altri e andrebbero persi svuotando i dati del browser.
+              Appena sarà raggiungibile verranno caricati automaticamente.
+              {ultimoErroreDb && (
+                <div className="mt-1.5 p-1.5 rounded bg-white text-[10px] font-mono text-slate-500 break-words">
+                  {ultimoErroreDb}
+                </div>
+              )}
             </div>
           )}
-        </button>
+        </div>
       )}
 
       {/* Selettore mese + Totali */}
