@@ -103,3 +103,5 @@ jobs:
           verifica "SELECT count(*) FROM movimenti;"
           echo "== Tabella impostazioni_email =="
           verifica "SELECT count(*) FROM impostazioni_email;"
+          echo "== DIAGNOSI: staff dell'officina di benci1991@tiscali.it =="
+          verifica "SELECT u.id, u.email, u.nome, u.attivo, u.is_admin, u.created_at, a.email_confirmed_at IS NOT NULL AS ha_auth FROM utenti u LEFT JOIN auth.users a ON a.email = u.email WHERE u.officina_id = (SELECT officina_id FROM utenti WHERE email ILIKE 'benci1991@tiscali.it') ORDER BY u.created_at;"
