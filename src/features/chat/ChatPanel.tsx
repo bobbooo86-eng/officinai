@@ -14,6 +14,7 @@ export function ChatPanel({ appuntamentoId, senderName, senderType }: ChatPanelP
   const [messaggi, setMessaggi] = useState<Messaggio[]>([]);
   const [testo, setTesto] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -67,12 +68,21 @@ export function ChatPanel({ appuntamentoId, senderName, senderType }: ChatPanelP
     const msg = testo.trim();
     setTesto('');
 
-    await supabase.from('messaggi').insert({
+    const { error } = await supabase.from('messaggi').insert({
       appuntamento_id: appuntamentoId,
       da: senderName,
       testo: msg,
       letto: false,
     });
+
+    // Il campo viene svuotato subito: se l'invio fallisce il testo va
+    // ripristinato, altrimenti il messaggio scritto sparisce per sempre.
+    if (error) {
+      setTesto(msg);
+      setSendError('Messaggio non inviato: ' + error.message);
+    } else {
+      setSendError('');
+    }
 
     setSending(false);
     inputRef.current?.focus();
@@ -143,6 +153,9 @@ export function ChatPanel({ appuntamentoId, senderName, senderType }: ChatPanelP
 
       {/* Input */}
       <form onSubmit={inviaMessaggio} className="p-3 bg-white border-t border-gray-200">
+        {sendError && (
+          <div className="mb-2 text-xs text-red-600 font-medium">⚠️ {sendError}</div>
+        )}
         <div className="flex gap-2">
           <input
             ref={inputRef}

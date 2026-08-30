@@ -358,6 +358,7 @@ function TabStato({ app }: { app: Appuntamento }) {
   const [propostaOra, setPropostaOra] = useState('09:00');
   const [propostaNota, setPropostaNota] = useState('');
   const [showConsegnaModal, setShowConsegnaModal] = useState(false);
+  const [erroreAzione, setErroreAzione] = useState('');
 
   // Auto-send email on status change
   const notificaCliente = (nuovoStato: string) => {
@@ -374,14 +375,20 @@ function TabStato({ app }: { app: Appuntamento }) {
 
   const cambiaStato = async (nuovoStato: string, pagamento?: PagamentoInfo) => {
     setUpdating(true);
+    setErroreAzione('');
     const update: Record<string, unknown> = { stato: nuovoStato };
     if (pagamento) update.pagamento = pagamento;
-    await supabase
+    const { error: statoErr } = await supabase
       .from('appuntamenti')
       .update(update)
       .eq('id', app.id);
-    notificaCliente(nuovoStato);
     setUpdating(false);
+    // Il cliente non va avvisato di un cambio di stato che non e' avvenuto.
+    if (statoErr) {
+      setErroreAzione('Stato non aggiornato: ' + statoErr.message);
+      return;
+    }
+    notificaCliente(nuovoStato);
   };
 
   const handleConsegna = () => {
@@ -462,14 +469,22 @@ function TabStato({ app }: { app: Appuntamento }) {
   const inviaControproposta = async (conWhatsapp = false) => {
     if (!propostaData) return;
     setUpdating(true);
+    setErroreAzione('');
     const nuovaDataIso = new Date(`${propostaData}T${propostaOra}:00`).toISOString();
-    await supabase
+    const { error: propErr } = await supabase
       .from('appuntamenti')
       .update({
         data_proposta: nuovaDataIso,
         nota_officina: propostaNota.trim() || null,
       })
       .eq('id', app.id);
+    // Senza questo controllo il cliente riceveva email e WhatsApp con una
+    // data che in realta' non era stata registrata.
+    if (propErr) {
+      setUpdating(false);
+      setErroreAzione('Proposta non salvata: ' + propErr.message);
+      return;
+    }
 
     const d = parseISO(nuovaDataIso);
     const dataFmt = format(d, 'dd/MM/yyyy', { locale: itLocale });
@@ -517,9 +532,16 @@ function TabStato({ app }: { app: Appuntamento }) {
   ];
 
   // Show request approval UI when stato is 'richiesta'
+  const bannerErrore = erroreAzione ? (
+    <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+      ⚠️ {erroreAzione}
+    </div>
+  ) : null;
+
   if (app.stato === 'richiesta') {
     return (
       <div className="space-y-3">
+        {bannerErrore}
         <Card className="!p-4 bg-purple-50 border-purple-200">
           <div className="text-sm font-semibold text-purple-900 mb-1">🔔 Richiesta di prenotazione</div>
           <div className="text-xs text-purple-700">
@@ -666,6 +688,7 @@ function TabStato({ app }: { app: Appuntamento }) {
 
   return (
     <div className="space-y-2">
+      {bannerErrore}
       {showConsegnaModal && (
         <ModalPagamento
           onConferma={confermaConsegna}
@@ -1330,13 +1353,15 @@ function TabFoglioLavoro({ appuntamentoId, statoAppuntamento, veicolo, clienteNo
   // Save km & notes on blur
   const salvaDettagli = async () => {
     if (!foglio) return;
-    await supabase
+    const { error: dettagliErr } = await supabase
       .from('foglio_lavoro')
       .update({
         km_uscita: kmUscita ? parseInt(kmUscita) : null,
         note_finali: noteFinali || null,
       })
       .eq('id', foglio.id);
+    // Km e note venivano persi senza alcun segnale se il salvataggio falliva.
+    if (dettagliErr) showToast('Dettagli non salvati: ' + dettagliErr.message);
   };
 
   // Modifica tempo manuale
@@ -1463,25 +1488,32 @@ ${noteFinali ? `<div class="section"><h2>Note Finali</h2><p style="padding:8px;b
   const inviaConto = async () => {
     if (!foglio) return;
     setInvioInCorso(true);
-    try {
-      await supabase.from('foglio_lavoro').update({
-        inviato_al_cliente: true,
-        data_invio_cliente: new Date().toISOString(),
-        costo_manodopera: costoManodopera,
-        tariffa_oraria: tariffaOraria,
-        firma_operaio: firmaOperaio || null,
-        km_uscita: kmUscita ? parseInt(kmUscita) : null,
-        note_finali: noteFinali || null,
-      }).eq('id', foglio.id);
-      await supabase.from('appuntamenti').update({ stato: 'pronto' }).eq('id', appuntamentoId);
-      setContoInviato(true);
-      setConfermaInvio(null);
-      showToast('Conto inviato al cliente!');
-    } catch {
-      showToast('Errore invio conto. Riprova.');
-    } finally {
+    // supabase-js restituisce gli errori nel risultato invece di lanciarli:
+    // il try/catch non li intercettava e il conto risultava "inviato"
+    // anche quando non era stato salvato nulla.
+    const { error: fErr } = await supabase.from('foglio_lavoro').update({
+      inviato_al_cliente: true,
+      data_invio_cliente: new Date().toISOString(),
+      costo_manodopera: costoManodopera,
+      tariffa_oraria: tariffaOraria,
+      firma_operaio: firmaOperaio || null,
+      km_uscita: kmUscita ? parseInt(kmUscita) : null,
+      note_finali: noteFinali || null,
+    }).eq('id', foglio.id);
+    if (fErr) {
       setInvioInCorso(false);
+      showToast('Conto non inviato: ' + fErr.message);
+      return;
     }
+    const { error: aErr } = await supabase.from('appuntamenti').update({ stato: 'pronto' }).eq('id', appuntamentoId);
+    setInvioInCorso(false);
+    if (aErr) {
+      showToast('Conto salvato, ma stato non aggiornato: ' + aErr.message);
+      return;
+    }
+    setContoInviato(true);
+    setConfermaInvio(null);
+    showToast('Conto inviato al cliente!');
   };
 
   // Genera fattura elettronica (bozza per SDI)
@@ -1504,7 +1536,7 @@ ${noteFinali ? `<div class="section"><h2>Note Finali</h2><p style="padding:8px;b
         .maybeSingle();
       const lastNum = lastFattura?.numero ? parseInt(lastFattura.numero.split('-').pop() || '0') : 0;
       const numero = `FT-${year}-${String(lastNum + 1).padStart(3, '0')}`;
-      await supabase.from('fatture').insert({
+      const { error: fattErr } = await supabase.from('fatture').insert({
         officina_id: officina?.id,
         appuntamento_id: appuntamentoId,
         numero,
@@ -1518,6 +1550,11 @@ ${noteFinali ? `<div class="section"><h2>Note Finali</h2><p style="padding:8px;b
         stato: 'bozza',
         note: noteFinali || '',
       });
+      if (fattErr) {
+        setInvioInCorso(false);
+        showToast('Fattura non generata: ' + fattErr.message);
+        return;
+      }
       // Salva anche i dati sul foglio se non già fatto
       if (!contoInviato) {
         await supabase.from('foglio_lavoro').update({
@@ -1544,7 +1581,7 @@ ${noteFinali ? `<div class="section"><h2>Note Finali</h2><p style="padding:8px;b
     const orelavoro = timerMs / 3600000;
     const costo = Math.round(orelavoro * tariffaOraria * 100) / 100;
     setCostoManodopera(costo);
-    await supabase
+    const { error: chiusuraErr } = await supabase
       .from('foglio_lavoro')
       .update({
         tempo_lavoro_ms: timerMs,
@@ -1556,6 +1593,12 @@ ${noteFinali ? `<div class="section"><h2>Note Finali</h2><p style="padding:8px;b
         costo_manodopera: costo,
       })
       .eq('id', foglio.id);
+    // Senza questo controllo tempo, km, note e costo manodopera potevano
+    // andare persi mentre a schermo il lavoro risultava completato.
+    if (chiusuraErr) {
+      showToast('Lavoro non chiuso: ' + chiusuraErr.message);
+      return;
+    }
     setFoglio({ ...foglio, chiuso: true, fine: new Date().toISOString(), tariffa_oraria: tariffaOraria, costo_manodopera: costo });
     // Auto-set stato to pronto
     await supabase.from('appuntamenti').update({ stato: 'pronto' }).eq('id', appuntamentoId);
