@@ -111,6 +111,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         password,
       });
 
+      let authUser = authData?.user ?? null;
+
       if (authError) {
         const { data: utente } = await supabase
           .from('utenti')
@@ -123,30 +125,33 @@ export const useAuthStore = create<AuthState>((set) => ({
           return { error: 'Email o password non validi' };
         }
 
-        const { error: signUpError } = await supabase.auth.signUp({ email, password });
-        if (signUpError && !signUpError.message.includes('already registered')) {
-          const { data: officina } = await supabase
-            .from('officine')
-            .select('*')
-            .eq('id', utente.officina_id)
-            .single();
+        // Alcuni account creati prima dell'introduzione dell'autenticazione
+        // vera non hanno ancora un account Auth: si prova a crearlo ora,
+        // una tantum, con la password appena digitata.
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
 
-          writeDemoSession({ email, userType: 'officina' });
-          set({ utente, officina, userType: 'officina', sessionUser: { email } });
-          return {};
+        if (signUpError?.message.includes('already registered')) {
+          // L'account Auth esiste gia': il fallimento del login sopra
+          // significa che la password digitata e' sbagliata. Mostrarlo
+          // chiaramente invece di procedere con una sessione non reale,
+          // che farebbe fallire in silenzio ogni scrittura protetta piu'
+          // avanti (es. "row-level security policy" nella Cassa).
+          return { error: 'Password errata.' };
+        }
+        if (signUpError) {
+          return { error: signUpError.message };
         }
 
-        const { error: retryError } = await supabase.auth.signInWithPassword({ email, password });
-        if (retryError) {
-          const { data: officina } = await supabase
-            .from('officine')
-            .select('*')
-            .eq('id', utente.officina_id)
-            .single();
-
-          writeDemoSession({ email, userType: 'officina' });
-          set({ utente, officina, userType: 'officina', sessionUser: { email } });
-          return {};
+        authUser = signUpData?.user ?? null;
+        if (!signUpData?.session) {
+          // La creazione dell'account Auth puo' non restituire subito una
+          // sessione (es. conferma email richiesta): si ritenta il login,
+          // che con la stessa password ora dovrebbe riuscire.
+          const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({ email, password });
+          if (retryError) {
+            return { error: 'Account creato ma accesso non riuscito: ' + retryError.message };
+          }
+          authUser = retryData.user;
         }
       }
 
@@ -178,7 +183,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         .single();
 
       set({
-        sessionUser: authData?.user || { email },
+        sessionUser: authUser || { email },
         utente,
         officina,
         userType: 'officina',
@@ -197,6 +202,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         password,
       });
 
+      let authUser = authData?.user ?? null;
+
       if (authError) {
         const { data: cliente } = await supabase
           .from('clienti')
@@ -208,8 +215,28 @@ export const useAuthStore = create<AuthState>((set) => ({
           return { error: 'Email o password non validi' };
         }
 
-        writeDemoSession({ email, userType: 'cliente' });
-        set({ cliente, userType: 'cliente', sessionUser: { email } });
+        // Come per lo staff: un account gia' esistente + login fallito
+        // significa password sbagliata, non un cliente da far entrare lo
+        // stesso senza autenticazione reale.
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
+
+        if (signUpError?.message.includes('already registered')) {
+          return { error: 'Password errata.' };
+        }
+        if (signUpError) {
+          return { error: signUpError.message };
+        }
+
+        authUser = signUpData?.user ?? null;
+        if (!signUpData?.session) {
+          const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({ email, password });
+          if (retryError) {
+            return { error: 'Account creato ma accesso non riuscito: ' + retryError.message };
+          }
+          authUser = retryData.user;
+        }
+
+        set({ cliente, userType: 'cliente', sessionUser: authUser || { email } });
         return {};
       }
 
@@ -224,7 +251,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
 
       set({
-        sessionUser: authData?.user || { email },
+        sessionUser: authUser || { email },
         cliente,
         userType: 'cliente',
       });
