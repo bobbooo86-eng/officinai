@@ -1,9 +1,22 @@
 name: Ripara database Supabase
 
-# Applica le migrazioni correttive al database di produzione.
-# Richiede il secret SUPABASE_DB_URL (connection string del progetto:
-# basta la password del database, host/porta/utente li ricostruisce
-# in automatico la fase "Trova una rotta funzionante" qui sotto).
+# Applica le migrazioni correttive al database di produzione usando la
+# Management API di Supabase via HTTPS, invece di una connessione
+# Postgres diretta.
+#
+# Perche' questo cambio: la connessione diretta (porta 5432) su questo
+# progetto e' raggiungibile solo via IPv6, che i runner di GitHub Actions
+# non supportano in uscita ("Network is unreachable"). Il pooler IPv4
+# (Supavisor) non e' disponibile per questo progetto: ogni indirizzo
+# provato restituisce "tenant not found", e la finestra "Connect to your
+# project" di Supabase non offre un'alternativa col pooler per questo
+# account. La Management API gira invece su normale HTTPS (porta 443),
+# che i runner raggiungono senza problemi, ed espone un endpoint per
+# eseguire SQL sul database del progetto.
+#
+# Richiede il secret SUPABASE_ACCESS_TOKEN: un Personal Access Token
+# generato da supabase.com/dashboard/account/tokens (diverso dalla
+# password del database).
 #
 # Vengono eseguite solo le migrazioni 013+ perche' sono scritte per essere
 # idempotenti e ripetibili; le precedenti descrivono lo schema iniziale e
@@ -18,98 +31,70 @@ on:
       - '.github/workflows/supabase-migrate.yml'
   workflow_dispatch:
 
+env:
+  # Riferimento del progetto Supabase: e' lo stesso valore gia' pubblico
+  # nel codice del frontend (VITE_SUPABASE_URL), non e' un segreto.
+  PROJECT_REF: sncwrzrzlorzfnfnaxin
+
 jobs:
   migrate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Installa psql
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-
-      - name: Trova una rotta funzionante verso il database
-        id: rotta
+      - name: Applica le migrazioni correttive via Management API
         env:
-          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::error::Manca il secret SUPABASE_DB_URL."
-            echo "Impostalo in Settings > Secrets and variables > Actions."
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Manca il secret SUPABASE_ACCESS_TOKEN."
+            echo "Generane uno su supabase.com/dashboard/account/tokens e impostalo in Settings > Secrets and variables > Actions."
             exit 1
           fi
 
-          # Dalla stringa gia' fornita (diretta o pooler, corretta o
-          # sbagliata) si estraggono solo i due dati che non cambiano mai:
-          # la password e il riferimento del progetto. Da questi si
-          # ricostruiscono in automatico tutte le combinazioni ragionevoli
-          # di host/porta/utente, cosi' non serve che l'utente trovi
-          # l'indirizzo esatto nell'interfaccia di Supabase.
-          PASS=$(echo "$DATABASE_URL" | sed -E 's#^postgresql://[^:]+:([^@]+)@.*#\1#')
-          # Il riferimento progetto compare sempre come "db.<ref>...supabase.co"
-          # (connessione diretta) o "postgres.<ref>" (utente del pooler):
-          # si cerca l'uno o l'altro invece di assumere una lunghezza fissa.
-          REF=$(echo "$DATABASE_URL" | grep -oE '(db\.|postgres\.)[a-z0-9]+' | head -1 | sed -E 's/^(db\.|postgres\.)//')
-
-          if [ -z "$PASS" ] || [ -z "$REF" ]; then
-            echo "::error::Non riesco a leggere password/riferimento progetto dal secret. Controlla che SUPABASE_DB_URL sia una connection string valida di Supabase."
-            exit 1
-          fi
-
-          # Regioni AWS in cui Supabase distribuisce piu' spesso i progetti;
-          # si prova ognuna finche' una risponde. Ogni tentativo e' un
-          # singolo collegamento breve, quindi anche provarle tutte richiede
-          # al massimo una manciata di secondi in piu'.
-          REGIONI="eu-west-1 eu-west-2 eu-west-3 eu-central-1 eu-central-2 eu-north-1 us-east-1 us-east-2 us-west-1 us-west-2 ap-southeast-1 ap-southeast-2 ap-northeast-1 ap-northeast-2 ap-south-1 sa-east-1 ca-central-1"
-
-          TROVATA=""
-          for regione in $REGIONI; do
-            for porta in 5432 6543; do
-              CANDIDATA="postgresql://postgres.${REF}:${PASS}@aws-0-${regione}.pooler.supabase.com:${porta}/postgres?connect_timeout=5"
-              if psql "$CANDIDATA" -c "SELECT 1" > /dev/null 2>/tmp/err.log; then
-                TROVATA="$CANDIDATA"
-                echo "Connessione riuscita: pooler regione ${regione}, porta ${porta}"
-                break 2
-              fi
-            done
-          done
-
-          if [ -z "$TROVATA" ]; then
-            echo "::error::Nessuna combinazione pooler ha funzionato. Ultimo errore:"
-            cat /tmp/err.log || true
-            echo "::error::Verifica su Supabase (Project Settings > Database) che il Connection Pooling sia attivo per questo progetto, e la regione esatta mostrata li'."
-            exit 1
-          fi
-
-          # Non si stampa mai la stringa risolta nei log (contiene la
-          # password): resta solo nell'output cifrato passato allo step
-          # successivo tramite GITHUB_OUTPUT.
-          echo "database_url=$TROVATA" >> "$GITHUB_OUTPUT"
-
-      - name: Applica le migrazioni correttive
-        env:
-          DATABASE_URL: ${{ steps.rotta.outputs.database_url }}
-        run: |
           fallite=0
           for f in $(ls supabase/migrations/*.sql | sort | awk -F/ '$NF >= "013"'); do
             echo "::group::$f"
-            # Ogni file viene applicato singolarmente: se uno fallisce si
-            # prosegue con gli altri, cosi' un solo problema non blocca
-            # tutte le correzioni e il log mostra l'errore esatto.
-            if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; then
+            # Il file va incapsulato in un JSON valido (jq -Rs gestisce
+            # a capo e virgolette senza bisogno di escape manuale).
+            payload=$(jq -n --rawfile sql "$f" '{query: $sql}')
+            risposta=$(curl -sS -w '\n%{http_code}' \
+              -X POST "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data "$payload")
+            corpo=$(echo "$risposta" | sed '$d')
+            stato=$(echo "$risposta" | tail -1)
+            if [ "$stato" -ge 200 ] && [ "$stato" -lt 300 ]; then
               echo "OK: $f"
             else
-              echo "::error::Fallita: $f"
+              echo "::error::Fallita: $f (HTTP $stato)"
+              echo "$corpo"
               fallite=$((fallite + 1))
             fi
             echo "::endgroup::"
           done
-
-          echo "== Verifica finale =="
-          psql "$DATABASE_URL" -c "\d movimenti" || echo "::error::La tabella movimenti non esiste."
-          psql "$DATABASE_URL" -c "SELECT unnest(enum_range(NULL::stato_appuntamento));" || true
 
           if [ "$fallite" -gt 0 ]; then
             echo "::error::$fallite migrazioni non applicate: vedi i log sopra."
             exit 1
           fi
           echo "Tutte le migrazioni correttive sono state applicate."
+
+      - name: Verifica finale
+        if: always()
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          [ -z "$TOKEN" ] && exit 0
+          verifica() {
+            curl -sS -X POST "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data "$(jq -n --arg q "$1" '{query: $q}')"
+            echo
+          }
+          echo "== Tabella movimenti =="
+          verifica "SELECT count(*) FROM movimenti;"
+          echo "== Stati appuntamento disponibili =="
+          verifica "SELECT unnest(enum_range(NULL::stato_appuntamento));"
