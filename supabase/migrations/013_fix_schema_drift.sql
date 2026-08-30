@@ -88,5 +88,46 @@ DROP POLICY IF EXISTS notifiche_staff_insert_cliente ON notifiche;
 CREATE POLICY notifiche_staff_insert_cliente ON notifiche FOR INSERT TO authenticated
   WITH CHECK (officina_id IN (SELECT officina_id FROM utenti WHERE email = auth.jwt()->>'email'));
 
+-- ---- STORAGE: bucket per i preventivi condivisibili e per i loghi ----
+-- Senza questo bucket l'upload del preventivo fallisce e i messaggi
+-- WhatsApp/Email partono senza il link al documento.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('preventivi', 'preventivi', true)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('logos', 'logos', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- I bucket gia' esistenti potrebbero non essere pubblici: i link condivisi
+-- con i clienti devono essere leggibili senza autenticazione.
+UPDATE storage.buckets SET public = true WHERE id IN ('preventivi', 'logos');
+
+DROP POLICY IF EXISTS "Staff can upload preventivi" ON storage.objects;
+CREATE POLICY "Staff can upload preventivi" ON storage.objects FOR INSERT
+  TO authenticated WITH CHECK (bucket_id = 'preventivi');
+
+DROP POLICY IF EXISTS "Staff can update preventivi" ON storage.objects;
+CREATE POLICY "Staff can update preventivi" ON storage.objects FOR UPDATE
+  TO authenticated USING (bucket_id = 'preventivi');
+
+DROP POLICY IF EXISTS "Anyone can read preventivi" ON storage.objects;
+CREATE POLICY "Anyone can read preventivi" ON storage.objects FOR SELECT
+  TO public USING (bucket_id = 'preventivi');
+
+-- Ricrea anche le policy dei loghi in modo idempotente (la 003 fallisce
+-- se rieseguita, perche' non usa DROP POLICY IF EXISTS).
+DROP POLICY IF EXISTS "Authenticated users can upload logos" ON storage.objects;
+CREATE POLICY "Authenticated users can upload logos" ON storage.objects FOR INSERT
+  TO authenticated WITH CHECK (bucket_id = 'logos');
+
+DROP POLICY IF EXISTS "Authenticated users can update their logos" ON storage.objects;
+CREATE POLICY "Authenticated users can update their logos" ON storage.objects FOR UPDATE
+  TO authenticated USING (bucket_id = 'logos');
+
+DROP POLICY IF EXISTS "Anyone can read logos" ON storage.objects;
+CREATE POLICY "Anyone can read logos" ON storage.objects FOR SELECT
+  TO public USING (bucket_id = 'logos');
+
 -- ---- Forza il refresh della cache schema di PostgREST ----
 NOTIFY pgrst, 'reload schema';

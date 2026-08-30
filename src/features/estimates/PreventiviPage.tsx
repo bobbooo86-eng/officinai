@@ -566,6 +566,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
   const [sconto, setSconto] = useState(0);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState(false);
   const [savedPdfUrl, setSavedPdfUrl] = useState<string | null>(null);
   const [uploadingSavedPdf, setUploadingSavedPdf] = useState(false);
@@ -610,9 +611,13 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     const cilindrata = modelloObj.cilindrate[0] === '0' ? '' : modelloObj.cilindrate[0] + ' cc';
 
     setVeicolo(null);
-    setCliente(null);
+    // Non azzerare `cliente`: se e' stato trovato cercando per nome (cliente
+    // esistente senza veicolo), perderlo creerebbe un doppione in anagrafica
+    // e farebbe sparire telefono/email usati per WhatsApp ed email.
+    if (cliente && cliente.nome !== selClienteNome.trim()) setCliente(null);
     setTarga('');
     setNotFound(false);
+    setRighe([]);
     setManualClienteNome(selClienteNome.trim());
     setDatiEsterni({
       targa: 'MANUALE',
@@ -641,6 +646,9 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     setSelModello('');
     setSelCarburante('');
     setSelAnno('');
+    // Va azzerato anche qui, altrimenti il preventivo successivo eredita
+    // il nome cliente della selezione manuale precedente.
+    setManualClienteNome('');
   };
 
   const segmento = veicolo
@@ -677,32 +685,44 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     clearManualSelection();
     setManualOpen(false);
 
-    // 1. Search in local DB by targa
-    const { data: veicoliByTarga } = await supabase
-      .from('veicoli')
-      .select('*')
-      .ilike('targa', `%${t}%`)
-      .limit(1);
+    // Una targa non contiene spazi e mescola lettere e cifre: senza questo
+    // controllo un nome come "Mario Rossi" diventava "MARIOROSSI", superava
+    // il test di targa e faceva inventare un veicolo inesistente.
+    const sembraTarga = !/\s/.test(raw) && /^[A-Z0-9]{5,8}$/.test(t) && /\d/.test(t) && /[A-Z]/.test(t);
 
-    if (veicoliByTarga && veicoliByTarga.length > 0) {
-      setVeicolo(veicoliByTarga[0]);
-      const { data: cl } = await supabase
-        .from('clienti')
-        .select('*')
-        .eq('id', veicoliByTarga[0].cliente_id)
-        .single();
+    // Cerca il veicolo per targa restando dentro l'officina corrente.
+    const cercaPerTarga = async (esatta: boolean) => {
+      if (!officina?.id) return null;
+      let q = supabase
+        .from('veicoli')
+        .select('*, clienti!inner(officina_id)')
+        .eq('clienti.officina_id', officina.id);
+      q = esatta ? q.eq('targa', t) : q.ilike('targa', `%${t}%`);
+      const { data } = await q.limit(1);
+      return data && data.length > 0 ? data[0] : null;
+    };
+
+    const usaVeicolo = async (v: { cliente_id: string }) => {
+      setVeicolo(v as Veicolo);
+      const { data: cl } = await supabase.from('clienti').select('*').eq('id', v.cliente_id).single();
       if (cl) setCliente(cl);
       setSearching(false);
-      return;
+    };
+
+    // 1. Se sembra una targa, cercala per prima (corrispondenza esatta).
+    if (sembraTarga) {
+      const v = await cercaPerTarga(true);
+      if (v) { await usaVeicolo(v); return; }
     }
 
-    // 2. Search by nome cliente (targa non trovata)
+    // 2. Cerca per nome cliente.
     if (officina?.id) {
       const { data: clientiByNome } = await supabase
         .from('clienti')
         .select('*')
         .eq('officina_id', officina.id)
         .ilike('nome', `%${raw}%`)
+        .order('nome')
         .limit(1);
 
       if (clientiByNome && clientiByNome.length > 0) {
@@ -727,17 +747,19 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
       }
     }
 
-    // 3. Non trovato in locale → prova lookup targa esterno (solo se sembra una targa)
-    if (t.length >= 5 && /^[A-Z0-9]+$/.test(t)) {
+    // 3. Targa parziale (es. solo alcune lettere digitate).
+    const vParziale = await cercaPerTarga(false);
+    if (vParziale) { await usaVeicolo(vParziale); return; }
+
+    // 4. Solo per una targa plausibile ha senso il lookup esterno.
+    if (sembraTarga) {
       const datiReali = await lookupTargaEsterna(t);
-      if (datiReali && datiReali.marca) {
-        setDatiEsterni(datiReali);
-      } else {
-        const dati = generaDatiVeicolo(t);
-        setDatiEsterni(dati);
-      }
+      setDatiEsterni(datiReali && datiReali.marca ? datiReali : generaDatiVeicolo(t));
     } else {
-      setNotFound(true);
+      // Nome non trovato: apre la selezione manuale gia' compilata col nome,
+      // invece di inventare un veicolo.
+      setSelClienteNome(raw);
+      setManualOpen(true);
     }
     setSearching(false);
   };
@@ -798,6 +820,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
   const handleSave = async () => {
     if ((!veicolo && !datiEsterni) || righe.length === 0) return;
     setSaving(true);
+    setSaveError('');
 
     let veicoloId = veicolo?.id;
     let clienteId = cliente?.id;
@@ -806,7 +829,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     if (!veicoloId && datiEsterni && officina) {
       // Crea cliente generico
       if (!clienteId) {
-        const { data: newCliente } = await supabase
+        const { data: newCliente, error: cliErr } = await supabase
           .from('clienti')
           .insert({
             officina_id: officina.id,
@@ -819,11 +842,16 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
           })
           .select()
           .single();
-        if (newCliente) clienteId = newCliente.id;
+        if (cliErr || !newCliente) {
+          setSaving(false);
+          setSaveError('Cliente non creato: ' + (cliErr?.message || 'errore sconosciuto'));
+          return;
+        }
+        clienteId = newCliente.id;
       }
       // Crea veicolo
       if (clienteId) {
-        const { data: newVeicolo } = await supabase
+        const { data: newVeicolo, error: veiErr } = await supabase
           .from('veicoli')
           .insert({
             cliente_id: clienteId,
@@ -836,12 +864,18 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
           })
           .select()
           .single();
-        if (newVeicolo) veicoloId = newVeicolo.id;
+        if (veiErr || !newVeicolo) {
+          setSaving(false);
+          setSaveError('Veicolo non creato: ' + (veiErr?.message || 'errore sconosciuto'));
+          return;
+        }
+        veicoloId = newVeicolo.id;
       }
     }
 
     if (!veicoloId || !clienteId || !officina) {
       setSaving(false);
+      setSaveError('Dati incompleti: seleziona un veicolo prima di salvare.');
       return;
     }
 
@@ -858,7 +892,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
 
     // Se non c'è appuntamento aperto, creane uno
     if (!appuntamentoId) {
-      const { data: newApp } = await supabase
+      const { data: newApp, error: appErr } = await supabase
         .from('appuntamenti')
         .insert({
           officina_id: officina.id,
@@ -871,11 +905,16 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
         })
         .select()
         .single();
-      if (newApp) appuntamentoId = newApp.id;
+      if (appErr || !newApp) {
+        setSaving(false);
+        setSaveError('Appuntamento non creato: ' + (appErr?.message || 'errore sconosciuto'));
+        return;
+      }
+      appuntamentoId = newApp.id;
     }
 
     if (appuntamentoId) {
-      const { data: newPreventivo } = await supabase
+      const { data: newPreventivo, error: prevErr } = await supabase
         .from('preventivi')
         .insert({
           appuntamento_id: appuntamentoId,
@@ -888,6 +927,13 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
         })
         .select()
         .single();
+      // Solo un inserimento andato a buon fine puo' sbloccare l'invio:
+      // prima bastava arrivare qui per mostrare "Salvato!" anche in errore.
+      if (prevErr || !newPreventivo) {
+        setSaving(false);
+        setSaveError('Preventivo non salvato: ' + (prevErr?.message || 'errore sconosciuto'));
+        return;
+      }
       setSaved(true);
 
       // Genera l'HTML del preventivo e lo carica su Storage per ottenere un
@@ -1072,22 +1118,22 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
         </button>
         <div>
           <h2 className="text-lg font-bold text-gray-900 dark:text-white">Nuovo Preventivo</h2>
-          <p className="text-xs text-gray-500">Cerca per targa o seleziona manualmente il veicolo</p>
+          <p className="text-xs text-gray-500">Cerca per targa o nome cliente, oppure seleziona manualmente il veicolo</p>
         </div>
       </div>
 
       {/* Search by targa */}
       <Card className="!p-4">
-        <div className="text-xs font-semibold text-gray-600 mb-2">Cerca veicolo per targa</div>
+        <div className="text-xs font-semibold text-gray-600 mb-2">Cerca per targa o nome cliente</div>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <input
               type="text"
               value={targa}
-              onChange={(e) => setTarga(e.target.value.toUpperCase())}
+              onChange={(e) => setTarga(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Es. FH123AB"
-              className="w-full px-4 py-2.5 pr-8 rounded-xl border border-gray-300 bg-white text-sm font-mono font-bold uppercase tracking-wider placeholder:text-gray-300 placeholder:font-normal placeholder:tracking-normal focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Es. FH123AB oppure Mario Rossi"
+              className="w-full px-4 py-2.5 pr-8 rounded-xl border border-gray-300 bg-white text-sm font-semibold placeholder:text-gray-300 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {targa && (
               <button
@@ -1102,7 +1148,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                   setSavedPdfUrl(null);
                 }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
-                title="Cancella targa"
+                title="Cancella ricerca"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1120,7 +1166,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
         </div>
         {notFound && (
           <div className="mt-3 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700">
-            Nessun veicolo trovato con targa "{targa}". Verifica la targa o aggiungi prima il cliente.
+            Nessun risultato per "{targa}". Controlla targa o nome, oppure usa la selezione manuale qui sotto.
           </div>
         )}
       </Card>
@@ -1562,6 +1608,12 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                   {saved ? '✅ Salvato!' : saving ? 'Salvataggio...' : '💾 Salva preventivo'}
                 </button>
               </div>
+
+              {saveError && (
+                <div className="mt-2 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+                  ⚠️ {saveError}
+                </div>
+              )}
 
               {/* Invio WhatsApp / Email — usa il link PDF generato al salvataggio */}
               <div className="grid grid-cols-2 gap-2 mt-2">
@@ -2140,6 +2192,8 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
                 created_at: p.created_at,
               }}
             />
+            {/* Finche' il link non e' pronto l'invio partirebbe senza allegato. */}
+            <div className={uploadingPdf ? 'opacity-50 pointer-events-none' : ''}>
             <ShareDocument
               tipo="preventivo"
               titolo="preventivo"
@@ -2164,6 +2218,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
                   : 'veicolo'
               }${detailAppuntamento.veicoli?.targa ? ` (${detailAppuntamento.veicoli.targa})` : ''}.\nTotale: ${fmtEuro(p.totale)}\n\nResto a disposizione per qualsiasi chiarimento.\n— ${officina?.nome || 'OfficinAI'}`}
             />
+            </div>
             {uploadingPdf && (
               <div className="text-[11px] text-gray-400 text-center">Generazione link preventivo…</div>
             )}
