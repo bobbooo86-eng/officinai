@@ -82,6 +82,7 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
   // Vero quando la tabella movimenti non esiste ancora: la Cassa continua a
   // funzionare salvando sul dispositivo, in attesa di poter sincronizzare.
   const [soloLocale, setSoloLocale] = useState(false);
+  const [dettagliLocale, setDettagliLocale] = useState(false);
 
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2500); };
 
@@ -478,19 +479,30 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
       )}
 
       {soloLocale && (
-        <Card className="!p-3 bg-amber-50 !border-amber-200">
-          <div className="text-xs font-bold text-amber-900 mb-1">
-            📵 Cassa in modalità locale
+        // Avviso, non errore: la cassa funziona. Va tenuto discreto ma
+        // visibile, perche' i dati non sono ancora condivisi tra dispositivi.
+        <button
+          onClick={() => setDettagliLocale((v) => !v)}
+          className="w-full text-left px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-slate-600">
+              💾 Salvataggio su questo dispositivo
+            </span>
+            <span className="text-[11px] text-slate-400">
+              {dettagliLocale ? 'nascondi' : 'dettagli'}
+            </span>
           </div>
-          <div className="text-[11px] text-amber-800 leading-snug">
-            La tabella della cassa non esiste ancora sul database, quindi i movimenti
-            vengono salvati <strong>solo su questo dispositivo</strong>: non si vedono
-            dagli altri telefoni e andrebbero persi svuotando i dati del browser.
-            <br />
-            Appena la tabella verrà creata (Altro → Impostazioni → Stato database)
-            saranno caricati automaticamente e questo avviso sparirà.
-          </div>
-        </Card>
+          {dettagliLocale && (
+            <div className="text-[11px] text-slate-600 leading-snug mt-1.5">
+              La cassa funziona normalmente, ma la tabella sul database non esiste
+              ancora: i movimenti restano <strong>su questo dispositivo</strong>, non
+              si vedono dagli altri e andrebbero persi svuotando i dati del browser.
+              Appena la tabella verrà creata saranno caricati automaticamente e
+              questo avviso sparirà.
+            </div>
+          )}
+        </button>
       )}
 
       {/* Selettore mese + Totali */}
