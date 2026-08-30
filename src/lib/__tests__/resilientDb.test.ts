@@ -5,12 +5,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const calls: Record<string, unknown>[] = [];
 let errorQueue: ({ message: string } | null)[] = [];
 
+let returnRow: unknown = { id: 'row-1' };
+
 vi.mock('../supabase', () => ({
   supabase: {
     from: () => ({
       insert: (payload: Record<string, unknown>) => {
         calls.push(payload);
-        return Promise.resolve({ error: errorQueue.shift() ?? null });
+        const error = errorQueue.shift() ?? null;
+        const result = { data: error ? null : returnRow, error };
+        return Object.assign(Promise.resolve({ error }), {
+          select: () => ({ single: () => Promise.resolve(result) }),
+        });
       },
       update: (payload: Record<string, unknown>) => ({
         eq: () => {
@@ -80,6 +86,33 @@ describe('insertTolerant', () => {
     expect(error).not.toBeNull();
     expect(isMissingTable(error)).toBe(true);
     expect(calls).toHaveLength(1);
+  });
+
+  it('con returning restituisce la riga inserita', async () => {
+    returnRow = { id: 'cliente-9', nome: 'Mario' };
+    const { error, data } = await insertTolerant<{ id: string; nome: string }>(
+      'clienti',
+      { nome: 'Mario' },
+      ['nome'],
+      { returning: true }
+    );
+    expect(error).toBeNull();
+    expect(data).toEqual({ id: 'cliente-9', nome: 'Mario' });
+  });
+
+  it('con returning riprova senza la colonna mancante e restituisce la riga', async () => {
+    returnRow = { id: 'cliente-10', nome: 'Mario' };
+    errorQueue = [missingCol('codice_fiscale', 'clienti'), null];
+    const { error, data, skipped } = await insertTolerant<{ id: string }>(
+      'clienti',
+      { nome: 'Mario', codice_fiscale: 'ABC' },
+      ['nome'],
+      { returning: true }
+    );
+    expect(error).toBeNull();
+    expect(skipped).toEqual(['codice_fiscale']);
+    expect(data).toEqual({ id: 'cliente-10', nome: 'Mario' });
+    expect(calls[1]).toEqual({ nome: 'Mario' });
   });
 
   it('propaga errori non legati allo schema senza riprovare', async () => {

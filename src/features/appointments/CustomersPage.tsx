@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, Loader, Button, Input, Badge } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
+import { insertTolerant } from '@/lib/resilientDb';
 import { STATO_CONFIG } from '@/lib/constants';
 import { fmtData, fmtOra, fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
@@ -29,7 +30,9 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
   }, [resetSignal]);
 
   const fetchClienti = async () => {
-    if (!officina) return;
+    // Senza officina non c'e' nulla da caricare, ma il loader va comunque
+    // spento o la pagina resta bloccata su "Caricamento clienti...".
+    if (!officina) { setLoading(false); return; }
     const { data } = await supabase
       .from('clienti')
       .select('*')
@@ -37,18 +40,25 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
       .order('nome');
     setClienti(data || []);
     setLoading(false);
+    return data;
+  };
 
-    // If initialClienteId is provided, navigate to that client's detail
-    if (initialClienteId && data) {
-      const cl = data.find(c => c.id === initialClienteId);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const data = await fetchClienti();
+      // Se nel frattempo l'utente e' tornato alla lista (resetSignal), non
+      // riaprire il dettaglio con un risultato ormai obsoleto.
+      if (cancelled || !initialClienteId || !data) return;
+      const cl = data.find((c) => c.id === initialClienteId);
       if (cl) {
         setSelectedCliente(cl);
         setView('detail');
       }
-    }
-  };
-
-  useEffect(() => { fetchClienti(); }, [officina, initialClienteId]);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [officina, initialClienteId]);
 
   if (loading) return <Loader text="Caricamento clienti..." />;
 
@@ -176,6 +186,7 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
   const [colore, setColore] = useState('');
 
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [errNome, setErrNome] = useState<string | null>(null);
 
   const carburanti = ['benzina', 'diesel', 'gpl', 'metano', 'ibrido', 'elettrico'];
@@ -185,27 +196,36 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
     if (!officina) return;
 
     setSaving(true);
+    setSaveError('');
 
     // Insert cliente
-    const { data: cliente, error } = await supabase
-      .from('clienti')
-      .insert({
-        officina_id: officina.id,
-        nome: nome.trim(),
-        email: email.trim() || null,
-        tel: tel.trim() || null,
-        note: [
-          codiceFiscale.trim() ? `CF: ${codiceFiscale.trim()}` : '',
-          indirizzo.trim() ? `Indirizzo: ${indirizzo.trim()}` : '',
-          note.trim(),
-        ].filter(Boolean).join(' | ') || null,
-      })
-      .select()
-      .single();
+    // codice_fiscale e indirizzo hanno colonne dedicate: vanno li', non
+    // concatenati dentro note, altrimenti non sono piu' consultabili.
+    const { data: cliente, error } = await insertTolerant<Cliente>('clienti', {
+      officina_id: officina.id,
+      nome: nome.trim(),
+      email: email.trim() || null,
+      tel: tel.trim() || null,
+      codice_fiscale: codiceFiscale.trim() || null,
+      indirizzo: indirizzo.trim() || null,
+      note: note.trim() || null,
+    }, ['officina_id', 'nome'], { returning: true });
+
+    if (error || !cliente) {
+      setSaving(false);
+      setSaveError('Errore salvataggio cliente: ' + (error?.message || 'nessun dato restituito'));
+      return;
+    }
 
     // Insert veicolo if targa provided
-    if (cliente && !error && targa.trim()) {
-      await supabase.from('veicoli').insert({
+    if (targa.trim()) {
+      // La tabella veicoli non ha una colonna note: cilindrata e colore
+      // finivano li' e l'intero insert veniva rifiutato, perdendo il veicolo.
+      const dettagli = [
+        cilindrata ? `Cilindrata: ${cilindrata}` : '',
+        colore ? `Colore: ${colore}` : '',
+      ].filter(Boolean).join(' | ');
+      const { error: vErr } = await insertTolerant('veicoli', {
         cliente_id: cliente.id,
         marca: marca.trim() || 'N/D',
         modello: modello.trim() || 'N/D',
@@ -213,16 +233,17 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
         anno: parseInt(anno) || new Date().getFullYear(),
         km: parseInt(km) || 0,
         carburante,
-        note: [
-          cilindrata ? `Cilindrata: ${cilindrata}` : '',
-          telaio ? `Telaio: ${telaio}` : '',
-          colore ? `Colore: ${colore}` : '',
-        ].filter(Boolean).join(' | ') || null,
-      });
+        telaio: [telaio.trim(), dettagli].filter(Boolean).join(' | ') || null,
+      }, ['cliente_id', 'targa']);
+      if (vErr) {
+        setSaving(false);
+        setSaveError('Cliente salvato, ma il veicolo non e stato registrato: ' + vErr.message);
+        return;
+      }
     }
 
     setSaving(false);
-    if (cliente && !error) onSaved(cliente);
+    onSaved(cliente);
   };
 
   const BackBtn = () => (
@@ -385,6 +406,12 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
           ))}
         </div>
       </div>
+
+      {saveError && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+          ⚠️ {saveError}
+        </div>
+      )}
 
       <Button fullWidth onClick={submit} loading={saving} disabled={!nome.trim()}>
         Salva cliente{targa.trim() ? ' e veicolo' : ''}

@@ -212,8 +212,15 @@ export function AppOfficina() {
       {activeTab === 'agenda' && (
         showNewApp ? (
           <NuovoAppuntamento
+            initialDate={calendarDate}
             onBack={() => setShowNewApp(false)}
-            onCreated={(app) => { setShowNewApp(false); handleSelectApp(app); }}
+            onCreated={(app) => {
+              setShowNewApp(false);
+              // Porta il calendario sul giorno dell'appuntamento appena creato,
+              // altrimenti restando sul giorno precedente sembra non salvato.
+              if (app?.data_ora) setCalendarDate(new Date(app.data_ora));
+              handleSelectApp(app);
+            }}
           />
         ) : (
           <div>

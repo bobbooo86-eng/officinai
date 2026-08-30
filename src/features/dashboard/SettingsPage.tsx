@@ -13,11 +13,12 @@ const RUOLO_CONFIG: Record<string, { label: string; color: string; bg: string }>
 };
 
 export function SettingsPage() {
-  const { officina, utente, logout } = useAuthStore();
+  const { officina, utente, logout, updateOfficina } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
   const { i18n } = useTranslation();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const [nome, setNome] = useState(officina?.nome || '');
   const [indirizzo, setIndirizzo] = useState(officina?.indirizzo || '');
@@ -122,11 +123,17 @@ export function SettingsPage() {
   const salva = async () => {
     if (!officina) return;
     setSaving(true);
-    await supabase
-      .from('officine')
-      .update({ nome, indirizzo, tel, email, p_iva: pIva, logo_url: logoUrl || null })
-      .eq('id', officina.id);
+    setSaveError('');
+    const patch = { nome, indirizzo, tel, email, p_iva: pIva, logo_url: logoUrl || null };
+    const { error } = await supabase.from('officine').update(patch).eq('id', officina.id);
     setSaving(false);
+    if (error) {
+      setSaveError('Errore salvataggio: ' + error.message);
+      return;
+    }
+    // Aggiorna lo store, altrimenti intestazione, PDF e dashboard
+    // continuerebbero a mostrare i dati precedenti fino al riavvio dell'app.
+    updateOfficina(patch);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
@@ -144,21 +151,32 @@ export function SettingsPage() {
       const { error: upErr } = await supabase.storage
         .from('logos')
         .upload(path, file, { upsert: true, contentType: file.type });
+
+      let url: string;
       if (upErr) {
-        // Fallback: leggi come data URL se lo storage non e configurato
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const dataUrl = String(reader.result);
-          setLogoUrl(dataUrl);
-          await supabase.from('officine').update({ logo_url: dataUrl }).eq('id', officina.id);
-        };
-        reader.readAsDataURL(file);
+        // Fallback: se il bucket Storage non esiste, salva il logo come data URL.
+        url = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error('Lettura del file non riuscita'));
+          reader.readAsDataURL(file);
+        });
+      } else {
+        url = supabase.storage.from('logos').getPublicUrl(path).data.publicUrl;
+      }
+
+      const { error: updErr } = await supabase
+        .from('officine')
+        .update({ logo_url: url })
+        .eq('id', officina.id);
+      if (updErr) {
+        alert('Logo non salvato: ' + updErr.message);
         return;
       }
-      const { data: pub } = supabase.storage.from('logos').getPublicUrl(path);
-      const url = pub.publicUrl;
       setLogoUrl(url);
-      await supabase.from('officine').update({ logo_url: url }).eq('id', officina.id);
+      updateOfficina({ logo_url: url });
+    } catch (e) {
+      alert('Logo non caricato: ' + (e instanceof Error ? e.message : 'errore sconosciuto'));
     } finally {
       setUploadingLogo(false);
     }
@@ -229,6 +247,12 @@ export function SettingsPage() {
       {saved && (
         <Card className="!p-3 bg-emerald-50 !border-emerald-200">
           <div className="text-sm font-semibold text-emerald-800">✅ Salvato con successo!</div>
+        </Card>
+      )}
+
+      {saveError && (
+        <Card className="!p-3 bg-red-50 !border-red-200">
+          <div className="text-sm font-semibold text-red-800">⚠️ {saveError}</div>
         </Card>
       )}
 

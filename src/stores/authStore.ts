@@ -34,6 +34,8 @@ interface AuthState {
   userType: 'officina' | 'cliente' | null;
 
   initialize: () => Promise<void>;
+  /** Aggiorna i dati dell'officina gia' caricati (es. dopo il salvataggio delle impostazioni). */
+  updateOfficina: (patch: Partial<Officina>) => void;
   loginOfficina: (email: string, password: string) => Promise<{ error?: string }>;
   loginCliente: (email: string, password: string) => Promise<{ error?: string }>;
   signUp: (email: string, password: string) => Promise<{ error?: string }>;
@@ -47,6 +49,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   cliente: null,
   officina: null,
   userType: null,
+
+  updateOfficina: (patch) =>
+    set((state) => (state.officina ? { officina: { ...state.officina, ...patch } } : state)),
 
   initialize: async () => {
     try {

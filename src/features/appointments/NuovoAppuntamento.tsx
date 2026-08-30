@@ -6,9 +6,16 @@ import type { Cliente, Veicolo } from '@/types/database';
 interface NuovoAppuntamentoProps {
   onBack: () => void;
   onCreated: (app: any) => void;
+  /** Giorno preselezionato dal calendario (es. "+ Nuovo appuntamento per 15 Set"). */
+  initialDate?: Date;
 }
 
-export function NuovoAppuntamento({ onBack, onCreated }: NuovoAppuntamentoProps) {
+/** Converte una Date nel formato accettato da <input type="datetime-local">, in ora locale. */
+function toLocalInputValue(d: Date): string {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppuntamentoProps) {
   const { officina } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -32,10 +39,20 @@ export function NuovoAppuntamento({ onBack, onCreated }: NuovoAppuntamentoProps)
 
   // Appuntamento fields
   const [dataOra, setDataOra] = useState(() => {
-    const now = new Date();
-    now.setMinutes(0);
-    now.setHours(now.getHours() + 1);
-    return now.toISOString().slice(0, 16);
+    // L'input datetime-local lavora in ora locale: toISOString() darebbe UTC
+    // e in Italia proporrebbe un orario 1-2 ore indietro (a notte fonda
+    // addirittura il giorno precedente).
+    const base = initialDate ? new Date(initialDate) : new Date();
+    if (initialDate) {
+      const now = new Date();
+      const isOggi = base.toDateString() === now.toDateString();
+      // Sul giorno scelto dal calendario propone le 9:00; se e' oggi, l'ora successiva.
+      if (isOggi) base.setHours(now.getHours() + 1, 0, 0, 0);
+      else base.setHours(9, 0, 0, 0);
+    } else {
+      base.setHours(base.getHours() + 1, 0, 0, 0);
+    }
+    return toLocalInputValue(base);
   });
   const [problema, setProblema] = useState('');
   const [priorita, setPriorita] = useState('normale');

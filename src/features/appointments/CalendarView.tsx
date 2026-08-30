@@ -43,6 +43,17 @@ const dateStr = (d: Date) => {
   return `${y}-${m}-${day}`;
 };
 
+/**
+ * data_ora arriva da Postgres come timestamp UTC. Confrontarne i primi 10
+ * caratteri con una data locale sbaglia giorno per gli appuntamenti serali
+ * (es. 00:30 del 30 in Italia e' il 29 alle 22:30 UTC), quindi va prima
+ * convertito nel fuso locale.
+ */
+const appDay = (dataOra?: string | null): string => (dataOra ? dateStr(new Date(dataOra)) : '');
+
+/** Ora locale (0-23) dell'appuntamento. */
+const appHour = (dataOra?: string | null): number => (dataOra ? new Date(dataOra).getHours() : 9);
+
 const dayNames = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const dayNamesShort = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
 const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
@@ -111,7 +122,7 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
   }, [appuntamenti, searchQuery]);
 
   const dayApps = useMemo(
-    () => searchFiltered.filter((a) => a.data_ora?.startsWith(selectedStr)),
+    () => searchFiltered.filter((a) => appDay(a.data_ora) === selectedStr),
     [searchFiltered, selectedStr]
   );
 
@@ -119,7 +130,7 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
     const start = dateStr(weekDates[0]);
     const end = dateStr(weekDates[6]);
     return searchFiltered.filter((a) => {
-      const d = a.data_ora?.slice(0, 10);
+      const d = appDay(a.data_ora);
       return d && d >= start && d <= end;
     });
   }, [searchFiltered, weekDates]);
@@ -132,7 +143,7 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
       slots[key] = [];
     }
     dayApps.forEach((a) => {
-      const hour = parseInt(a.data_ora?.slice(11, 13) || '9', 10);
+      const hour = appHour(a.data_ora);
       const clamped = Math.max(7, Math.min(20, hour));
       const key = `${clamped.toString().padStart(2, '0')}:00`;
       if (slots[key]) slots[key].push(a);
@@ -167,7 +178,7 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
     const y = selectedDate.getFullYear();
     const m = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
     const prefix = `${y}-${m}`;
-    return searchFiltered.filter((a) => a.data_ora?.startsWith(prefix));
+    return searchFiltered.filter((a) => appDay(a.data_ora).startsWith(prefix));
   }, [searchFiltered, selectedDate]);
 
   // Year overview: per each of 12 months, count of appointments
@@ -175,7 +186,7 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
     const y = selectedDate.getFullYear();
     const counts: number[] = Array.from({ length: 12 }, () => 0);
     searchFiltered.forEach((a) => {
-      const d = a.data_ora?.slice(0, 10);
+      const d = appDay(a.data_ora);
       if (!d) return;
       const [yy, mm] = d.split('-');
       if (parseInt(yy, 10) === y) counts[parseInt(mm, 10) - 1]++;
@@ -275,7 +286,7 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
             const ds = dateStr(d);
             const isToday = ds === todayStr;
             const isSelected = ds === selectedStr;
-            const dayAppsForCell = appuntamenti.filter((a) => a.data_ora?.startsWith(ds));
+            const dayAppsForCell = appuntamenti.filter((a) => appDay(a.data_ora) === ds);
             const nApps = dayAppsForCell.length;
             return (
               <button
@@ -366,7 +377,7 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
           )}
           {weekDates.map((d, i) => {
             const ds = dateStr(d);
-            const dApps = weekApps.filter((a) => a.data_ora?.startsWith(ds));
+            const dApps = weekApps.filter((a) => appDay(a.data_ora) === ds);
             if (dApps.length === 0) return null;
             const isToday = ds === todayStr;
             return (
@@ -429,7 +440,7 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
               const isCurrentMonth = d.getMonth() === selectedDate.getMonth();
               const isToday = ds === todayStr;
               const isSelected = ds === selectedStr;
-              const dApps = searchFiltered.filter((a) => a.data_ora?.startsWith(ds));
+              const dApps = searchFiltered.filter((a) => appDay(a.data_ora) === ds);
               return (
                 <button
                   key={idx}
@@ -481,7 +492,7 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
             )}
             {monthDaysList.map((d, i) => {
               const ds = dateStr(d);
-              const dApps = monthApps.filter((a) => a.data_ora?.startsWith(ds));
+              const dApps = monthApps.filter((a) => appDay(a.data_ora) === ds);
               if (dApps.length === 0) return null;
               const isToday = ds === todayStr;
               return (
