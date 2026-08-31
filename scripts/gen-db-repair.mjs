@@ -11,6 +11,7 @@ const SOURCES = [
   'supabase/migrations/013_fix_schema_drift.sql',
   'supabase/migrations/016_movimenti_minimale.sql',
   'supabase/migrations/017_impostazioni_email.sql',
+  'supabase/migrations/018_veicoli_scadenze.sql',
 ];
 const TARGET = 'src/lib/dbRepairSql.ts';
 

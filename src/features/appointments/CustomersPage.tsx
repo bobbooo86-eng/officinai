@@ -10,6 +10,21 @@ import type { Cliente, Veicolo, Appuntamento, Preventivo } from '@/types/databas
 
 type View = 'list' | 'add' | 'detail' | 'addVeicolo' | 'storicoVeicolo';
 
+/** Colore/etichetta di una scadenza in base a quanto manca: scaduta (rosso),
+ * entro un mese (ambra, coerente con l'anticipo delle notifiche in Home),
+ * oltre (grigio, solo informativo). */
+function statoScadenza(dataStr?: string): { label: string; color: string; bg: string } | null {
+  if (!dataStr) return null;
+  const oggi = new Date();
+  oggi.setHours(0, 0, 0, 0);
+  const d = new Date(dataStr);
+  const giorni = Math.round((d.getTime() - oggi.getTime()) / 86400000);
+  const dataFmt = d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
+  if (giorni < 0) return { label: `Scaduta il ${dataFmt}`, color: '#991b1b', bg: '#fee2e2' };
+  if (giorni <= 30) return { label: `${dataFmt} (tra ${giorni}g)`, color: '#92400e', bg: '#fef3c7' };
+  return { label: dataFmt, color: '#374151', bg: '#f3f4f6' };
+}
+
 export function CustomersPage({ initialClienteId, resetSignal }: { initialClienteId?: string; resetSignal?: number } = {}) {
   const { officina } = useAuthStore();
   const [clienti, setClienti] = useState<Cliente[]>([]);
@@ -184,6 +199,10 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
   const [cilindrata, setCilindrata] = useState('');
   const [telaio, setTelaio] = useState('');
   const [colore, setColore] = useState('');
+  const [scadenzaRevisione, setScadenzaRevisione] = useState('');
+  const [scadenzaTagliando, setScadenzaTagliando] = useState('');
+  const [scadenzaAssicurazione, setScadenzaAssicurazione] = useState('');
+  const [scadenzaBollo, setScadenzaBollo] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -227,6 +246,12 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
         cilindrata ? `Cilindrata: ${cilindrata}` : '',
         colore ? `Colore: ${colore}` : '',
       ].filter(Boolean).join(' | ');
+      const scadenze = (scadenzaRevisione || scadenzaTagliando || scadenzaAssicurazione || scadenzaBollo) ? {
+        revisione: scadenzaRevisione || undefined,
+        tagliando: scadenzaTagliando || undefined,
+        assicurazione: scadenzaAssicurazione || undefined,
+        bollo: scadenzaBollo || undefined,
+      } : null;
       const { error: vErr } = await insertTolerant('veicoli', {
         cliente_id: cliente.id,
         marca: marca.trim() || 'N/D',
@@ -236,6 +261,7 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
         km: parseInt(km) || 0,
         carburante,
         telaio: [telaio.trim(), dettagli].filter(Boolean).join(' | ') || null,
+        scadenze,
       }, ['cliente_id', 'targa']);
       if (vErr) {
         setSaving(false);
@@ -409,6 +435,37 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
         </div>
       </div>
 
+      {/* ---- Scadenze veicolo ---- */}
+      <SectionTitle icon="📅" title="Scadenze" />
+      <div className="grid grid-cols-2 gap-3">
+        <Input
+          label="Scadenza revisione"
+          type="date"
+          value={scadenzaRevisione}
+          onChange={(e) => setScadenzaRevisione(e.target.value)}
+        />
+        <Input
+          label="Scadenza tagliando"
+          type="date"
+          value={scadenzaTagliando}
+          onChange={(e) => setScadenzaTagliando(e.target.value)}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Input
+          label="Scadenza assicurazione"
+          type="date"
+          value={scadenzaAssicurazione}
+          onChange={(e) => setScadenzaAssicurazione(e.target.value)}
+        />
+        <Input
+          label="Scadenza bollo"
+          type="date"
+          value={scadenzaBollo}
+          onChange={(e) => setScadenzaBollo(e.target.value)}
+        />
+      </div>
+
       {saveError && (
         <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
           ⚠️ {saveError}
@@ -432,6 +489,36 @@ function ClienteDetail({ cliente, onBack, onAddVeicolo, onDeleted, onSelectVeico
 }) {
   const [veicoli, setVeicoli] = useState<Veicolo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editScadenzeId, setEditScadenzeId] = useState<string | null>(null);
+  const [editRevisione, setEditRevisione] = useState('');
+  const [editTagliando, setEditTagliando] = useState('');
+  const [editAssicurazione, setEditAssicurazione] = useState('');
+  const [editBollo, setEditBollo] = useState('');
+  const [savingScadenze, setSavingScadenze] = useState(false);
+
+  const apriScadenze = (v: Veicolo) => {
+    setEditScadenzeId(v.id);
+    setEditRevisione(v.scadenze?.revisione || '');
+    setEditTagliando(v.scadenze?.tagliando || '');
+    setEditAssicurazione(v.scadenze?.assicurazione || '');
+    setEditBollo(v.scadenze?.bollo || '');
+  };
+
+  const salvaScadenze = async (v: Veicolo) => {
+    setSavingScadenze(true);
+    const scadenze = {
+      revisione: editRevisione || undefined,
+      tagliando: editTagliando || undefined,
+      assicurazione: editAssicurazione || undefined,
+      bollo: editBollo || undefined,
+    };
+    const { error } = await supabase.from('veicoli').update({ scadenze }).eq('id', v.id);
+    setSavingScadenze(false);
+    if (!error) {
+      setVeicoli((prev) => prev.map((x) => (x.id === v.id ? { ...x, scadenze } : x)));
+      setEditScadenzeId(null);
+    }
+  };
 
   useEffect(() => {
     const fetch = async () => {
@@ -507,20 +594,57 @@ function ClienteDetail({ cliente, onBack, onAddVeicolo, onDeleted, onSelectVeico
         </Card>
       ) : (
         <div className="space-y-2">
-          {veicoli.map((v) => (
-            <Card key={v.id} hover className="!p-3" onClick={() => onSelectVeicolo(v)}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-xl">🚗</div>
-                <div className="flex-1">
-                  <div className="font-semibold text-sm text-gray-900">{v.marca} {v.modello}</div>
-                  <div className="text-xs text-gray-500">
-                    <span className="font-mono font-semibold">{v.targa}</span> · {v.anno} · {v.km?.toLocaleString()} km · {v.carburante}
+          {veicoli.map((v) => {
+            const revisione = statoScadenza(v.scadenze?.revisione);
+            const tagliando = statoScadenza(v.scadenze?.tagliando);
+            const assicurazione = statoScadenza(v.scadenze?.assicurazione);
+            const bollo = statoScadenza(v.scadenze?.bollo);
+            return (
+              <Card key={v.id} className="!p-3">
+                <div className="flex items-center gap-3 cursor-pointer" onClick={() => onSelectVeicolo(v)}>
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-xl shrink-0">🚗</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm text-gray-900">{v.marca} {v.modello}</div>
+                    <div className="text-xs text-gray-500">
+                      <span className="font-mono font-semibold">{v.targa}</span> · {v.anno} · {v.km?.toLocaleString()} km · {v.carburante}
+                    </div>
+                    <div className="text-[10px] text-blue-500 mt-0.5">Tocca per vedere lo storico lavorazioni →</div>
                   </div>
-                  <div className="text-[10px] text-blue-500 mt-0.5">Tocca per vedere lo storico lavorazioni →</div>
                 </div>
-              </div>
-            </Card>
-          ))}
+                {(revisione || tagliando || assicurazione || bollo) && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {revisione && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ color: revisione.color, backgroundColor: revisione.bg }}>Revisione: {revisione.label}</span>}
+                    {tagliando && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ color: tagliando.color, backgroundColor: tagliando.bg }}>Tagliando: {tagliando.label}</span>}
+                    {assicurazione && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ color: assicurazione.color, backgroundColor: assicurazione.bg }}>Assicurazione: {assicurazione.label}</span>}
+                    {bollo && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ color: bollo.color, backgroundColor: bollo.bg }}>Bollo: {bollo.label}</span>}
+                  </div>
+                )}
+                {editScadenzeId === v.id ? (
+                  <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input label="Revisione" type="date" value={editRevisione} onChange={(e) => setEditRevisione(e.target.value)} />
+                      <Input label="Tagliando" type="date" value={editTagliando} onChange={(e) => setEditTagliando(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input label="Assicurazione" type="date" value={editAssicurazione} onChange={(e) => setEditAssicurazione(e.target.value)} />
+                      <Input label="Bollo" type="date" value={editBollo} onChange={(e) => setEditBollo(e.target.value)} />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={() => salvaScadenze(v)} loading={savingScadenze}>Salva</Button>
+                      <Button variant="secondary" onClick={() => setEditScadenzeId(null)}>Annulla</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => apriScadenze(v)}
+                    className="text-[11px] text-blue-600 font-semibold hover:text-blue-800 cursor-pointer mt-2"
+                  >
+                    📅 Modifica scadenze
+                  </button>
+                )}
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -544,6 +668,10 @@ function AddVeicoloForm({ clienteId, onBack, onSaved }: {
   const [anno, setAnno] = useState(new Date().getFullYear().toString());
   const [km, setKm] = useState('');
   const [carburante, setCarburante] = useState('benzina');
+  const [scadenzaRevisione, setScadenzaRevisione] = useState('');
+  const [scadenzaTagliando, setScadenzaTagliando] = useState('');
+  const [scadenzaAssicurazione, setScadenzaAssicurazione] = useState('');
+  const [scadenzaBollo, setScadenzaBollo] = useState('');
   const [saving, setSaving] = useState(false);
   const [errTarga, setErrTarga] = useState<string | null>(null);
 
@@ -553,9 +681,13 @@ function AddVeicoloForm({ clienteId, onBack, onSaved }: {
     if (!targa.trim()) { setErrTarga('La targa è obbligatoria'); return; }
 
     setSaving(true);
-    const { error } = await supabase
-      .from('veicoli')
-      .insert({
+    const scadenze = (scadenzaRevisione || scadenzaTagliando || scadenzaAssicurazione || scadenzaBollo) ? {
+      revisione: scadenzaRevisione || undefined,
+      tagliando: scadenzaTagliando || undefined,
+      assicurazione: scadenzaAssicurazione || undefined,
+      bollo: scadenzaBollo || undefined,
+    } : null;
+    const { error } = await insertTolerant('veicoli', {
         cliente_id: clienteId,
         marca: marca.trim() || 'N/D',
         modello: modello.trim() || 'N/D',
@@ -563,7 +695,8 @@ function AddVeicoloForm({ clienteId, onBack, onSaved }: {
         anno: parseInt(anno) || new Date().getFullYear(),
         km: parseInt(km) || 0,
         carburante,
-      });
+        scadenze,
+      }, ['cliente_id', 'targa']);
 
     setSaving(false);
     if (!error) onSaved();
@@ -637,6 +770,18 @@ function AddVeicoloForm({ clienteId, onBack, onSaved }: {
               {c}
             </button>
           ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Scadenze</label>
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Revisione" type="date" value={scadenzaRevisione} onChange={(e) => setScadenzaRevisione(e.target.value)} />
+          <Input label="Tagliando" type="date" value={scadenzaTagliando} onChange={(e) => setScadenzaTagliando(e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <Input label="Assicurazione" type="date" value={scadenzaAssicurazione} onChange={(e) => setScadenzaAssicurazione(e.target.value)} />
+          <Input label="Bollo" type="date" value={scadenzaBollo} onChange={(e) => setScadenzaBollo(e.target.value)} />
         </div>
       </div>
 

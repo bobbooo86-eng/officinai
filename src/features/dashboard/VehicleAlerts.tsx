@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import type { Veicolo, Cliente } from '@/types/database';
 
+// Un mese di anticipo, come richiesto: le scadenze piu' lontane non
+// interessano ancora il titolare e affollerebbero solo la Home.
+const SOGLIA_GIORNI = 30;
+
 interface VehicleAlert {
   veicolo: Veicolo;
   cliente?: Cliente;
@@ -51,8 +55,8 @@ export function VehicleAlerts() {
             const diffMs = scadDate.getTime() - oggi.getTime();
             const giorniRimanenti = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-            // Alert if within 60 days or already expired
-            if (giorniRimanenti <= 60) {
+            // Alert if within a month or already expired
+            if (giorniRimanenti <= SOGLIA_GIORNI) {
               alertList.push({
                 veicolo: v,
                 cliente,
@@ -73,6 +77,16 @@ export function VehicleAlerts() {
 
     fetch();
   }, [officina]);
+
+  const inviaPromemoria = (alert: VehicleAlert) => {
+    const tel = alert.cliente?.tel;
+    if (!tel) return;
+    const dataFmt = new Date(alert.scadenza).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+    const scaduta = alert.giorniRimanenti <= 0;
+    const testo = `Buongiorno ${alert.cliente?.nome || ''}, le ricordiamo che ${alert.tipo.toLowerCase()} del suo ${alert.veicolo.marca} ${alert.veicolo.modello}${alert.veicolo.targa ? ` (${alert.veicolo.targa})` : ''} ${scaduta ? `è scaduta il ${dataFmt}` : `scade il ${dataFmt}`}. La contattiamo per fissare un appuntamento.\n— ${officina?.nome || 'OfficinAI'}`;
+    const telPulito = tel.replace(/[^0-9+]/g, '');
+    window.open(`https://wa.me/${telPulito}?text=${encodeURIComponent(testo)}`, '_blank');
+  };
 
   if (loading) return null;
   if (alerts.length === 0) return null;
@@ -114,6 +128,14 @@ export function VehicleAlerts() {
                     : `Tra ${alert.giorniRimanenti}gg`
                   }
                 </div>
+                {alert.cliente?.tel && (
+                  <button
+                    onClick={() => inviaPromemoria(alert)}
+                    className="mt-1 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-semibold hover:bg-emerald-700 cursor-pointer transition-colors"
+                  >
+                    💬 Promemoria
+                  </button>
+                )}
               </div>
             </div>
           );
