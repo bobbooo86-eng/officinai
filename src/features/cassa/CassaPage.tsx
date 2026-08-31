@@ -6,6 +6,7 @@ import {
   aggiornaLocale, aggiungiLocale, isLocale, leggiLocali, perSupabase, rimuoviLocale, svuotaLocali,
 } from '@/lib/cassaLocale';
 import { useAuthStore } from '@/stores/authStore';
+import { IncassiOfficina } from './IncassiOfficina';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente } from '@/types/database';
 
 type CassaTab = 'tutti' | 'incasso_extra' | 'spesa_officina' | 'spesa_titolare' | 'dipendenti';
@@ -61,6 +62,7 @@ interface CassaPageProps {
 
 export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
   const { officina, utente } = useAuthStore();
+  const [sezione, setSezione] = useState<'movimenti' | 'incassi'>('movimenti');
   const [tab, setTab] = useState<CassaTab>('tutti');
   const [movimenti, setMovimenti] = useState<Movimento[]>([]);
   const [dipendenti, setDipendenti] = useState<Utente[]>([]);
@@ -408,14 +410,40 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">Cassa</h2>
+        {sezione === 'movimenti' && (
+          <button
+            onClick={() => { resetForm(); setShowForm(!showForm); }}
+            className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 cursor-pointer"
+          >
+            {showForm ? '✗ Chiudi' : '+ Nuovo movimento'}
+          </button>
+        )}
+      </div>
+
+      {/* Movimenti (cassa manuale) vs Incassi officina (pagamenti alla consegna) */}
+      <div className="grid grid-cols-2 gap-2">
         <button
-          onClick={() => { resetForm(); setShowForm(!showForm); }}
-          className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 cursor-pointer"
+          onClick={() => setSezione('movimenti')}
+          className={`py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+            sezione === 'movimenti' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
         >
-          {showForm ? '✗ Chiudi' : '+ Nuovo movimento'}
+          💶 Movimenti
+        </button>
+        <button
+          onClick={() => setSezione('incassi')}
+          className={`py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+            sezione === 'incassi' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          🚗 Incassi officina
         </button>
       </div>
 
+      {sezione === 'incassi' && <IncassiOfficina officinaId={officinaId} />}
+
+      {sezione === 'movimenti' && (
+      <>
       {toast && (
         <div className="p-2.5 rounded-lg bg-gray-900 text-white text-xs text-center">{toast}</div>
       )}
@@ -716,6 +744,8 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
             );
           })}
         </div>
+      )}
+      </>
       )}
     </div>
   );

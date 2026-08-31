@@ -250,6 +250,7 @@ function ModalPagamento({ onConferma, onAnnulla }: {
       stato: statoPag,
       importo_pagato: importoPagato ? parseFloat(importoPagato) : undefined,
       importo_totale: importoTotale ? parseFloat(importoTotale) : undefined,
+      data_consegna: new Date().toISOString(),
       note: note.trim() || undefined,
     });
   };
@@ -290,33 +291,37 @@ function ModalPagamento({ onConferma, onAnnulla }: {
           ))}
         </div>
 
-        {/* Importi (per acconto e non pagato) */}
-        {(statoPag === 'acconto' || statoPag === 'non_pagato') && (
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
+        {/* Importo: sempre richiesto, anche per "pagato completo", altrimenti
+            il resoconto incassi in Cassa non avrebbe nessun numero da sommare
+            proprio per il caso piu' frequente. */}
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {statoPag === 'pagato' ? 'Totale incassato (€)' : 'Totale da pagare (€)'}
+              </label>
+              <input
+                type="number"
+                value={importoTotale}
+                onChange={(e) => setImportoTotale(e.target.value)}
+                placeholder="es. 350"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {statoPag === 'acconto' && (
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Totale da pagare (€)</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Già pagato (€)</label>
                 <input
                   type="number"
-                  value={importoTotale}
-                  onChange={(e) => setImportoTotale(e.target.value)}
-                  placeholder="es. 350"
+                  value={importoPagato}
+                  onChange={(e) => setImportoPagato(e.target.value)}
+                  placeholder="es. 100"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              {statoPag === 'acconto' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Già pagato (€)</label>
-                  <input
-                    type="number"
-                    value={importoPagato}
-                    onChange={(e) => setImportoPagato(e.target.value)}
-                    placeholder="es. 100"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              )}
-            </div>
+            )}
+          </div>
+          {statoPag !== 'pagato' && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Note (opzionale)</label>
               <input
@@ -327,8 +332,8 @@ function ModalPagamento({ onConferma, onAnnulla }: {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="flex gap-2 pt-1">
           <button

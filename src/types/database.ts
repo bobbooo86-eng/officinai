@@ -93,6 +93,8 @@ export interface PagamentoInfo {
   stato: PagamentoStato;
   importo_pagato?: number;   // per acconto: quanto ha gia pagato
   importo_totale?: number;   // importo totale da pagare
+  costo_ricambi?: number;    // costo dei ricambi usati, per calcolare il guadagno netto
+  data_consegna?: string;    // quando e' stata confermata la consegna: appuntamenti non ha altrimenti una data di consegna, solo data_ora (la data prenotata)
   note?: string;
 }
 
