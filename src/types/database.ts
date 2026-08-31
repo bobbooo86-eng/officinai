@@ -133,6 +133,9 @@ export interface FoglioLavoro {
   firma_operaio?: string;
   costo_manodopera?: number;
   tariffa_oraria?: number;
+  lavorazioni_tipiche?: string[];
+  lavorazioni_da_eseguire?: string;
+  nome_operaio?: string;
   created_at?: string;
 }
 

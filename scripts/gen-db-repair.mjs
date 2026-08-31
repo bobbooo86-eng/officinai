@@ -12,6 +12,7 @@ const SOURCES = [
   'supabase/migrations/016_movimenti_minimale.sql',
   'supabase/migrations/017_impostazioni_email.sql',
   'supabase/migrations/018_veicoli_scadenze.sql',
+  'supabase/migrations/019_foglio_lavoro_semplice.sql',
 ];
 const TARGET = 'src/lib/dbRepairSql.ts';
 
