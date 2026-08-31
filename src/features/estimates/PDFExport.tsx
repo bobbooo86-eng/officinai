@@ -83,20 +83,26 @@ export function buildPreventivoHtml(
   appuntamento: Appuntamento,
   preventivo: Preventivo,
   officina?: Officina | null,
-  accentColor?: string
+  accentColor?: string,
+  opts?: { docType?: 'preventivo' | 'fattura'; numero?: string; clienteCf?: string }
 ): string {
   const accent = accentColor || '#1a56db';
   const accentDark = darkenColor(accent, 0.15);
   const logoBlock = officina?.logo_url
     ? `<img src="${officina.logo_url}" alt="Logo" style="width:48px;height:48px;border-radius:10px;object-fit:cover;margin-right:12px;" />`
     : '';
+  // La fattura e' un preventivo accettato con un'intestazione diversa: la
+  // grafica resta identica, cosi' il cliente riconosce lo stesso documento
+  // invece di riceverne uno stilisticamente diverso all'ultimo passaggio.
+  const isFattura = opts?.docType === 'fattura';
+  const titoloDoc = isFattura ? 'Fattura' : 'Preventivo';
 
   return `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Preventivo — ${officina?.nome || 'OfficinAI'}</title>
+  <title>${titoloDoc} — ${officina?.nome || 'OfficinAI'}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #333; font-size: 13px; }
@@ -141,7 +147,8 @@ export function buildPreventivoHtml(
       </div>
     </div>
     <div class="header-right">
-      <strong>PREVENTIVO</strong><br>
+      ${isFattura && opts?.numero ? `<div style="font-size:18px;font-weight:700;color:${accent};">${opts.numero}</div>` : ''}
+      <strong>${titoloDoc.toUpperCase()}</strong><br>
       Data: ${new Date().toLocaleDateString('it-IT')}<br>
       Stato: ${preventivo.stato.toUpperCase()}
     </div>
@@ -158,10 +165,17 @@ export function buildPreventivoHtml(
         <label>Veicolo</label>
         <p>${appuntamento.veicoli?.marca} ${appuntamento.veicoli?.modello} — ${appuntamento.veicoli?.targa}</p>
       </div>
+      ${isFattura ? `
+      <div class="info-box">
+        <label>Codice Fiscale / P.IVA</label>
+        <p>${opts?.clienteCf || '—'}</p>
+      </div>
+      ` : `
       <div class="info-box">
         <label>Problema segnalato</label>
         <p>${appuntamento.problema}</p>
       </div>
+      `}
       <div class="info-box">
         <label>Km</label>
         <p>${appuntamento.veicoli?.km?.toLocaleString() || '-'}</p>
@@ -170,7 +184,7 @@ export function buildPreventivoHtml(
   </div>
 
   <div class="section">
-    <h2>Dettaglio preventivo</h2>
+    <h2>Dettaglio ${isFattura ? 'fattura' : 'preventivo'}</h2>
     <table>
       <thead>
         <tr>
@@ -205,9 +219,9 @@ export function buildPreventivoHtml(
   <div class="section">
     <h2>Condizioni</h2>
     <p style="font-size: 11px; color: #666; line-height: 1.6;">
-      Il presente preventivo ha validità 30 giorni dalla data di emissione.
-      I prezzi dei ricambi possono subire variazioni in base alla disponibilità.
-      I tempi di lavorazione sono stimati e possono variare in base alle condizioni effettive del veicolo.
+      ${isFattura
+        ? 'Documento emesso a saldo della lavorazione eseguita. Si prega di conservare per eventuali garanzie sui ricambi.'
+        : 'Il presente preventivo ha validità 30 giorni dalla data di emissione. I prezzi dei ricambi possono subire variazioni in base alla disponibilità. I tempi di lavorazione sono stimati e possono variare in base alle condizioni effettive del veicolo.'}
     </p>
   </div>
 

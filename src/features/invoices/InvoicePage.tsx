@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { fmtEuro, fmtData } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { ShareDocument } from '@/components/ShareDocument';
+import { buildPreventivoHtml, extractLogoColor } from '@/features/estimates/PDFExport';
 import type { Preventivo, PreventivoRiga, Appuntamento } from '@/types/database';
 
 // ============================================
@@ -463,130 +464,44 @@ function DettaglioFattura({
   const righe = (fattura.righe || []) as FatturaRiga[];
 
   // ---- PDF Generation ----
-  const generaPDF = () => {
+  // Riusa esattamente la grafica del preventivo (stesso font, colori,
+  // logo): la fattura e' lo stesso documento un passaggio piu' avanti,
+  // non un modello a se' stante che rischia di disallinearsi nel tempo.
+  const generaPDF = async () => {
     setGenerating(true);
-
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Fattura ${fattura.numero} — ${officina?.nome || 'OfficinAI'}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #333; font-size: 13px; }
-    .header { display: flex; justify-content: space-between; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 3px solid #1a56db; }
-    .header-left h1 { color: #1a56db; font-size: 24px; margin-bottom: 4px; }
-    .header-left p { color: #666; font-size: 12px; }
-    .header-right { text-align: right; font-size: 12px; color: #666; }
-    .header-right strong { color: #333; }
-    .header-right .numero { font-size: 18px; font-weight: 700; color: #1a56db; }
-    .section { margin-bottom: 24px; }
-    .section h2 { font-size: 14px; color: #1a56db; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb; }
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .info-box { background: #f9fafb; padding: 12px; border-radius: 8px; }
-    .info-box label { font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; }
-    .info-box p { font-weight: 600; margin-top: 2px; }
-    table { width: 100%; border-collapse: collapse; margin: 8px 0; }
-    th { background: #1f2937; color: white; padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; }
-    th:first-child { border-radius: 6px 0 0 0; }
-    th:last-child { border-radius: 0 6px 0 0; text-align: right; }
-    td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; }
-    td:last-child { text-align: right; font-weight: 600; }
-    tr:nth-child(even) { background: #f9fafb; }
-    .totals { margin-top: 16px; text-align: right; }
-    .totals .row { display: flex; justify-content: flex-end; gap: 40px; padding: 4px 0; }
-    .totals .total { font-size: 18px; font-weight: 700; color: #1a56db; padding-top: 8px; border-top: 2px solid #1a56db; }
-    .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; text-align: center; }
-    .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; }
-    .badge-mano { background: #dbeafe; color: #1e40af; }
-    .badge-ric { background: #fef3c7; color: #92400e; }
-    .payment-info { margin-top: 24px; padding: 16px; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0; }
-    .payment-info p { font-size: 12px; color: #166534; }
-    @media print { body { padding: 20px; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="header-left">
-      <h1>${officina?.nome || 'OfficinAI'}</h1>
-      <p>${officina?.indirizzo || ''}</p>
-      <p>Tel: ${officina?.tel || ''} &bull; Email: ${officina?.email || ''}</p>
-      <p>P.IVA: ${officina?.p_iva || ''}</p>
-    </div>
-    <div class="header-right">
-      <div class="numero">${fattura.numero}</div>
-      <strong>FATTURA</strong><br>
-      Data: ${new Date(fattura.data_emissione).toLocaleDateString('it-IT')}<br>
-      Stato: ${FATTURA_STATO_CONFIG[fattura.stato].label.toUpperCase()}
-    </div>
-  </div>
-
-  <div class="section">
-    <h2>Dati cliente</h2>
-    <div class="info-grid">
-      <div class="info-box">
-        <label>Cliente</label>
-        <p>${fattura.cliente_nome}</p>
-      </div>
-      <div class="info-box">
-        <label>Codice Fiscale / P.IVA</label>
-        <p>${fattura.cliente_cf || '—'}</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="section">
-    <h2>Dettaglio voci</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Tipo</th>
-          <th>Descrizione</th>
-          <th>Qt&agrave;</th>
-          <th>Prezzo</th>
-          <th>Totale</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${righe.map((r) => `
-          <tr>
-            <td><span class="badge ${r.tipo === 'manodopera' ? 'badge-mano' : 'badge-ric'}">${r.tipo === 'manodopera' ? 'Manodopera' : 'Ricambio'}</span></td>
-            <td>${r.desc}</td>
-            <td>${r.qta}</td>
-            <td>${fmtEuro(r.prezzo)}</td>
-            <td>${fmtEuro(r.qta * r.prezzo)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-
-    <div class="totals">
-      <div class="row"><span>Subtotale:</span> <strong>${fmtEuro(fattura.subtotale)}</strong></div>
-      <div class="row"><span>IVA 22%:</span> <strong>${fmtEuro(fattura.iva)}</strong></div>
-      <div class="row total"><span>TOTALE:</span> <strong>${fmtEuro(fattura.totale)}</strong></div>
-    </div>
-  </div>
-
-  ${fattura.note ? `
-  <div class="section">
-    <h2>Note</h2>
-    <p style="font-size: 12px; color: #666; line-height: 1.6;">${fattura.note}</p>
-  </div>
-  ` : ''}
-
-  ${fattura.stato === 'pagata' ? `
-  <div class="payment-info">
-    <p><strong>Fattura saldata</strong></p>
-  </div>
-  ` : ''}
-
-  <div class="footer">
-    <p>${officina?.nome || 'OfficinAI'} &bull; ${officina?.indirizzo || ''} &bull; P.IVA ${officina?.p_iva || ''}</p>
-    <p style="margin-top: 4px;">Documento generato con OfficinAI &mdash; officinai.app</p>
-  </div>
-</body>
-</html>`;
+    const { data: app } = fattura.appuntamento_id
+      ? await supabase
+          .from('appuntamenti')
+          .select('*, clienti(id,nome,email,tel), veicoli(marca,modello,targa,km)')
+          .eq('id', fattura.appuntamento_id)
+          .maybeSingle()
+      : { data: null };
+    const appBase = app as Appuntamento | null;
+    const appuntamentoPerPdf: Appuntamento = appBase
+      ? { ...appBase, clienti: { ...(appBase.clienti || { id: '', officina_id: officina?.id || '', email: '', tel: '' }), nome: fattura.cliente_nome || appBase.clienti?.nome || '' } }
+      : ({
+          id: '', officina_id: officina?.id || '', cliente_id: '', veicolo_id: '',
+          data_ora: fattura.data_emissione, stato: 'prenotato', priorita: 'normale', problema: '',
+          clienti: { id: '', officina_id: officina?.id || '', nome: fattura.cliente_nome || 'Cliente', email: '', tel: '' },
+        } as unknown as Appuntamento);
+    const accent = await extractLogoColor(officina?.logo_url);
+    const html = buildPreventivoHtml(
+      appuntamentoPerPdf,
+      {
+        id: fattura.id,
+        appuntamento_id: fattura.appuntamento_id || '',
+        righe: righe as unknown as Preventivo['righe'],
+        subtotale: fattura.subtotale,
+        sconto: 0,
+        iva: fattura.iva,
+        totale: fattura.totale,
+        stato: 'accettato',
+        created_at: fattura.data_emissione,
+      },
+      officina,
+      accent,
+      { docType: 'fattura', numero: fattura.numero, clienteCf: fattura.cliente_cf }
+    );
 
     const printWindow = window.open('', '_blank');
     if (printWindow) {

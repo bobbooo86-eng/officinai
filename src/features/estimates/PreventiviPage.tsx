@@ -1777,7 +1777,7 @@ interface PreventivoListItem {
   veicolo_desc?: string;
 }
 
-export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, externalSearch, resetSignal }: { onSelectAppuntamento?: (app: any) => void; onNavigateToCalendar?: (date: Date) => void; externalSearch?: string; resetSignal?: number }) {
+export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onNavigateToFatture, externalSearch, resetSignal }: { onSelectAppuntamento?: (app: any) => void; onNavigateToCalendar?: (date: Date) => void; onNavigateToFatture?: () => void; externalSearch?: string; resetSignal?: number }) {
   const { officina } = useAuthStore();
   const [view, setView] = useState<'list' | 'new' | 'detail'>('list');
   const [selectedPreventivo, setSelectedPreventivo] = useState<PreventivoListItem | null>(null);
@@ -1799,6 +1799,8 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
   const [editClienteNome, setEditClienteNome] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingPreventivo, setDeletingPreventivo] = useState(false);
+  const [generatingFattura, setGeneratingFattura] = useState(false);
+  const [fatturaEsistente, setFatturaEsistente] = useState<string | null>(null);
 
   // Quando l'utente clicca di nuovo sul tab Preventivi mentre e' gia' attivo,
   // torna alla lista principale invece di restare nel dettaglio/creazione.
@@ -1828,6 +1830,22 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
     })();
     return () => { cancelled = true; };
   }, [view, selectedPreventivo?.appuntamento_id]);
+
+  // Verifica se per questo preventivo esiste gia' una fattura, per non farne
+  // generare una seconda per errore e mostrare invece il numero gia' emesso.
+  useEffect(() => {
+    if (view !== 'detail' || !selectedPreventivo?.id) { setFatturaEsistente(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('fatture')
+        .select('numero')
+        .eq('preventivo_id', selectedPreventivo.id)
+        .maybeSingle();
+      if (!cancelled) setFatturaEsistente(data?.numero || null);
+    })();
+    return () => { cancelled = true; };
+  }, [view, selectedPreventivo?.id]);
 
   // Genera HTML del preventivo e lo carica su Supabase Storage per condivisione
   useEffect(() => {
@@ -2131,6 +2149,47 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
       setPreventivi((prev) => prev.filter((x) => x.id !== p.id));
       setView('list');
       setSelectedPreventivo(null);
+    };
+
+    const generaFattura = async () => {
+      if (!officina || fatturaEsistente) return;
+      setGeneratingFattura(true);
+      const year = new Date().getFullYear();
+      const { data: lastFattura } = await supabase
+        .from('fatture')
+        .select('numero')
+        .eq('officina_id', officina.id)
+        .like('numero', `FT-${year}-%`)
+        .order('numero', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const lastNum = lastFattura?.numero ? parseInt(lastFattura.numero.split('-').pop() || '0') : 0;
+      const numero = `FT-${year}-${String(lastNum + 1).padStart(3, '0')}`;
+      const { data: nuovaFattura, error: fattErr } = await supabase
+        .from('fatture')
+        .insert({
+          officina_id: officina.id,
+          appuntamento_id: p.appuntamento_id,
+          preventivo_id: p.id,
+          numero,
+          data_emissione: new Date().toISOString(),
+          cliente_nome: detailAppuntamento?.clienti?.nome || p.cliente_nome || 'Cliente',
+          cliente_cf: '',
+          righe: p.righe,
+          subtotale: p.subtotale,
+          iva: p.iva,
+          totale: p.totale,
+          stato: 'bozza',
+          note: '',
+        })
+        .select('numero')
+        .single();
+      setGeneratingFattura(false);
+      if (fattErr || !nuovaFattura) {
+        alert('Fattura non generata: ' + (fattErr?.message || 'errore sconosciuto'));
+        return;
+      }
+      setFatturaEsistente(nuovaFattura.numero);
     };
 
     return (
@@ -2451,32 +2510,52 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
 
         {/* Azioni */}
         {!editMode && !showConferma && (
-          <div className="flex gap-2">
-            {p.stato !== 'accettato' ? (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              {p.stato !== 'accettato' ? (
+                <button
+                  onClick={apriConferma}
+                  className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 cursor-pointer transition-colors"
+                >
+                  🗓️ Genera appuntamento
+                </button>
+              ) : (
+                <button
+                  onClick={async () => {
+                    const { data } = await supabase.from('appuntamenti').select('*, clienti(nome,tel), veicoli(marca,modello,targa)').eq('id', p.appuntamento_id).single();
+                    if (data && onSelectAppuntamento) onSelectAppuntamento(data);
+                  }}
+                  className="flex-1 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold text-sm hover:bg-blue-50 cursor-pointer transition-colors"
+                >
+                  📅 Vai all'appuntamento
+                </button>
+              )}
               <button
-                onClick={apriConferma}
-                className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 cursor-pointer transition-colors"
+                onClick={eliminaPreventivo}
+                disabled={deletingPreventivo}
+                className="px-4 py-3 rounded-xl border-2 border-red-200 text-red-600 font-semibold text-sm hover:bg-red-50 disabled:opacity-50 cursor-pointer transition-colors"
               >
-                🗓️ Genera appuntamento
+                {deletingPreventivo ? '...' : '🗑️'}
               </button>
-            ) : (
-              <button
-                onClick={async () => {
-                  const { data } = await supabase.from('appuntamenti').select('*, clienti(nome,tel), veicoli(marca,modello,targa)').eq('id', p.appuntamento_id).single();
-                  if (data && onSelectAppuntamento) onSelectAppuntamento(data);
-                }}
-                className="flex-1 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold text-sm hover:bg-blue-50 cursor-pointer transition-colors"
-              >
-                📅 Vai all'appuntamento
-              </button>
+            </div>
+            {p.stato === 'accettato' && (
+              fatturaEsistente ? (
+                <button
+                  onClick={() => onNavigateToFatture?.()}
+                  className="w-full py-3 rounded-xl border-2 border-purple-200 text-purple-700 font-semibold text-sm hover:bg-purple-50 cursor-pointer transition-colors"
+                >
+                  🧾 Fattura {fatturaEsistente} generata — vai in Fatture
+                </button>
+              ) : (
+                <button
+                  onClick={generaFattura}
+                  disabled={generatingFattura}
+                  className="w-full py-3 rounded-xl bg-purple-600 text-white font-semibold text-sm hover:bg-purple-700 disabled:opacity-50 cursor-pointer transition-colors"
+                >
+                  {generatingFattura ? 'Generazione...' : '🧾 Genera fattura'}
+                </button>
+              )
             )}
-            <button
-              onClick={eliminaPreventivo}
-              disabled={deletingPreventivo}
-              className="px-4 py-3 rounded-xl border-2 border-red-200 text-red-600 font-semibold text-sm hover:bg-red-50 disabled:opacity-50 cursor-pointer transition-colors"
-            >
-              {deletingPreventivo ? '...' : '🗑️'}
-            </button>
           </div>
         )}
       </div>

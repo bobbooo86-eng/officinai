@@ -275,7 +275,7 @@ export function AppOfficina() {
           </div>
         )
       )}
-      {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} onNavigateToCalendar={(date) => { setCalendarDate(date); setAgendaView('calendario'); setActiveTab('agenda'); }} externalSearch={preventiviSearch} resetSignal={resetSignal} /></Suspense>}
+      {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} onNavigateToCalendar={(date) => { setCalendarDate(date); setAgendaView('calendario'); setActiveTab('agenda'); }} onNavigateToFatture={() => setActiveTab('fatture')} externalSearch={preventiviSearch} resetSignal={resetSignal} /></Suspense>}
       {activeTab === 'clienti' && <CustomersPage initialClienteId={selectedClienteId} resetSignal={resetSignal} />}
       {activeTab === 'magazzino' && <Suspense fallback={<PageSkeleton />}><InventoryPage /></Suspense>}
       {activeTab === 'analytics' && <Suspense fallback={<PageSkeleton />}><AnalyticsPage /></Suspense>}
