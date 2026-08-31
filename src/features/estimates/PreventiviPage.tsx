@@ -1798,6 +1798,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
   const [confermaErrore, setConfermaErrore] = useState('');
   const [editClienteNome, setEditClienteNome] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingPreventivo, setDeletingPreventivo] = useState(false);
 
   // Quando l'utente clicca di nuovo sul tab Preventivi mentre e' gia' attivo,
   // torna alla lista principale invece di restare nel dettaglio/creazione.
@@ -2108,6 +2109,28 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
         })
       );
       setEditMode(false);
+    };
+
+    const eliminaPreventivo = async () => {
+      if (!confirm('Eliminare definitivamente questo preventivo? L\'operazione non si può annullare.')) return;
+      setDeletingPreventivo(true);
+      const { error: delErr } = await supabase.from('preventivi').delete().eq('id', p.id);
+      if (delErr) {
+        setDeletingPreventivo(false);
+        alert('Errore eliminazione: ' + delErr.message);
+        return;
+      }
+      // Il segnaposto creato solo per questo preventivo (mai diventato un
+      // appuntamento reale) non serve piu': rimuoverlo evita che resti
+      // orfano nel database. Un appuntamento gia' confermato invece resta,
+      // il cliente potrebbe averlo gia' fissato a prescindere dal documento.
+      if (detailAppuntamento?.stato === 'bozza_preventivo') {
+        await supabase.from('appuntamenti').delete().eq('id', p.appuntamento_id);
+      }
+      setDeletingPreventivo(false);
+      setPreventivi((prev) => prev.filter((x) => x.id !== p.id));
+      setView('list');
+      setSelectedPreventivo(null);
     };
 
     return (
@@ -2447,6 +2470,13 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, ext
                 📅 Vai all'appuntamento
               </button>
             )}
+            <button
+              onClick={eliminaPreventivo}
+              disabled={deletingPreventivo}
+              className="px-4 py-3 rounded-xl border-2 border-red-200 text-red-600 font-semibold text-sm hover:bg-red-50 disabled:opacity-50 cursor-pointer transition-colors"
+            >
+              {deletingPreventivo ? '...' : '🗑️'}
+            </button>
           </div>
         )}
       </div>

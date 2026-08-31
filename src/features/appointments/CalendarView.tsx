@@ -466,6 +466,7 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
                 {weekDates.map((d, i) => {
                   const ds = dateStr(d);
                   const isToday = ds === todayStr;
+                  const dApps = weekApps.filter((a) => appDay(a.data_ora) === ds);
                   return (
                     <button
                       key={i}
@@ -480,6 +481,20 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
                       <div className={`text-sm font-bold ${isToday ? 'text-blue-700' : 'text-gray-700'}`}>
                         {d.getDate()}/{d.getMonth() + 1}
                       </div>
+                      {dApps.length > 0 && (
+                        <div className="flex items-center justify-center flex-wrap gap-0.5 mt-0.5 px-1">
+                          {dApps.slice(0, 8).map((a) => (
+                            <span
+                              key={a.id}
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ backgroundColor: colorForApp(a.id) }}
+                            />
+                          ))}
+                          {dApps.length > 8 && (
+                            <span className="text-[8px] font-bold text-gray-400 leading-none">+{dApps.length - 8}</span>
+                          )}
+                        </div>
+                      )}
                     </button>
                   );
                 })}
@@ -592,12 +607,28 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
                     'border-transparent bg-gray-50/50 text-gray-400'
                   }`}
                 >
-                  <div className={`text-[11px] font-bold mb-0.5 ${
-                    isSelected ? 'text-blue-700' :
-                    isToday ? 'text-blue-600' :
-                    isCurrentMonth ? 'text-gray-700' : 'text-gray-400'
-                  }`}>
-                    {d.getDate()}
+                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <span className={`text-[11px] font-bold ${
+                      isSelected ? 'text-blue-700' :
+                      isToday ? 'text-blue-600' :
+                      isCurrentMonth ? 'text-gray-700' : 'text-gray-400'
+                    }`}>
+                      {d.getDate()}
+                    </span>
+                    {dApps.length > 0 && (
+                      <span className="flex flex-wrap items-center justify-end gap-0.5 max-w-[28px]">
+                        {dApps.slice(0, 6).map((a) => (
+                          <span
+                            key={a.id}
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ backgroundColor: colorForApp(a.id) }}
+                          />
+                        ))}
+                        {dApps.length > 6 && (
+                          <span className="text-[7px] font-bold text-gray-400 leading-none">+{dApps.length - 6}</span>
+                        )}
+                      </span>
+                    )}
                   </div>
                   {dApps.length > 0 && (
                     <div className="space-y-0.5">
