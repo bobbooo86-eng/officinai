@@ -2130,8 +2130,22 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
     };
 
     const eliminaPreventivo = async () => {
-      if (!confirm('Eliminare definitivamente questo preventivo? L\'operazione non si può annullare.')) return;
+      // La fattura ha un vincolo verso il preventivo (preventivo_id): se
+      // esiste gia' una fattura, il database rifiuta la cancellazione per
+      // non perdere in silenzio un documento fiscale. Va chiesto esplicitamente.
+      const messaggio = fatturaEsistente
+        ? `Attenzione: per questo preventivo è già stata generata la fattura ${fatturaEsistente}. Eliminando il preventivo verrà eliminata anche la fattura. Continuare?`
+        : 'Eliminare definitivamente questo preventivo? L\'operazione non si può annullare.';
+      if (!confirm(messaggio)) return;
       setDeletingPreventivo(true);
+      if (fatturaEsistente) {
+        const { error: fattErr } = await supabase.from('fatture').delete().eq('preventivo_id', p.id);
+        if (fattErr) {
+          setDeletingPreventivo(false);
+          alert('Fattura non eliminata: ' + fattErr.message);
+          return;
+        }
+      }
       const { error: delErr } = await supabase.from('preventivi').delete().eq('id', p.id);
       if (delErr) {
         setDeletingPreventivo(false);
