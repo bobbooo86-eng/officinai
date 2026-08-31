@@ -1890,6 +1890,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
     return () => { cancelled = true; };
   }, [view, selectedPreventivo, detailAppuntamento, officina]);
   const [preventivi, setPreventivi] = useState<PreventivoListItem[]>([]);
+  const [deletingListId, setDeletingListId] = useState<string | null>(null);
   const [loadingList, setLoadingList] = useState(true);
   const [searchQuery, setSearchQuery] = useState(externalSearch || '');
 
@@ -1962,6 +1963,51 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
       (p.veicolo_desc?.toLowerCase().includes(q))
     );
   }, [preventivi, searchQuery]);
+
+  // Elimina direttamente dalla lista, senza dover prima aprire il
+  // dettaglio: stesso vincolo del database della cancellazione nel
+  // dettaglio (una fattura gia' generata blocca la cancellazione finche'
+  // non viene rimossa anche lei), spiegato allo stesso modo.
+  const eliminaPreventivoDaLista = async (p: PreventivoListItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeletingListId(p.id);
+    const { data: fattura } = await supabase
+      .from('fatture')
+      .select('numero')
+      .eq('preventivo_id', p.id)
+      .maybeSingle();
+    const messaggio = fattura?.numero
+      ? `Attenzione: per questo preventivo è già stata generata la fattura ${fattura.numero}. Eliminando il preventivo verrà eliminata anche la fattura. Continuare?`
+      : 'Eliminare definitivamente questo preventivo? L\'operazione non si può annullare.';
+    if (!confirm(messaggio)) {
+      setDeletingListId(null);
+      return;
+    }
+    if (fattura?.numero) {
+      const { error: fattErr } = await supabase.from('fatture').delete().eq('preventivo_id', p.id);
+      if (fattErr) {
+        setDeletingListId(null);
+        alert('Fattura non eliminata: ' + fattErr.message);
+        return;
+      }
+    }
+    const { error: delErr } = await supabase.from('preventivi').delete().eq('id', p.id);
+    if (delErr) {
+      setDeletingListId(null);
+      alert('Errore eliminazione: ' + delErr.message);
+      return;
+    }
+    const { data: app } = await supabase
+      .from('appuntamenti')
+      .select('stato')
+      .eq('id', p.appuntamento_id)
+      .maybeSingle();
+    if (app?.stato === 'bozza_preventivo') {
+      await supabase.from('appuntamenti').delete().eq('id', p.appuntamento_id);
+    }
+    setDeletingListId(null);
+    setPreventivi((prev) => prev.filter((x) => x.id !== p.id));
+  };
 
   const statoBadge = (stato: string) => {
     const map: Record<string, { color: string; label: string }> = {
@@ -2649,8 +2695,17 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
                   {statoBadge(p.stato)}
                 </div>
               </div>
-              <div className="text-[10px] text-gray-400">
-                {new Date(p.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] text-gray-400">
+                  {new Date(p.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <button
+                  onClick={(e) => eliminaPreventivoDaLista(p, e)}
+                  disabled={deletingListId === p.id}
+                  className="text-[11px] text-red-500 hover:text-red-700 font-semibold cursor-pointer disabled:opacity-50 px-2 py-1 -mr-2"
+                >
+                  {deletingListId === p.id ? '...' : '🗑️ Elimina'}
+                </button>
               </div>
             </div>
           ))}
