@@ -6,8 +6,8 @@ import {
   aggiornaLocale, aggiungiLocale, isLocale, leggiLocali, perSupabase, rimuoviLocale, svuotaLocali,
 } from '@/lib/cassaLocale';
 import { useAuthStore } from '@/stores/authStore';
-import { IncassiOfficina } from './IncassiOfficina';
-import type { Movimento, MovimentoTipo, MetodoPagamento, Utente } from '@/types/database';
+import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
+import type { Movimento, MovimentoTipo, MetodoPagamento, Utente, Appuntamento } from '@/types/database';
 
 type CassaTab = 'tutti' | 'incasso_extra' | 'spesa_officina' | 'spesa_titolare' | 'dipendenti';
 
@@ -58,8 +58,9 @@ const todayISO = () => {
   const day = d.getDate().toString().padStart(2, '0');
   return `${d.getFullYear()}-${m}-${day}`;
 };
-const monthKey = (d: string) => d.slice(0, 7);
-const currentMonthKey = () => todayISO().slice(0, 7);
+// movimenti.data e' una stringa "YYYY-MM-DD": va riletta come data locale
+// (non UTC) o un giorno vicino alla mezzanotte finirebbe nel giorno sbagliato.
+const dateFromDataStr = (s: string) => new Date(s + 'T00:00:00');
 
 interface CassaPageProps {
   initialOpen?: MovimentoTipo | null;
@@ -74,7 +75,12 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   const [movimenti, setMovimenti] = useState<Movimento[]>([]);
   const [dipendenti, setDipendenti] = useState<Utente[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthKey());
+  // Stesso selettore periodo di Incassi officina, cosi' i due resoconti si
+  // leggono con lo stesso criterio invece di "questo mese" vs "oggi/settimana".
+  const [periodo, setPeriodo] = useState<Periodo>('mese');
+  // Incassi officina (pagamenti alla consegna auto) mostrati anche qui,
+  // dentro il tab "Incassi": prima si vedevano solo nella sezione separata.
+  const [incassiAuto, setIncassiAuto] = useState<Appuntamento[]>([]);
 
   // Nuovo movimento
   const [showForm, setShowForm] = useState(false);
@@ -208,6 +214,29 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
       setDipendenti((data as Utente[]) || []);
     };
     loadDip();
+  }, [officinaId]);
+
+  // Incassi officina: stessa query di IncassiOfficina, cosi' i pagamenti
+  // alla consegna auto compaiono anche qui dentro il tab "Incassi".
+  useEffect(() => {
+    if (!officinaId) return;
+    const loadIncassiAuto = async () => {
+      const { data } = await supabase
+        .from('appuntamenti')
+        .select('*, clienti(nome), veicoli(marca,modello,targa)')
+        .eq('officina_id', officinaId)
+        .eq('stato', 'consegnato')
+        .not('pagamento', 'is', null)
+        .order('data_ora', { ascending: false })
+        .limit(500);
+      setIncassiAuto((data as Appuntamento[]) || []);
+    };
+    loadIncassiAuto();
+    const ch = supabase
+      .channel('movimenti-incassi-auto-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appuntamenti', filter: `officina_id=eq.${officinaId}` }, () => loadIncassiAuto())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, [officinaId]);
 
   // Apri modulo prefilled da FAB
@@ -385,22 +414,42 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     return movimenti.filter((m) => m.tipo === tab);
   }, [movimenti, tab]);
 
+  // Data di riferimento per il periodo selezionato: sempre "adesso", come
+  // in Incassi officina (nessuna navigazione a periodi passati arbitrari).
+  const riferimento = useMemo(() => new Date(), []);
+
+  // Gli incassi auto sono incassi: compaiono solo nei tab dove un incasso
+  // avrebbe senso (Tutti / Incassi), non dentro Officina/Titolare/Dipendenti.
+  const mostraIncassiAuto = tab === 'tutti' || tab === 'incasso_extra';
+
+  const incassiAutoInRange = useMemo(() => {
+    if (!mostraIncassiAuto) return [];
+    return incassiAuto.filter((a) => inPeriodo(dataIncasso(a), periodo, riferimento));
+  }, [incassiAuto, periodo, riferimento, mostraIncassiAuto]);
+
   // Lista mostrata sotto: rispetta il filtro per tipo selezionato.
   const monthMovimenti = useMemo(
-    () => filteredByTab.filter((m) => monthKey(m.data) === selectedMonth),
-    [filteredByTab, selectedMonth]
+    () => filteredByTab.filter((m) => inPeriodo(dateFromDataStr(m.data), periodo, riferimento)),
+    [filteredByTab, periodo, riferimento]
   );
 
-  // Il riepilogo in cima rappresenta la cassa del mese nel suo complesso:
+  // Il riepilogo in cima rappresenta la cassa del periodo nel suo complesso:
   // se seguisse il filtro per tipo mostrerebbe incassi o spese sempre a zero.
   const monthTutti = useMemo(
-    () => movimenti.filter((m) => monthKey(m.data) === selectedMonth),
-    [movimenti, selectedMonth]
+    () => movimenti.filter((m) => inPeriodo(dateFromDataStr(m.data), periodo, riferimento)),
+    [movimenti, periodo, riferimento]
+  );
+
+  const incassiAutoTotaliInRange = useMemo(
+    () => incassiAuto.filter((a) => inPeriodo(dataIncasso(a), periodo, riferimento)),
+    [incassiAuto, periodo, riferimento]
   );
 
   const totalIncassi = useMemo(
-    () => monthTutti.filter((m) => findTipo(m.tipo).sign === 1).reduce((a, m) => a + Number(m.importo), 0),
-    [monthTutti]
+    () =>
+      monthTutti.filter((m) => findTipo(m.tipo).sign === 1).reduce((a, m) => a + Number(m.importo), 0) +
+      incassiAutoTotaliInRange.reduce((a, app) => a + incassatoAuto(app), 0),
+    [monthTutti, incassiAutoTotaliInRange]
   );
   const totalSpese = useMemo(
     () => monthTutti.filter((m) => findTipo(m.tipo).sign === -1).reduce((a, m) => a + Number(m.importo), 0),
@@ -408,23 +457,23 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   );
   const saldo = totalIncassi - totalSpese;
 
-  // Raggruppa per giorno
+  // Raggruppa per giorno, movimenti manuali e incassi auto insieme.
   const byDay = useMemo(() => {
-    const map = new Map<string, Movimento[]>();
+    const map = new Map<string, { movimenti: Movimento[]; auto: Appuntamento[] }>();
     monthMovimenti.forEach((m) => {
-      if (!map.has(m.data)) map.set(m.data, []);
-      map.get(m.data)!.push(m);
+      if (!map.has(m.data)) map.set(m.data, { movimenti: [], auto: [] });
+      map.get(m.data)!.movimenti.push(m);
+    });
+    incassiAutoInRange.forEach((a) => {
+      const d = dataIncasso(a);
+      const mm = (d.getMonth() + 1).toString().padStart(2, '0');
+      const dd = d.getDate().toString().padStart(2, '0');
+      const giorno = `${d.getFullYear()}-${mm}-${dd}`;
+      if (!map.has(giorno)) map.set(giorno, { movimenti: [], auto: [] });
+      map.get(giorno)!.auto.push(a);
     });
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [monthMovimenti]);
-
-  // Available months (from data)
-  const availableMonths = useMemo(() => {
-    const set = new Set<string>();
-    movimenti.forEach((m) => set.add(monthKey(m.data)));
-    set.add(currentMonthKey());
-    return Array.from(set).sort().reverse();
-  }, [movimenti]);
+  }, [monthMovimenti, incassiAutoInRange]);
 
   const showDipendenteField = newTipo === 'spesa_dipendente' || newTipo === 'spesa_titolare';
   const dipendenteFieldLabel = newTipo === 'spesa_titolare' ? 'Titolare *' : 'Dipendente *';
@@ -639,23 +688,21 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
         </div>
       )}
 
-      {/* Selettore mese + Totali */}
+      {/* Selettore periodo + Totali */}
       <Card className="!p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-xs font-semibold text-gray-500">Riepilogo</div>
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none"
-          >
-            {availableMonths.map((m) => {
-              const [y, mm] = m.split('-');
-              const monthNames = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
-              return (
-                <option key={m} value={m}>{monthNames[parseInt(mm)-1]} {y}</option>
-              );
-            })}
-          </select>
+        <div className="text-xs font-semibold text-gray-500 mb-2">Riepilogo</div>
+        <div className="grid grid-cols-4 gap-1.5 mb-3">
+          {PERIODI.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setPeriodo(p.id)}
+              className={`py-2 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                periodo === p.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center">
@@ -712,8 +759,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
       ) : (
         <div className="space-y-3">
           {byDay.map(([giorno, items]) => {
-            const dayIncassi = items.filter((m) => findTipo(m.tipo).sign === 1).reduce((a, m) => a + Number(m.importo), 0);
-            const daySpese = items.filter((m) => findTipo(m.tipo).sign === -1).reduce((a, m) => a + Number(m.importo), 0);
+            const dayIncassi =
+              items.movimenti.filter((m) => findTipo(m.tipo).sign === 1).reduce((a, m) => a + Number(m.importo), 0) +
+              items.auto.reduce((a, app) => a + incassatoAuto(app), 0);
+            const daySpese = items.movimenti.filter((m) => findTipo(m.tipo).sign === -1).reduce((a, m) => a + Number(m.importo), 0);
             const daySaldo = dayIncassi - daySpese;
             const dt = new Date(giorno + 'T00:00');
             const label = dt.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -726,7 +775,27 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                   </div>
                 </div>
                 <Card className="!p-2 divide-y divide-gray-100">
-                  {items.map((m) => {
+                  {items.auto.map((app) => (
+                    <div key={`auto-${app.id}`} className="flex items-center gap-3 py-2 px-1 group">
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center text-base bg-sky-100">
+                        🚗
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 truncate">
+                          {app.clienti?.nome || 'Cliente'} — consegna auto
+                        </div>
+                        <div className="text-[11px] text-gray-500 truncate">
+                          Incasso officina
+                          {app.veicoli?.targa && ` · ${app.veicoli.targa}`}
+                          {app.pagamento?.stato === 'acconto' && ' · acconto'}
+                        </div>
+                      </div>
+                      <div className="text-sm font-bold text-emerald-600">
+                        +{fmtEuro(incassatoAuto(app))}
+                      </div>
+                    </div>
+                  ))}
+                  {items.movimenti.map((m) => {
                     const cfg = findTipo(m.tipo);
                     const dip = m.dipendente_id ? dipendenti.find((d) => d.id === m.dipendente_id) : null;
                     return (

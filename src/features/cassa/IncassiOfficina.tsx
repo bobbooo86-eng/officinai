@@ -6,13 +6,14 @@ import type { Appuntamento } from '@/types/database';
 const fmtEuro = (n: number) =>
   new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
 
-type Periodo = 'giorno' | 'settimana' | 'mese' | 'anno';
+export type Periodo = 'giorno' | 'settimana' | 'mese' | 'anno';
 
 /** Data di riferimento per il resoconto: quando e' stata confermata la
  * consegna, non la data prenotata dell'appuntamento (data_ora), che puo'
  * essere molto precedente. I record salvati prima di questo campo non
- * hanno data_consegna: si ripiega su data_ora per non perderli dai totali. */
-function dataIncasso(a: Appuntamento): Date {
+ * hanno data_consegna: si ripiega su data_ora per non perderli dai totali.
+ * Esportata perche' Movimenti (CassaPage) riusa gli stessi incassi qui. */
+export function dataIncasso(a: Appuntamento): Date {
   const iso = a.pagamento?.data_consegna || a.data_ora;
   return new Date(iso);
 }
@@ -25,7 +26,7 @@ function inizioSettimana(d: Date): Date {
   return r;
 }
 
-function inPeriodo(d: Date, periodo: Periodo, riferimento: Date): boolean {
+export function inPeriodo(d: Date, periodo: Periodo, riferimento: Date): boolean {
   if (periodo === 'giorno') {
     return d.toDateString() === riferimento.toDateString();
   }
@@ -44,7 +45,7 @@ function inPeriodo(d: Date, periodo: Periodo, riferimento: Date): boolean {
 /** Quanto e' stato davvero incassato per questo veicolo: pagato completo
  * conta il totale, un acconto conta solo la parte gia' versata, il resto
  * (se c'e') non e' cassa finche' non arriva. */
-function incassato(a: Appuntamento): number {
+export function incassato(a: Appuntamento): number {
   const p = a.pagamento;
   if (!p) return 0;
   if (p.stato === 'pagato') return p.importo_totale || 0;
@@ -52,7 +53,7 @@ function incassato(a: Appuntamento): number {
   return 0;
 }
 
-const PERIODI: { id: Periodo; label: string }[] = [
+export const PERIODI: { id: Periodo; label: string }[] = [
   { id: 'giorno', label: 'Oggi' },
   { id: 'settimana', label: 'Settimana' },
   { id: 'mese', label: 'Mese' },
