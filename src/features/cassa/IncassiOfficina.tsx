@@ -63,9 +63,13 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<Periodo>('mese');
-  const [editRicambi, setEditRicambi] = useState<Record<string, string>>({});
-  const [editPagato, setEditPagato] = useState<Record<string, string>>({});
-  const [editTotale, setEditTotale] = useState<Record<string, string>>({});
+  // Un solo pannello di modifica alla volta (acconto + costo ricambi
+  // insieme), dietro una matita: prima si poteva scrivere direttamente
+  // negli input, sempre visibili, che invitava a toccarli per sbaglio.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editPagato, setEditPagato] = useState('');
+  const [editTotale, setEditTotale] = useState('');
+  const [editRicambi, setEditRicambi] = useState('');
   const [salvandoPagamento, setSalvandoPagamento] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -111,38 +115,36 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
     return s;
   }, 0);
 
-  const salvaCostoRicambi = async (a: Appuntamento, valore: number) => {
-    if (!a.pagamento) return;
-    const nuovoPagamento = { ...a.pagamento, costo_ricambi: valore };
-    const { error } = await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
-    if (!error) {
-      setAppuntamenti((prev) => prev.map((x) => (x.id === a.id ? { ...x, pagamento: nuovoPagamento } : x)));
-    }
+  const apriModifica = (a: Appuntamento) => {
+    setEditingId(a.id);
+    setEditPagato(String(a.pagamento?.importo_pagato ?? 0));
+    setEditTotale(String(a.pagamento?.importo_totale ?? 0));
+    setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
   };
 
   // Un acconto puo' crescere nel tempo (il cliente paga altro dopo la
-  // consegna): l'importo incassato finora e il totale da pagare vanno
-  // corretti a mano. Se l'incassato raggiunge il totale, il pagamento
-  // passa da solo a "pagato".
-  const salvaPagamento = async (a: Appuntamento) => {
+  // consegna): incassato finora, totale da pagare e costo ricambi si
+  // modificano tutti insieme da qui. Se l'incassato raggiunge il totale,
+  // il pagamento passa da solo a "pagato".
+  const salvaModifica = async (a: Appuntamento) => {
     if (!a.pagamento) return;
-    const nuovoPagato = parseFloat(editPagato[a.id] ?? String(a.pagamento.importo_pagato ?? 0)) || 0;
-    const nuovoTotale = parseFloat(editTotale[a.id] ?? String(a.pagamento.importo_totale ?? 0)) || 0;
+    const nuovoPagato = parseFloat(editPagato) || 0;
+    const nuovoTotale = parseFloat(editTotale) || 0;
+    const nuovoRicambi = parseFloat(editRicambi) || 0;
     const saldato = nuovoTotale > 0 && nuovoPagato >= nuovoTotale;
     const nuovoPagamento = {
       ...a.pagamento,
       importo_pagato: nuovoPagato,
       importo_totale: nuovoTotale,
-      stato: saldato ? ('pagato' as const) : ('acconto' as const),
+      costo_ricambi: nuovoRicambi,
+      stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
     };
     setSalvandoPagamento(a.id);
     const { error } = await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
     setSalvandoPagamento(null);
-    if (!error) {
-      setAppuntamenti((prev) => prev.map((x) => (x.id === a.id ? { ...x, pagamento: nuovoPagamento } : x)));
-      setEditPagato((prev) => { const n = { ...prev }; delete n[a.id]; return n; });
-      setEditTotale((prev) => { const n = { ...prev }; delete n[a.id]; return n; });
-    }
+    if (error) { alert('Modifica non salvata: ' + error.message); return; }
+    setAppuntamenti((prev) => prev.map((x) => (x.id === a.id ? { ...x, pagamento: nuovoPagamento } : x)));
+    setEditingId(null);
   };
 
   if (!officinaId) return null;
@@ -201,7 +203,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
               : p.stato === 'acconto'
               ? { label: 'Acconto', color: '#92400e', bg: '#fef3c7' }
               : { label: 'Non pagato', color: '#991b1b', bg: '#fee2e2' };
-            const valoreRicambi = editRicambi[a.id] ?? (p.costo_ricambi != null ? String(p.costo_ricambi) : '');
+            const inEdit = editingId === a.id;
             return (
               <Card key={a.id} className="!p-3">
                 <div className="flex items-start justify-between gap-2">
@@ -228,11 +230,27 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                     )}
                   </div>
                 </div>
-                {p.stato !== 'pagato' && (
+
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                  <span className="text-[11px] text-gray-500">
+                    Costo ricambi: <span className="font-semibold text-gray-700">{fmtEuro(p.costo_ricambi || 0)}</span>
+                    {(p.costo_ricambi || 0) > 0 && (
+                      <span className="text-gray-400"> · netto {fmtEuro(incassato(a) - (p.costo_ricambi || 0))}</span>
+                    )}
+                  </span>
+                  {!inEdit && (
+                    <button
+                      onClick={() => apriModifica(a)}
+                      className="text-gray-400 hover:text-emerald-600 cursor-pointer shrink-0 px-1"
+                      title="Modifica acconto e costo ricambi"
+                    >
+                      ✏️
+                    </button>
+                  )}
+                </div>
+
+                {inEdit && (
                   <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
-                    <div className="text-[11px] font-semibold text-gray-600">
-                      {p.stato === 'acconto' ? 'Ha pagato altro? Aggiorna gli importi:' : 'Ha pagato qualcosa? Registralo qui:'}
-                    </div>
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
                         <label className="text-[10px] text-gray-400 block">Incassato finora €</label>
@@ -240,8 +258,8 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                           type="number"
                           step="0.01"
                           min={0}
-                          value={editPagato[a.id] ?? String(p.importo_pagato ?? 0)}
-                          onChange={(e) => setEditPagato((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                          value={editPagato}
+                          onChange={(e) => setEditPagato(e.target.value)}
                           className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                       </div>
@@ -251,39 +269,41 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                           type="number"
                           step="0.01"
                           min={0}
-                          value={editTotale[a.id] ?? String(p.importo_totale ?? 0)}
-                          onChange={(e) => setEditTotale((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                          value={editTotale}
+                          onChange={(e) => setEditTotale(e.target.value)}
                           className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                       </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-gray-400 block">Costo ricambi €</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={editRicambi}
+                          onChange={(e) => setEditRicambi(e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
                       <button
-                        onClick={() => salvaPagamento(a)}
+                        onClick={() => salvaModifica(a)}
                         disabled={salvandoPagamento === a.id}
-                        className="self-end px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
+                        className="flex-1 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
                       >
-                        {salvandoPagamento === a.id ? '...' : 'Salva'}
+                        {salvandoPagamento === a.id ? 'Salvataggio...' : 'Salva'}
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        disabled={salvandoPagamento === a.id}
+                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
+                      >
+                        Annulla
                       </button>
                     </div>
                   </div>
                 )}
-                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
-                  <label className="text-[11px] text-gray-500 shrink-0">Costo ricambi €</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    value={valoreRicambi}
-                    onChange={(e) => setEditRicambi((prev) => ({ ...prev, [a.id]: e.target.value }))}
-                    onBlur={(e) => salvaCostoRicambi(a, parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                    className="flex-1 text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                  {(p.costo_ricambi || 0) > 0 && (
-                    <span className="text-[11px] font-semibold text-gray-600 shrink-0">
-                      netto {fmtEuro(incassato(a) - (p.costo_ricambi || 0))}
-                    </span>
-                  )}
-                </div>
               </Card>
             );
           })}
