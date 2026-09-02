@@ -64,6 +64,9 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<Periodo>('mese');
   const [editRicambi, setEditRicambi] = useState<Record<string, string>>({});
+  const [editPagato, setEditPagato] = useState<Record<string, string>>({});
+  const [editTotale, setEditTotale] = useState<Record<string, string>>({});
+  const [salvandoPagamento, setSalvandoPagamento] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!officinaId) return;
@@ -114,6 +117,31 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
     const { error } = await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
     if (!error) {
       setAppuntamenti((prev) => prev.map((x) => (x.id === a.id ? { ...x, pagamento: nuovoPagamento } : x)));
+    }
+  };
+
+  // Un acconto puo' crescere nel tempo (il cliente paga altro dopo la
+  // consegna): l'importo incassato finora e il totale da pagare vanno
+  // corretti a mano. Se l'incassato raggiunge il totale, il pagamento
+  // passa da solo a "pagato".
+  const salvaPagamento = async (a: Appuntamento) => {
+    if (!a.pagamento) return;
+    const nuovoPagato = parseFloat(editPagato[a.id] ?? String(a.pagamento.importo_pagato ?? 0)) || 0;
+    const nuovoTotale = parseFloat(editTotale[a.id] ?? String(a.pagamento.importo_totale ?? 0)) || 0;
+    const saldato = nuovoTotale > 0 && nuovoPagato >= nuovoTotale;
+    const nuovoPagamento = {
+      ...a.pagamento,
+      importo_pagato: nuovoPagato,
+      importo_totale: nuovoTotale,
+      stato: saldato ? ('pagato' as const) : ('acconto' as const),
+    };
+    setSalvandoPagamento(a.id);
+    const { error } = await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
+    setSalvandoPagamento(null);
+    if (!error) {
+      setAppuntamenti((prev) => prev.map((x) => (x.id === a.id ? { ...x, pagamento: nuovoPagamento } : x)));
+      setEditPagato((prev) => { const n = { ...prev }; delete n[a.id]; return n; });
+      setEditTotale((prev) => { const n = { ...prev }; delete n[a.id]; return n; });
     }
   };
 
@@ -184,6 +212,8 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                     </div>
                     <div className="text-[10px] text-gray-400 mt-0.5">
                       {dataIncasso(a).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {' · '}
+                      {dataIncasso(a).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
@@ -198,6 +228,44 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                     )}
                   </div>
                 </div>
+                {p.stato !== 'pagato' && (
+                  <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
+                    <div className="text-[11px] font-semibold text-gray-600">
+                      {p.stato === 'acconto' ? 'Ha pagato altro? Aggiorna gli importi:' : 'Ha pagato qualcosa? Registralo qui:'}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-gray-400 block">Incassato finora €</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={editPagato[a.id] ?? String(p.importo_pagato ?? 0)}
+                          onChange={(e) => setEditPagato((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-gray-400 block">Totale da pagare €</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={editTotale[a.id] ?? String(p.importo_totale ?? 0)}
+                          onChange={(e) => setEditTotale((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <button
+                        onClick={() => salvaPagamento(a)}
+                        disabled={salvandoPagamento === a.id}
+                        className="self-end px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
+                      >
+                        {salvandoPagamento === a.id ? '...' : 'Salva'}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
                   <label className="text-[11px] text-gray-500 shrink-0">Costo ricambi €</label>
                   <input
