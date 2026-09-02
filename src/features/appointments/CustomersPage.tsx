@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { StoricoVeicolo } from './StoricoVeicolo';
 import type { Cliente, Veicolo, Appuntamento, Preventivo } from '@/types/database';
 
-type View = 'list' | 'add' | 'detail' | 'addVeicolo' | 'storicoVeicolo';
+type View = 'list' | 'add' | 'detail' | 'addVeicolo' | 'editVeicolo' | 'storicoVeicolo';
 
 /** Colore/etichetta di una scadenza in base a quanto manca: scaduta (rosso),
  * entro un mese (ambra, coerente con l'anticipo delle notifiche in Home),
@@ -97,6 +97,7 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
         cliente={selectedCliente}
         onBack={() => { setView('list'); setSelectedCliente(null); }}
         onAddVeicolo={() => setView('addVeicolo')}
+        onEditVeicolo={(v) => { setSelectedVeicolo(v); setView('editVeicolo'); }}
         onDeleted={() => {
           // Non rimosso dall'elenco: resta come archiviato, ripristinabile.
           setClienti((prev) => prev.map((c) => (c.id === selectedCliente.id ? { ...c, attivo: false } : c)));
@@ -114,6 +115,17 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
         clienteId={selectedCliente.id}
         onBack={() => setView('detail')}
         onSaved={() => setView('detail')}
+      />
+    );
+  }
+
+  if (view === 'editVeicolo' && selectedCliente && selectedVeicolo) {
+    return (
+      <AddVeicoloForm
+        clienteId={selectedCliente.id}
+        veicolo={selectedVeicolo}
+        onBack={() => { setSelectedVeicolo(null); setView('detail'); }}
+        onSaved={() => { setSelectedVeicolo(null); setView('detail'); }}
       />
     );
   }
@@ -233,6 +245,7 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
   const [scadenzaTagliando, setScadenzaTagliando] = useState('');
   const [scadenzaAssicurazione, setScadenzaAssicurazione] = useState('');
   const [scadenzaBollo, setScadenzaBollo] = useState('');
+  const [fotoLibretto, setFotoLibretto] = useState<File | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -282,7 +295,7 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
         assicurazione: scadenzaAssicurazione || undefined,
         bollo: scadenzaBollo || undefined,
       } : null;
-      const { error: vErr } = await insertTolerant('veicoli', {
+      const { data: nuovoVeicolo, error: vErr } = await insertTolerant<Veicolo>('veicoli', {
         cliente_id: cliente.id,
         marca: marca.trim() || 'N/D',
         modello: modello.trim() || 'N/D',
@@ -292,11 +305,22 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
         carburante,
         telaio: [telaio.trim(), dettagli].filter(Boolean).join(' | ') || null,
         scadenze,
-      }, ['cliente_id', 'targa']);
+      }, ['cliente_id', 'targa'], { returning: true });
       if (vErr) {
         setSaving(false);
         setSaveError('Cliente salvato, ma il veicolo non e stato registrato: ' + vErr.message);
         return;
+      }
+      if (fotoLibretto && nuovoVeicolo?.id) {
+        const ext = fotoLibretto.name.split('.').pop();
+        const fileName = `libretto/${nuovoVeicolo.id}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from('foto-lavorazione')
+          .upload(fileName, fotoLibretto, { cacheControl: '3600', upsert: true });
+        if (!upErr) {
+          const { data: urlData } = supabase.storage.from('foto-lavorazione').getPublicUrl(fileName);
+          await supabase.from('veicoli').update({ foto_libretto_url: urlData.publicUrl }).eq('id', nuovoVeicolo.id);
+        }
       }
     }
 
@@ -496,6 +520,19 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
         />
       </div>
 
+      {targa.trim() && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Foto libretto di circolazione</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setFotoLibretto(e.target.files?.[0] || null)}
+            className="w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 file:text-xs file:font-semibold hover:file:bg-blue-100 cursor-pointer"
+          />
+          {fotoLibretto && <div className="text-[11px] text-gray-500 mt-1">Verrà caricata al salvataggio: {fotoLibretto.name}</div>}
+        </div>
+      )}
+
       {saveError && (
         <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
           ⚠️ {saveError}
@@ -510,12 +547,13 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
 }
 
 // ==================== CLIENTE DETAIL ====================
-function ClienteDetail({ cliente, onBack, onAddVeicolo, onDeleted, onSelectVeicolo }: {
+function ClienteDetail({ cliente, onBack, onAddVeicolo, onDeleted, onSelectVeicolo, onEditVeicolo }: {
   cliente: Cliente;
   onBack: () => void;
   onAddVeicolo: () => void;
   onDeleted: () => void;
   onSelectVeicolo: (v: Veicolo) => void;
+  onEditVeicolo: (v: Veicolo) => void;
 }) {
   const [veicoli, setVeicoli] = useState<Veicolo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -638,15 +676,27 @@ function ClienteDetail({ cliente, onBack, onAddVeicolo, onDeleted, onSelectVeico
             const bollo = statoScadenza(v.scadenze?.bollo);
             return (
               <Card key={v.id} className="!p-3">
-                <div className="flex items-center gap-3 cursor-pointer" onClick={() => onSelectVeicolo(v)}>
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-xl shrink-0">🚗</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm text-gray-900">{v.marca} {v.modello}</div>
-                    <div className="text-xs text-gray-500">
-                      <span className="font-mono font-semibold">{v.targa}</span> · {v.anno} · {v.km?.toLocaleString()} km · {v.carburante}
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+                    onClick={() => onSelectVeicolo(v)}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-xl shrink-0">🚗</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-gray-900">{v.marca} {v.modello}</div>
+                      <div className="text-xs text-gray-500">
+                        <span className="font-mono font-semibold">{v.targa}</span> · {v.anno} · {v.km?.toLocaleString()} km · {v.carburante}
+                      </div>
+                      <div className="text-[10px] text-blue-500 mt-0.5">Tocca per vedere lo storico lavorazioni →</div>
                     </div>
-                    <div className="text-[10px] text-blue-500 mt-0.5">Tocca per vedere lo storico lavorazioni →</div>
                   </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onEditVeicolo(v); }}
+                    className="p-2 text-gray-400 hover:text-blue-600 cursor-pointer shrink-0"
+                    title="Modifica veicolo"
+                  >
+                    ✏️
+                  </button>
                 </div>
                 {(revisione || tagliando || assicurazione || bollo) && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
@@ -693,22 +743,27 @@ function ClienteDetail({ cliente, onBack, onAddVeicolo, onDeleted, onSelectVeico
   );
 }
 
-// ==================== ADD VEICOLO FORM ====================
-function AddVeicoloForm({ clienteId, onBack, onSaved }: {
+// ==================== ADD/MODIFICA VEICOLO FORM ====================
+function AddVeicoloForm({ clienteId, veicolo, onBack, onSaved }: {
   clienteId: string;
+  /** Se presente, il form modifica questo veicolo invece di crearne uno nuovo. */
+  veicolo?: Veicolo;
   onBack: () => void;
   onSaved: () => void;
 }) {
-  const [marca, setMarca] = useState('');
-  const [modello, setModello] = useState('');
-  const [targa, setTarga] = useState('');
-  const [anno, setAnno] = useState(new Date().getFullYear().toString());
-  const [km, setKm] = useState('');
-  const [carburante, setCarburante] = useState('benzina');
-  const [scadenzaRevisione, setScadenzaRevisione] = useState('');
-  const [scadenzaTagliando, setScadenzaTagliando] = useState('');
-  const [scadenzaAssicurazione, setScadenzaAssicurazione] = useState('');
-  const [scadenzaBollo, setScadenzaBollo] = useState('');
+  const isEdit = !!veicolo;
+  const [marca, setMarca] = useState(veicolo?.marca || '');
+  const [modello, setModello] = useState(veicolo?.modello || '');
+  const [targa, setTarga] = useState(veicolo?.targa || '');
+  const [anno, setAnno] = useState((veicolo?.anno || new Date().getFullYear()).toString());
+  const [km, setKm] = useState(veicolo?.km ? String(veicolo.km) : '');
+  const [carburante, setCarburante] = useState(veicolo?.carburante || 'benzina');
+  const [scadenzaRevisione, setScadenzaRevisione] = useState(veicolo?.scadenze?.revisione || '');
+  const [scadenzaTagliando, setScadenzaTagliando] = useState(veicolo?.scadenze?.tagliando || '');
+  const [scadenzaAssicurazione, setScadenzaAssicurazione] = useState(veicolo?.scadenze?.assicurazione || '');
+  const [scadenzaBollo, setScadenzaBollo] = useState(veicolo?.scadenze?.bollo || '');
+  const [fotoLibrettoUrl, setFotoLibrettoUrl] = useState<string | null>(veicolo?.foto_libretto_url || null);
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [errTarga, setErrTarga] = useState<string | null>(null);
 
@@ -724,19 +779,45 @@ function AddVeicoloForm({ clienteId, onBack, onSaved }: {
       assicurazione: scadenzaAssicurazione || undefined,
       bollo: scadenzaBollo || undefined,
     } : null;
-    const { error } = await insertTolerant('veicoli', {
+    const dati = {
+      marca: marca.trim() || 'N/D',
+      modello: modello.trim() || 'N/D',
+      targa: targa.trim().toUpperCase(),
+      anno: parseInt(anno) || new Date().getFullYear(),
+      km: parseInt(km) || 0,
+      carburante,
+      scadenze,
+    };
+
+    let veicoloId = veicolo?.id;
+    if (isEdit && veicoloId) {
+      const { error } = await supabase.from('veicoli').update(dati).eq('id', veicoloId);
+      if (error) { setSaving(false); alert('Errore salvataggio: ' + error.message); return; }
+    } else {
+      const { data, error } = await insertTolerant<Veicolo>('veicoli', {
         cliente_id: clienteId,
-        marca: marca.trim() || 'N/D',
-        modello: modello.trim() || 'N/D',
-        targa: targa.trim().toUpperCase(),
-        anno: parseInt(anno) || new Date().getFullYear(),
-        km: parseInt(km) || 0,
-        carburante,
-        scadenze,
-      }, ['cliente_id', 'targa']);
+        ...dati,
+      }, ['cliente_id', 'targa'], { returning: true });
+      if (error) { setSaving(false); alert('Errore salvataggio: ' + error.message); return; }
+      veicoloId = data?.id;
+    }
+
+    // Foto libretto: caricata solo dopo aver ottenuto un id veicolo valido
+    // (per un veicolo nuovo, solo dopo l'insert appena fatto).
+    if (fotoFile && veicoloId) {
+      const ext = fotoFile.name.split('.').pop();
+      const fileName = `libretto/${veicoloId}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('foto-lavorazione')
+        .upload(fileName, fotoFile, { cacheControl: '3600', upsert: true });
+      if (!upErr) {
+        const { data: urlData } = supabase.storage.from('foto-lavorazione').getPublicUrl(fileName);
+        await supabase.from('veicoli').update({ foto_libretto_url: urlData.publicUrl }).eq('id', veicoloId);
+      }
+    }
 
     setSaving(false);
-    if (!error) onSaved();
+    onSaved();
   };
 
   return (
@@ -747,7 +828,7 @@ function AddVeicoloForm({ clienteId, onBack, onSaved }: {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <h2 className="text-lg font-bold text-gray-900">Nuovo veicolo</h2>
+        <h2 className="text-lg font-bold text-gray-900">{isEdit ? 'Modifica veicolo' : 'Nuovo veicolo'}</h2>
       </div>
 
       <Input
@@ -822,8 +903,24 @@ function AddVeicoloForm({ clienteId, onBack, onSaved }: {
         </div>
       </div>
 
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Foto libretto di circolazione</label>
+        {fotoLibrettoUrl && !fotoFile && (
+          <a href={fotoLibrettoUrl} target="_blank" rel="noopener noreferrer" className="block mb-2">
+            <img src={fotoLibrettoUrl} alt="Libretto" className="w-full max-h-40 object-contain rounded-lg border border-gray-200 bg-gray-50" />
+          </a>
+        )}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setFotoFile(e.target.files?.[0] || null)}
+          className="w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 file:text-xs file:font-semibold hover:file:bg-blue-100 cursor-pointer"
+        />
+        {fotoFile && <div className="text-[11px] text-gray-500 mt-1">Verrà caricata al salvataggio: {fotoFile.name}</div>}
+      </div>
+
       <Button fullWidth onClick={submit} loading={saving} disabled={!targa.trim()}>
-        Salva veicolo
+        {isEdit ? 'Salva modifiche' : 'Salva veicolo'}
       </Button>
     </div>
   );

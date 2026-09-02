@@ -88,6 +88,7 @@ export interface Veicolo {
     tagliando?: string;
     bollo?: string;
   };
+  foto_libretto_url?: string | null;
   created_at?: string;
 }
 

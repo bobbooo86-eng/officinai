@@ -28,6 +28,9 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
   const [newClienteNome, setNewClienteNome] = useState('');
   const [newClienteTel, setNewClienteTel] = useState('');
   const [newClienteEmail, setNewClienteEmail] = useState('');
+  const [newClienteCF, setNewClienteCF] = useState('');
+  const [newClienteIndirizzo, setNewClienteIndirizzo] = useState('');
+  const [newClienteNote, setNewClienteNote] = useState('');
 
   // Veicolo search/create
   const [veicoli, setVeicoli] = useState<Veicolo[]>([]);
@@ -37,6 +40,15 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
   const [newTarga, setNewTarga] = useState('');
   const [newMarca, setNewMarca] = useState('');
   const [newModello, setNewModello] = useState('');
+  const [newAnno, setNewAnno] = useState(new Date().getFullYear().toString());
+  const [newKm, setNewKm] = useState('');
+  const [newCarburante, setNewCarburante] = useState('benzina');
+  const [newScadRevisione, setNewScadRevisione] = useState('');
+  const [newScadTagliando, setNewScadTagliando] = useState('');
+  const [newScadAssicurazione, setNewScadAssicurazione] = useState('');
+  const [newScadBollo, setNewScadBollo] = useState('');
+  const [newFotoLibretto, setNewFotoLibretto] = useState<File | null>(null);
+  const carburanti = ['benzina', 'diesel', 'gpl', 'metano', 'ibrido', 'elettrico'];
 
   // Appuntamento fields
   const [dataOra, setDataOra] = useState(() => {
@@ -126,6 +138,9 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
             nome: newClienteNome.trim(),
             tel: newClienteTel.trim(),
             email: newClienteEmail.trim(),
+            codice_fiscale: newClienteCF.trim() || null,
+            indirizzo: newClienteIndirizzo.trim() || null,
+            note: newClienteNote.trim() || null,
           })
           .select()
           .single();
@@ -137,6 +152,12 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
 
       // Create new veicolo if needed
       if (!veicoloId && showNewVeicolo && newTarga.trim()) {
+        const scadenze = (newScadRevisione || newScadTagliando || newScadAssicurazione || newScadBollo) ? {
+          revisione: newScadRevisione || undefined,
+          tagliando: newScadTagliando || undefined,
+          assicurazione: newScadAssicurazione || undefined,
+          bollo: newScadBollo || undefined,
+        } : null;
         const { data: newVe, error: veErr } = await supabase
           .from('veicoli')
           .insert({
@@ -144,14 +165,27 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
             marca: newMarca.trim() || 'N/D',
             modello: newModello.trim() || 'N/D',
             targa: newTarga.trim().toUpperCase(),
-            anno: new Date().getFullYear(),
-            km: 0,
-            carburante: 'benzina',
+            anno: parseInt(newAnno) || new Date().getFullYear(),
+            km: parseInt(newKm) || 0,
+            carburante: newCarburante,
+            scadenze,
           })
           .select()
           .single();
         if (veErr) throw new Error('Errore creazione veicolo: ' + veErr.message);
         veicoloId = newVe.id;
+
+        if (newFotoLibretto && veicoloId) {
+          const ext = newFotoLibretto.name.split('.').pop();
+          const fileName = `libretto/${veicoloId}/${Date.now()}.${ext}`;
+          const { error: upErr } = await supabase.storage
+            .from('foto-lavorazione')
+            .upload(fileName, newFotoLibretto, { cacheControl: '3600', upsert: true });
+          if (!upErr) {
+            const { data: urlData } = supabase.storage.from('foto-lavorazione').getPublicUrl(fileName);
+            await supabase.from('veicoli').update({ foto_libretto_url: urlData.publicUrl }).eq('id', veicoloId);
+          }
+        }
       }
 
       if (!veicoloId) throw new Error('Seleziona o crea un veicolo');
@@ -220,6 +254,11 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
               <input type="tel" value={newClienteTel} onChange={(e) => setNewClienteTel(e.target.value)} className={inputClass} placeholder="Telefono" />
               <input type="email" value={newClienteEmail} onChange={(e) => setNewClienteEmail(e.target.value)} className={inputClass} placeholder="Email" />
             </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input type="text" value={newClienteCF} onChange={(e) => setNewClienteCF(e.target.value.toUpperCase())} className={inputClass} placeholder="Codice Fiscale" />
+              <input type="text" value={newClienteIndirizzo} onChange={(e) => setNewClienteIndirizzo(e.target.value)} className={inputClass} placeholder="Indirizzo" />
+            </div>
+            <textarea value={newClienteNote} onChange={(e) => setNewClienteNote(e.target.value)} rows={2} className={inputClass + ' resize-none'} placeholder="Note cliente" />
           </div>
         ) : (
           <div className="space-y-2">
@@ -284,6 +323,43 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
               <div className="grid grid-cols-2 gap-2">
                 <input type="text" value={newMarca} onChange={(e) => setNewMarca(e.target.value)} className={inputClass} placeholder="Marca (es. Fiat)" />
                 <input type="text" value={newModello} onChange={(e) => setNewModello(e.target.value)} className={inputClass} placeholder="Modello (es. Panda)" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="number" value={newAnno} onChange={(e) => setNewAnno(e.target.value)} className={inputClass} placeholder="Anno" />
+                <input type="number" value={newKm} onChange={(e) => setNewKm(e.target.value)} className={inputClass} placeholder="Km" />
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {carburanti.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setNewCarburante(c)}
+                    className={`py-2 rounded-lg text-xs font-medium capitalize transition-colors cursor-pointer ${
+                      newCarburante === c ? 'bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Scadenze (opzionale)</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="date" value={newScadRevisione} onChange={(e) => setNewScadRevisione(e.target.value)} className={inputClass} placeholder="Revisione" />
+                  <input type="date" value={newScadTagliando} onChange={(e) => setNewScadTagliando(e.target.value)} className={inputClass} placeholder="Tagliando" />
+                </div>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <input type="date" value={newScadAssicurazione} onChange={(e) => setNewScadAssicurazione(e.target.value)} className={inputClass} placeholder="Assicurazione" />
+                  <input type="date" value={newScadBollo} onChange={(e) => setNewScadBollo(e.target.value)} className={inputClass} placeholder="Bollo" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Foto libretto di circolazione</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setNewFotoLibretto(e.target.files?.[0] || null)}
+                  className="w-full text-xs text-gray-600 dark:text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:text-xs file:font-semibold hover:file:bg-emerald-100 cursor-pointer"
+                />
               </div>
             </div>
           ) : (
