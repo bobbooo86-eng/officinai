@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, Badge } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { leggiPromemoriaNascosti, nascondiPromemoria } from '@/lib/promemoriaNascosti';
 import type { Veicolo, Cliente } from '@/types/database';
 
 // Un mese di anticipo, come richiesto: le scadenze piu' lontane non
@@ -14,6 +15,7 @@ interface VehicleAlert {
   tipo: string;
   scadenza: string;
   giorniRimanenti: number;
+  chiave: string;
 }
 
 export function VehicleAlerts() {
@@ -25,11 +27,11 @@ export function VehicleAlerts() {
     if (!officina) return;
 
     const fetch = async () => {
-      // Get all vehicles with their clients
-      const { data: clienti } = await supabase
-        .from('clienti')
-        .select('*, veicoli(*)')
-        .eq('officina_id', officina.id);
+      // Get all vehicles with their clients, e i promemoria gia' nascosti
+      const [{ data: clienti }, nascosti] = await Promise.all([
+        supabase.from('clienti').select('*, veicoli(*)').eq('officina_id', officina.id),
+        leggiPromemoriaNascosti(officina.id),
+      ]);
 
       if (!clienti) { setLoading(false); return; }
 
@@ -56,13 +58,15 @@ export function VehicleAlerts() {
             const giorniRimanenti = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
             // Alert if within a month or already expired
-            if (giorniRimanenti <= SOGLIA_GIORNI) {
+            const chiave = `scadenza:${v.id}:${tipo}:${data}`;
+            if (giorniRimanenti <= SOGLIA_GIORNI && !nascosti.has(chiave)) {
               alertList.push({
                 veicolo: v,
                 cliente,
                 tipo,
                 scadenza: data,
                 giorniRimanenti,
+                chiave,
               });
             }
           });
@@ -77,6 +81,15 @@ export function VehicleAlerts() {
 
     fetch();
   }, [officina]);
+
+  // Nasconde solo dalla Home: la scadenza resta sul veicolo, modificabile
+  // e ripristinabile da li' in qualsiasi momento (non e' una cancellazione).
+  const nascondi = async (alert: VehicleAlert, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!officina) return;
+    setAlerts((prev) => prev.filter((a) => a.chiave !== alert.chiave));
+    await nascondiPromemoria(officina.id, alert.chiave);
+  };
 
   const inviaPromemoria = (alert: VehicleAlert) => {
     const tel = alert.cliente?.tel;
@@ -99,12 +112,12 @@ export function VehicleAlerts() {
         </span>
       </div>
       <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-        {alerts.map((alert, i) => {
+        {alerts.map((alert) => {
           const isExpired = alert.giorniRimanenti <= 0;
           const isUrgent = alert.giorniRimanenti <= 15;
           return (
             <div
-              key={i}
+              key={alert.chiave}
               className={`flex items-center justify-between p-2 rounded-lg text-xs ${
                 isExpired ? 'bg-red-50' : isUrgent ? 'bg-amber-50' : 'bg-blue-50'
               }`}
@@ -115,27 +128,36 @@ export function VehicleAlerts() {
                 </div>
                 <div className="text-gray-500">{alert.veicolo.targa}</div>
               </div>
-              <div className="text-right ml-2 shrink-0">
-                <Badge
-                  color={isExpired ? '#991b1b' : isUrgent ? '#92400e' : '#1e40af'}
-                  bg={isExpired ? '#fecaca' : isUrgent ? '#fde68a' : '#dbeafe'}
-                >
-                  {alert.tipo}
-                </Badge>
-                <div className={`text-[10px] mt-0.5 ${isExpired ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
-                  {isExpired
-                    ? `Scaduto da ${Math.abs(alert.giorniRimanenti)}gg`
-                    : `Tra ${alert.giorniRimanenti}gg`
-                  }
-                </div>
-                {alert.cliente?.tel && (
-                  <button
-                    onClick={() => inviaPromemoria(alert)}
-                    className="mt-1 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-semibold hover:bg-emerald-700 cursor-pointer transition-colors"
+              <div className="text-right ml-2 shrink-0 flex items-start gap-1">
+                <div>
+                  <Badge
+                    color={isExpired ? '#991b1b' : isUrgent ? '#92400e' : '#1e40af'}
+                    bg={isExpired ? '#fecaca' : isUrgent ? '#fde68a' : '#dbeafe'}
                   >
-                    💬 Promemoria
-                  </button>
-                )}
+                    {alert.tipo}
+                  </Badge>
+                  <div className={`text-[10px] mt-0.5 ${isExpired ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
+                    {isExpired
+                      ? `Scaduto da ${Math.abs(alert.giorniRimanenti)}gg`
+                      : `Tra ${alert.giorniRimanenti}gg`
+                    }
+                  </div>
+                  {alert.cliente?.tel && (
+                    <button
+                      onClick={() => inviaPromemoria(alert)}
+                      className="mt-1 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-semibold hover:bg-emerald-700 cursor-pointer transition-colors"
+                    >
+                      💬 Promemoria
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={(e) => nascondi(alert, e)}
+                  className="text-gray-400 hover:text-gray-600 cursor-pointer px-1 shrink-0"
+                  title="Nascondi dalla Home"
+                >
+                  ✕
+                </button>
               </div>
             </div>
           );

@@ -5,6 +5,7 @@ import { STATO_CONFIG, TIPO_LAVORAZIONE, detectTipoLavorazione } from '@/lib/con
 import { fmtData, fmtOra, dayKey, todayKey } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { VehicleAlerts } from './VehicleAlerts';
+import { leggiPromemoriaNascosti, nascondiPromemoria } from '@/lib/promemoriaNascosti';
 import type { Appuntamento, Magazzino } from '@/types/database';
 
 interface DashboardProps {
@@ -23,6 +24,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [meseStats, setMeseStats] = useState<{ fatturato: number; lavori: number; nonFatturati: number } | null>(null);
+  const [creditiNascosti, setCreditiNascosti] = useState<Set<string>>(new Set());
 
   const fetchData = useCallback(async () => {
     if (!officina) return;
@@ -39,7 +41,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
       // azzerando il fatturato per 5 mesi l'anno.
       const inizioMeseProssimo = dayKey(new Date(oggiDate.getFullYear(), oggiDate.getMonth() + 1, 1));
 
-      const [appsResult, magazzinoResult, obdResult, prevResult, fattureResult, tutteFattureResult] = await Promise.all([
+      const [appsResult, magazzinoResult, obdResult, prevResult, fattureResult, tutteFattureResult, nascosti] = await Promise.all([
         supabase
           .from('appuntamenti')
           .select('*, clienti(nome,tel,email), veicoli(marca,modello,targa,km)')
@@ -73,10 +75,12 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
           .from('fatture')
           .select('appuntamento_id')
           .eq('officina_id', officina.id),
+        leggiPromemoriaNascosti(officina.id),
       ]);
 
       if (appsResult.error) throw appsResult.error;
       if (fattureResult.error) throw fattureResult.error;
+      setCreditiNascosti(nascosti);
 
       const apps = appsResult.data || [];
       setAppuntamenti(apps);
@@ -157,7 +161,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
   const recenti = appuntamenti.filter((a) => new Date(a.data_ora).getTime() <= adesso).slice(0, 8);
 
   const crediti = appuntamenti.filter((a) =>
-    a.stato === 'consegnato' && a.pagamento && a.pagamento.stato !== 'pagato'
+    a.stato === 'consegnato' && a.pagamento && a.pagamento.stato !== 'pagato' && !creditiNascosti.has(`credito:${a.id}`)
   );
   const totaleCrediti = crediti.reduce((sum, a) => {
     const p = a.pagamento!;
@@ -167,6 +171,16 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
   }, 0);
 
   const isNuovoUtente = appuntamenti.length === 0;
+
+  // Nasconde solo dalla Home: il credito resta sull'appuntamento, ancora
+  // modificabile da Cassa > Incassi officina o dallo storico del veicolo.
+  const nascondiCredito = async (a: Appuntamento, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!officina) return;
+    const chiave = `credito:${a.id}`;
+    setCreditiNascosti((prev) => new Set(prev).add(chiave));
+    await nascondiPromemoria(officina.id, chiave);
+  };
 
   return (
     <div className="p-4 space-y-5">
@@ -363,7 +377,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
                 ? p.importo_totale
                 : p.stato === 'acconto' ? (p.importo_totale || 0) - (p.importo_pagato || 0) : 0;
               return (
-                <button
+                <div
                   key={a.id}
                   onClick={() => onSelectAppuntamento(a)}
                   className="w-full flex items-center justify-between text-left p-2.5 bg-white dark:bg-gray-800 rounded-xl border border-red-100 hover:border-red-300 hover:shadow-sm transition-all cursor-pointer"
@@ -378,15 +392,24 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
                       {p.note && <div className="text-[11px] text-gray-400 italic mt-0.5">{p.note}</div>}
                     </div>
                   </div>
-                  <div className="text-right ml-3 shrink-0">
-                    {resto != null && resto > 0 && (
-                      <div className="text-sm font-black text-red-600">€{resto.toFixed(2)}</div>
-                    )}
-                    <div className="text-[10px] text-gray-400">
-                      {p.stato === 'acconto' ? 'acconto' : 'da pagare'}
+                  <div className="flex items-start gap-1 shrink-0">
+                    <div className="text-right ml-3 shrink-0">
+                      {resto != null && resto > 0 && (
+                        <div className="text-sm font-black text-red-600">€{resto.toFixed(2)}</div>
+                      )}
+                      <div className="text-[10px] text-gray-400">
+                        {p.stato === 'acconto' ? 'acconto' : 'da pagare'}
+                      </div>
                     </div>
+                    <button
+                      onClick={(e) => nascondiCredito(a, e)}
+                      className="text-gray-400 hover:text-gray-600 cursor-pointer px-1"
+                      title="Nascondi dalla Home"
+                    >
+                      ✕
+                    </button>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>

@@ -12,9 +12,13 @@ interface LayoutProps {
   onSearchSelect?: (type: string, id: string) => void;
   showSearch?: boolean;
   fab?: { onClick: () => void };
+  // Il tasto "+" e quello di stampa, entrambi in basso a destra, a volte
+  // finiscono sopra i prezzi delle righe di un preventivo mentre si scorre:
+  // le pagine con quel problema li nascondono passando true qui.
+  hideFloatingButtons?: boolean;
 }
 
-export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect, showSearch = false, fab }: LayoutProps) {
+export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect, showSearch = false, fab, hideFloatingButtons = false }: LayoutProps) {
   const { utente, officina, cliente, userType, logout } = useAuthStore();
   const [showMenu, setShowMenu] = useState(false);
   // Memorizza l'URL che non si e' caricato invece di un booleano: cosi' un
@@ -105,11 +109,11 @@ export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect,
         {children}
       </main>
 
-      {/* Print button — floating on every page */}
-      <PrintButton />
+      {/* Print button — floating on every page, tranne dove copre altro */}
+      {!hideFloatingButtons && <PrintButton />}
 
       {/* FAB — Nuovo appuntamento */}
-      {fab && (
+      {fab && !hideFloatingButtons && (
         <button
           onClick={fab.onClick}
           className="fixed bottom-[68px] right-4 z-50 w-14 h-14 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-full shadow-xl flex items-center justify-center text-3xl font-light transition-all cursor-pointer select-none"

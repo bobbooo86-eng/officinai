@@ -17,6 +17,7 @@ const SOURCES = [
   'supabase/migrations/021_clienti_archiviazione.sql',
   'supabase/migrations/022_preventivi_fermo_macchina.sql',
   'supabase/migrations/023_veicoli_foto_libretto.sql',
+  'supabase/migrations/024_promemoria_nascosti.sql',
 ];
 const TARGET = 'src/lib/dbRepairSql.ts';
 

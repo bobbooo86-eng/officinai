@@ -71,6 +71,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   const [editPagato, setEditPagato] = useState('');
   const [editTotale, setEditTotale] = useState('');
   const [editRicambi, setEditRicambi] = useState('');
+  const [editOperaio, setEditOperaio] = useState('');
   const [salvandoPagamento, setSalvandoPagamento] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -121,12 +122,13 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
     setEditPagato(String(a.pagamento?.importo_pagato ?? 0));
     setEditTotale(String(a.pagamento?.importo_totale ?? 0));
     setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
+    setEditOperaio(a.pagamento?.operaio || '');
   };
 
   // Un acconto puo' crescere nel tempo (il cliente paga altro dopo la
-  // consegna): incassato finora, totale da pagare e costo ricambi si
-  // modificano tutti insieme da qui. Se l'incassato raggiunge il totale,
-  // il pagamento passa da solo a "pagato".
+  // consegna): incassato finora, totale da pagare, costo ricambi e nome
+  // dell'operaio si modificano tutti insieme da qui. Se l'incassato
+  // raggiunge il totale, il pagamento passa da solo a "pagato".
   const salvaModifica = async (a: Appuntamento) => {
     if (!a.pagamento) return;
     const nuovoPagato = parseFloat(editPagato) || 0;
@@ -138,6 +140,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
       importo_pagato: nuovoPagato,
       importo_totale: nuovoTotale,
       costo_ricambi: nuovoRicambi,
+      operaio: editOperaio.trim() || undefined,
       stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
     };
     setSalvandoPagamento(a.id);
@@ -238,6 +241,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                     {(p.costo_ricambi || 0) > 0 && (
                       <span className="text-gray-400"> · netto {fmtEuro(incassato(a) - (p.costo_ricambi || 0))}</span>
                     )}
+                    {p.operaio && <span className="text-gray-400"> · 🔧 {p.operaio}</span>}
                   </span>
                   {!inEdit && (
                     <button
@@ -286,6 +290,16 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                           className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                       </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 block">Operaio che ha fatto il lavoro</label>
+                      <input
+                        type="text"
+                        value={editOperaio}
+                        onChange={(e) => setEditOperaio(e.target.value)}
+                        placeholder="Nome operaio"
+                        className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
                     </div>
                     <div className="flex gap-2">
                       <button

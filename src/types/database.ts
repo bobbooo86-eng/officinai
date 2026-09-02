@@ -101,6 +101,7 @@ export interface PagamentoInfo {
   costo_ricambi?: number;    // costo dei ricambi usati, per calcolare il guadagno netto
   data_consegna?: string;    // quando e' stata confermata la consegna: appuntamenti non ha altrimenti una data di consegna, solo data_ora (la data prenotata)
   note?: string;
+  operaio?: string;          // nome di chi ha eseguito il lavoro sull'auto
 }
 
 export interface Appuntamento {

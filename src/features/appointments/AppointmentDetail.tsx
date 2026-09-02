@@ -1020,7 +1020,19 @@ function TabFoglioLavoro({ appuntamentoId, statoAppuntamento, veicolo, veicoloKm
           .select('*')
           .eq('foglio_lavoro_id', fl.id)
           .order('created_at');
-        setDifetti(dif || []);
+        let difettiIniziali = dif || [];
+        // Nessun tasto "+ Aggiungi" da premere prima di poter scrivere: uno
+        // spazio vuoto e' sempre gia' pronto, come Lavorazioni da eseguire.
+        // Non su una scheda gia' chiusa/firmata (sola lettura).
+        if (!fl.chiuso && !difettiIniziali.some((d) => !d.descrizione.trim())) {
+          const { data: nuovo } = await supabase
+            .from('difetti')
+            .insert({ foglio_lavoro_id: fl.id, descrizione: '', gravita: 'media', risolto: false })
+            .select()
+            .single();
+          if (nuovo) difettiIniziali = [...difettiIniziali, nuovo];
+        }
+        setDifetti(difettiIniziali);
       }
       setLoading(false);
     };
@@ -1097,6 +1109,16 @@ function TabFoglioLavoro({ appuntamentoId, statoAppuntamento, veicolo, veicoloKm
   const updateDifetto = async (id: string, updates: Partial<Difetto>) => {
     await supabase.from('difetti').update(updates).eq('id', id);
     setDifetti(difetti.map((d) => (d.id === id ? { ...d, ...updates } : d)));
+  };
+
+  // Appena l'unico spazio vuoto rimasto viene scritto, ne compare subito un
+  // altro sotto: cosi' non serve mai un tasto "+ Aggiungi" per registrarne
+  // piu' di uno, ma non compare uno spazio in piu' a ogni singola lettera
+  // digitata (va chiamata solo su blur, a modifica finita).
+  const ensureBlankDifettoDopo = (idAppenaScritto: string, testo: string) => {
+    if (!testo.trim()) return;
+    const esisteAltroVuoto = difetti.some((d) => d.id !== idAppenaScritto && !d.descrizione.trim());
+    if (!esisteAltroVuoto) addDifetto();
   };
 
   const deleteDifetto = async (id: string) => {
@@ -1264,17 +1286,10 @@ ${difetti.length > 0 ? `<div class="section"><h2>Difetti riscontrati</h2>${difet
 
       {/* Difetti riscontrati */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-gray-900">
-            Difetti riscontrati <span className="text-gray-400 font-normal">({difetti.length})</span>
-          </h3>
-          {!isChiuso && (
-            <button onClick={addDifetto} className="text-xs text-blue-600 font-semibold hover:text-blue-700 cursor-pointer">
-              + Aggiungi
-            </button>
-          )}
-        </div>
-        {difetti.length === 0 && (
+        <h3 className="text-sm font-semibold text-gray-900 mb-2">
+          Difetti riscontrati <span className="text-gray-400 font-normal">({difetti.filter((d) => d.descrizione.trim()).length})</span>
+        </h3>
+        {isChiuso && difetti.length === 0 && (
           <div className="text-center py-3 text-xs text-gray-400">Nessun difetto registrato</div>
         )}
         {difetti.map((d) => {
@@ -1312,12 +1327,17 @@ ${difetti.length > 0 ? `<div class="section"><h2>Difetti riscontrati</h2>${difet
                 <textarea
                   value={d.descrizione}
                   onChange={(e) => setDifetti(difetti.map((x) => (x.id === d.id ? { ...x, descrizione: e.target.value } : x)))}
-                  onBlur={() => updateDifetto(d.id, { descrizione: d.descrizione })}
+                  onBlur={() => { updateDifetto(d.id, { descrizione: d.descrizione }); ensureBlankDifettoDopo(d.id, d.descrizione); }}
                   placeholder="Descrizione del difetto..."
                   rows={2}
                   className="flex-1 text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
-                <VoiceButton onResult={(text) => { const updated = difetti.map((x) => (x.id === d.id ? { ...x, descrizione: text } : x)); setDifetti(updated); updateDifetto(d.id, { descrizione: text }); }} />
+                <VoiceButton onResult={(text) => {
+                  const updated = difetti.map((x) => (x.id === d.id ? { ...x, descrizione: text } : x));
+                  setDifetti(updated);
+                  updateDifetto(d.id, { descrizione: text });
+                  ensureBlankDifettoDopo(d.id, text);
+                }} />
               </div>
               <div className="flex items-center gap-2">
                 <input

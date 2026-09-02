@@ -577,6 +577,12 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
   const [savedPdfHtml, setSavedPdfHtml] = useState<string | null>(null);
   const [allegandoPreventivo, setAllegandoPreventivo] = useState(false);
   const [uploadingSavedPdf, setUploadingSavedPdf] = useState(false);
+  // Id del preventivo appena salvato e dell'appuntamento segnaposto creato
+  // con lui: servono per poterlo eliminare subito da qui, senza dover prima
+  // uscire e ricercarlo nella lista.
+  const [savedPreventivoId, setSavedPreventivoId] = useState<string | null>(null);
+  const [savedAppuntamentoId, setSavedAppuntamentoId] = useState<string | null>(null);
+  const [deletingSaved, setDeletingSaved] = useState(false);
 
   // Manual vehicle selection — nome cliente + 4 dropdown sequenziali
   const [manualOpen, setManualOpen] = useState(false);
@@ -937,6 +943,8 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
         return;
       }
       setSaved(true);
+      setSavedPreventivoId(newPreventivo.id);
+      setSavedAppuntamentoId(appuntamentoId);
 
       // Genera l'HTML del preventivo e lo carica su Storage per ottenere un
       // link condivisibile da usare in WhatsApp/Email (invece del solo testo)
@@ -1007,6 +1015,26 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     }
 
     setSaving(false);
+  };
+
+  // Eliminare il preventivo appena salvato senza dover uscire e ricercarlo
+  // nella lista. E' sempre appena stato creato (stato 'bozza'), quindi non
+  // puo' avere gia' una fattura collegata: nessun controllo da fare li'.
+  const eliminaPreventivoSalvato = async () => {
+    if (!savedPreventivoId) return;
+    if (!confirm('Eliminare questo preventivo? L\'operazione non si può annullare.')) return;
+    setDeletingSaved(true);
+    const { error: delErr } = await supabase.from('preventivi').delete().eq('id', savedPreventivoId);
+    if (delErr) {
+      setDeletingSaved(false);
+      alert('Errore eliminazione: ' + delErr.message);
+      return;
+    }
+    if (savedAppuntamentoId) {
+      await supabase.from('appuntamenti').delete().eq('id', savedAppuntamentoId);
+    }
+    setDeletingSaved(false);
+    onBack();
   };
 
   const handleStampa = async () => {
@@ -1616,7 +1644,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
               </div>
 
               {/* Actions */}
-              <div className="grid grid-cols-2 gap-2 mt-4">
+              <div className={`grid ${saved ? 'grid-cols-3' : 'grid-cols-2'} gap-2 mt-4`}>
                 <button
                   onClick={handleStampa}
                   className="p-3 rounded-xl border-2 border-blue-600 text-blue-600 text-sm font-semibold hover:bg-blue-50 transition-colors cursor-pointer"
@@ -1630,6 +1658,15 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                 >
                   {saved ? '✅ Salvato!' : saving ? 'Salvataggio...' : '💾 Salva preventivo'}
                 </button>
+                {saved && (
+                  <button
+                    onClick={eliminaPreventivoSalvato}
+                    disabled={deletingSaved}
+                    className="p-3 rounded-xl border-2 border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    {deletingSaved ? '...' : '🗑️ Elimina'}
+                  </button>
+                )}
               </div>
 
               {saveError && (
@@ -1691,9 +1728,19 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                 </div>
               )}
               {saved && !uploadingSavedPdf && savedPdfUrl && (
-                <div className="text-center text-[10px] text-gray-400 mt-1">
-                  Il messaggio includera' il link al preventivo in PDF
-                </div>
+                <>
+                  <div className="text-center text-[10px] text-gray-400 mt-1">
+                    Il messaggio includera' il link al preventivo in PDF
+                  </div>
+                  <a
+                    href={savedPdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center text-xs text-blue-600 hover:underline mt-1"
+                  >
+                    📎 Apri preventivo condivisibile (pagina web)
+                  </a>
+                </>
               )}
               {saved && !uploadingSavedPdf && !savedPdfUrl && savedPdfHtml && (
                 <div className="mt-2">
