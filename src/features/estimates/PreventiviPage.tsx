@@ -565,6 +565,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
   const [categoriaAperta, setCategoriaAperta] = useState<string | null>(null);
   const [sconto, setSconto] = useState(0);
   const [note, setNote] = useState('');
+  const [fermoMacchina, setFermoMacchina] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -923,6 +924,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
           iva,
           totale,
           stato: 'bozza',
+          fermo_macchina: fermoMacchina.trim() || null,
         })
         .select()
         .single();
@@ -981,6 +983,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
               iva,
               totale,
               stato: 'bozza',
+              fermo_macchina: fermoMacchina.trim() || undefined,
               created_at: newPreventivo.created_at,
             },
             officina,
@@ -1034,6 +1037,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
       .total-row td { font-weight:bold; font-size:16px; color:${accent}; border-top:2px solid ${accent}; padding-top:8px; }
       .footer { margin-top:30px; font-size:10px; color:#999; text-align:center; border-top:1px solid #e5e7eb; padding-top:10px; }
       ${note ? '.note { margin-top:16px; padding:10px; background:#fefce8; border:1px solid #fde68a; border-radius:6px; font-size:12px; }' : ''}
+      ${fermoMacchina ? '.fermo { margin-top:16px; padding:10px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; font-size:12px; }' : ''}
     </style></head><body>
       <div class="header">
         <div class="brand">
@@ -1093,6 +1097,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
         </table>
       </div>
 
+      ${fermoMacchina ? `<div class="fermo"><strong>Fermo macchina:</strong> il veicolo dovrà rimanere in officina per ${fermoMacchina}</div>` : ''}
       ${note ? `<div class="note"><strong>Note:</strong> ${note}</div>` : ''}
 
       <div class="footer">
@@ -1553,6 +1558,18 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                 {sconto > 0 && <span className="text-xs text-red-600">-{fmtEuro(scontoEuro)}</span>}
               </div>
 
+              {/* Fermo macchina */}
+              <div className="mt-3">
+                <label className="block text-xs text-gray-600 mb-1">Fermo macchina (opzionale)</label>
+                <input
+                  type="text"
+                  value={fermoMacchina}
+                  onChange={(e) => setFermoMacchina(e.target.value)}
+                  placeholder="Es. 1 giorno, 2-3 ore..."
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+              </div>
+
               {/* Note */}
               <div className="mt-3">
                 <textarea
@@ -1775,6 +1792,7 @@ interface PreventivoListItem {
   cliente_nome?: string;
   veicolo_targa?: string;
   veicolo_desc?: string;
+  fermo_macchina?: string;
 }
 
 export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onNavigateToFatture, externalSearch, resetSignal }: { onSelectAppuntamento?: (app: any) => void; onNavigateToCalendar?: (date: Date) => void; onNavigateToFatture?: () => void; externalSearch?: string; resetSignal?: number }) {
@@ -1797,6 +1815,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
   const [confermando, setConfermando] = useState(false);
   const [confermaErrore, setConfermaErrore] = useState('');
   const [editClienteNome, setEditClienteNome] = useState('');
+  const [editFermoMacchina, setEditFermoMacchina] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingPreventivo, setDeletingPreventivo] = useState(false);
   const [generatingFattura, setGeneratingFattura] = useState(false);
@@ -2044,6 +2063,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
       setEditRighe(p.righe.map((r) => ({ ...r })));
       setEditSconto(p.sconto);
       setEditClienteNome(p.cliente_nome || '');
+      setEditFermoMacchina(p.fermo_macchina || '');
       setEditMode(true);
     };
 
@@ -2108,6 +2128,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
       setEditRighe([]);
       setEditSconto(0);
       setEditClienteNome('');
+      setEditFermoMacchina('');
     };
 
     const saveEdit = async () => {
@@ -2123,6 +2144,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
           sconto: editSconto,
           iva: nuovaIva,
           totale: nuovoTotale,
+          fermo_macchina: editFermoMacchina.trim() || null,
         })
         .eq('id', p.id);
       if (updErr) {
@@ -2160,6 +2182,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
         iva: nuovaIva,
         totale: nuovoTotale,
         cliente_nome: nomeFinale,
+        fermo_macchina: editFermoMacchina.trim() || undefined,
       };
       setSelectedPreventivo(updated);
       setPreventivi((prev) =>
@@ -2406,6 +2429,24 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
             <span>{fmtEuro(totaleView)}</span>
           </div>
         </div>
+
+        {/* Fermo macchina */}
+        {(editMode || p.fermo_macchina) && (
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <label className="block text-xs text-gray-500 mb-1">Fermo macchina</label>
+            {editMode ? (
+              <input
+                type="text"
+                value={editFermoMacchina}
+                onChange={(e) => setEditFermoMacchina(e.target.value)}
+                placeholder="Es. 1 giorno, 2-3 ore..."
+                className="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+            ) : (
+              <p className="text-sm font-semibold text-gray-800">{p.fermo_macchina}</p>
+            )}
+          </div>
+        )}
 
         {editMode && (
           <div className="flex gap-2">

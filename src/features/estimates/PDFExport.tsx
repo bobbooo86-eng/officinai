@@ -216,6 +216,13 @@ export function buildPreventivoHtml(
     </div>
   </div>
 
+  ${preventivo.fermo_macchina ? `
+  <div class="section">
+    <h2>Fermo macchina</h2>
+    <p style="font-size: 12px; color: #333;">Il veicolo dovrà rimanere in officina per: <strong>${preventivo.fermo_macchina}</strong></p>
+  </div>
+  ` : ''}
+
   <div class="section">
     <h2>Condizioni</h2>
     <p style="font-size: 11px; color: #666; line-height: 1.6;">

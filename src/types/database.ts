@@ -194,6 +194,9 @@ export interface Preventivo {
   iva: number;
   totale: number;
   stato: PreventivoStato;
+  // Quanto il cliente deve lasciare l'auto in officina (testo libero,
+  // es. "1 giorno"). Va anche nel documento inviato al cliente.
+  fermo_macchina?: string;
   created_at?: string;
 }
 
