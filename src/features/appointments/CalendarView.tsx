@@ -161,7 +161,9 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
         .eq('officina_id', officina.id)
         // Segnaposto di un preventivo non ancora confermato dal cliente:
         // non e' un appuntamento reale, non deve comparire in calendario.
-        .neq('stato', 'bozza_preventivo')
+        // Un appuntamento annullato confonderebbe la vista: resta comunque
+        // consultabile nell'agenda a lista e nello storico del veicolo.
+        .not('stato', 'in', '("bozza_preventivo","annullato")')
         .order('data_ora', { ascending: true });
       setAppuntamenti(data || []);
       setLoading(false);

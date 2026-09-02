@@ -14,6 +14,7 @@ const SOURCES = [
   'supabase/migrations/018_veicoli_scadenze.sql',
   'supabase/migrations/019_foglio_lavoro_semplice.sql',
   'supabase/migrations/020_fatture_delete_policy.sql',
+  'supabase/migrations/021_clienti_archiviazione.sql',
 ];
 const TARGET = 'src/lib/dbRepairSql.ts';
 

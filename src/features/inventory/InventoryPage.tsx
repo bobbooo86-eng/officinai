@@ -17,7 +17,7 @@ const emptyItem: Partial<Magazzino> = {
   prezzo_acq: 0, prezzo_vend: 0,
 };
 
-export function InventoryPage() {
+export function InventoryPage({ resetSignal }: { resetSignal?: number } = {}) {
   const { officina } = useAuthStore();
   const [items, setItems] = useState<Magazzino[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +48,15 @@ export function InventoryPage() {
   };
 
   useEffect(() => { fetchItems(); }, [officina]);
+
+  // Cliccare di nuovo sul tab Magazzino mentre e' gia' attivo chiude il
+  // modulo di modifica/aggiunta invece di lasciarlo a meta'.
+  useEffect(() => {
+    if (resetSignal === undefined) return;
+    setShowForm(false);
+    setEditItem(emptyItem);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal]);
 
   const saveItem = async () => {
     if (!officina || !editItem.nome?.trim()) return;

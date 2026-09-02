@@ -33,6 +33,7 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
   const [view, setView] = useState<View>('list');
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [selectedVeicolo, setSelectedVeicolo] = useState<Veicolo | null>(null);
+  const [mostraArchiviati, setMostraArchiviati] = useState(false);
 
   // Quando l'utente clicca di nuovo sul tab Clienti mentre e' gia' attivo,
   // torna alla lista principale invece di restare nel dettaglio.
@@ -97,7 +98,8 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
         onBack={() => { setView('list'); setSelectedCliente(null); }}
         onAddVeicolo={() => setView('addVeicolo')}
         onDeleted={() => {
-          setClienti((prev) => prev.filter((c) => c.id !== selectedCliente.id));
+          // Non rimosso dall'elenco: resta come archiviato, ripristinabile.
+          setClienti((prev) => prev.map((c) => (c.id === selectedCliente.id ? { ...c, attivo: false } : c)));
           setSelectedCliente(null);
           setView('list');
         }}
@@ -126,16 +128,26 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
     );
   }
 
-  const filtered = clienti.filter((c) =>
+  const attivi = clienti.filter((c) => c.attivo !== false);
+  const archiviati = clienti.filter((c) => c.attivo === false);
+  const listaBase = mostraArchiviati ? archiviati : attivi;
+  const filtered = listaBase.filter((c) =>
     c.nome.toLowerCase().includes(search.toLowerCase()) ||
     c.email?.toLowerCase().includes(search.toLowerCase()) ||
     c.tel?.includes(search)
   );
 
+  const ripristinaCliente = async (c: Cliente, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const { error } = await supabase.from('clienti').update({ attivo: true }).eq('id', c.id);
+    if (error) { alert('Errore ripristino: ' + error.message); return; }
+    setClienti((prev) => prev.map((x) => (x.id === c.id ? { ...x, attivo: true } : x)));
+  };
+
   return (
     <div className="p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-gray-900">Clienti ({clienti.length})</h2>
+        <h2 className="text-lg font-bold text-gray-900">Clienti ({attivi.length})</h2>
         <Button onClick={() => setView('add')}>+ Nuovo cliente</Button>
       </div>
 
@@ -147,9 +159,18 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
         className="w-full px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
 
+      {archiviati.length > 0 && (
+        <button
+          onClick={() => setMostraArchiviati((v) => !v)}
+          className="text-xs text-gray-500 font-semibold hover:text-gray-700 cursor-pointer"
+        >
+          {mostraArchiviati ? '← Torna ai clienti attivi' : `🗄️ Clienti archiviati (${archiviati.length})`}
+        </button>
+      )}
+
       {filtered.length === 0 ? (
         <div className="text-center py-8 text-gray-400 text-sm">
-          {search ? 'Nessun cliente trovato' : 'Nessun cliente registrato'}
+          {search ? 'Nessun cliente trovato' : mostraArchiviati ? 'Nessun cliente archiviato' : 'Nessun cliente registrato'}
         </div>
       ) : (
         <div className="space-y-2">
@@ -167,9 +188,18 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
                     {c.email}{c.tel ? ` · ${c.tel}` : ''}
                   </div>
                 </div>
-                <svg className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                {mostraArchiviati ? (
+                  <button
+                    onClick={(e) => ripristinaCliente(c, e)}
+                    className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 cursor-pointer px-2 py-1"
+                  >
+                    ↩ Ripristina
+                  </button>
+                ) : (
+                  <svg className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                )}
               </div>
             </Card>
           ))}
@@ -532,9 +562,16 @@ function ClienteDetail({ cliente, onBack, onAddVeicolo, onDeleted, onSelectVeico
     fetch();
   }, [cliente.id]);
 
+  // Non cancella davvero: appuntamenti_cliente_id_fkey e
+  // recensioni_cliente_id_fkey non hanno CASCADE, quindi quasi ogni
+  // cliente con storico verrebbe rifiutato dal database, e cancellare
+  // in cascata perderebbe comunque tutto quello storico. "Elimina"
+  // archivia il cliente (nascosto dalla lista, ripristinabile da
+  // "Clienti archiviati").
   const handleDelete = async () => {
-    if (!confirm(`Eliminare il cliente "${cliente.nome}"?`)) return;
-    await supabase.from('clienti').delete().eq('id', cliente.id);
+    if (!confirm(`Archiviare il cliente "${cliente.nome}"? Non sarà più visibile in elenco, ma potrai ripristinarlo in qualsiasi momento da "Clienti archiviati".`)) return;
+    const { error } = await supabase.from('clienti').update({ attivo: false }).eq('id', cliente.id);
+    if (error) { alert('Errore archiviazione: ' + error.message); return; }
     onDeleted();
   };
 
@@ -648,9 +685,9 @@ function ClienteDetail({ cliente, onBack, onAddVeicolo, onDeleted, onSelectVeico
         </div>
       )}
 
-      {/* Delete */}
+      {/* Delete (in realta' archivia: vedi handleDelete) */}
       <Button variant="danger" fullWidth onClick={handleDelete}>
-        Elimina cliente
+        🗄️ Archivia cliente
       </Button>
     </div>
   );

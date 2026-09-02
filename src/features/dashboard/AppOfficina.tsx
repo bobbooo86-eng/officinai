@@ -277,13 +277,13 @@ export function AppOfficina() {
       )}
       {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} onNavigateToCalendar={(date) => { setCalendarDate(date); setAgendaView('calendario'); setActiveTab('agenda'); }} onNavigateToFatture={() => setActiveTab('fatture')} externalSearch={preventiviSearch} resetSignal={resetSignal} /></Suspense>}
       {activeTab === 'clienti' && <CustomersPage initialClienteId={selectedClienteId} resetSignal={resetSignal} />}
-      {activeTab === 'magazzino' && <Suspense fallback={<PageSkeleton />}><InventoryPage /></Suspense>}
+      {activeTab === 'magazzino' && <Suspense fallback={<PageSkeleton />}><InventoryPage resetSignal={resetSignal} /></Suspense>}
       {activeTab === 'analytics' && <Suspense fallback={<PageSkeleton />}><AnalyticsPage /></Suspense>}
       {activeTab === 'fatture' && <Suspense fallback={<PageSkeleton />}><InvoicePage resetSignal={resetSignal} /></Suspense>}
       {activeTab === 'obd' && <Suspense fallback={<PageSkeleton />}><OBDScansPage /></Suspense>}
       {activeTab === 'cassa' && (
         <Suspense fallback={<PageSkeleton />}>
-          <CassaPage initialOpen={cassaOpenTipo} onOpenHandled={() => setCassaOpenTipo(null)} />
+          <CassaPage initialOpen={cassaOpenTipo} onOpenHandled={() => setCassaOpenTipo(null)} resetSignal={resetSignal} />
         </Suspense>
       )}
       {activeTab === 'altro' && !subPage && (

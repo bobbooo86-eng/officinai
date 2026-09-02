@@ -97,6 +97,7 @@ export function GlobalSearch({ onSelect }: GlobalSearchProps) {
           .from('clienti')
           .select('id, nome, tel, email')
           .eq('officina_id', officinaId)
+          .neq('attivo', false)
           .or(`nome.ilike.${pattern},tel.ilike.${pattern},email.ilike.${pattern}`)
           .limit(5);
 

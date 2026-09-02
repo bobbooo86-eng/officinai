@@ -58,9 +58,10 @@ const currentMonthKey = () => todayISO().slice(0, 7);
 interface CassaPageProps {
   initialOpen?: MovimentoTipo | null;
   onOpenHandled?: () => void;
+  resetSignal?: number;
 }
 
-export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
+export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPageProps) {
   const { officina, utente } = useAuthStore();
   const [sezione, setSezione] = useState<'movimenti' | 'incassi'>('movimenti');
   const [tab, setTab] = useState<CassaTab>('tutti');
@@ -213,6 +214,18 @@ export function CassaPage({ initialOpen, onOpenHandled }: CassaPageProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialOpen]);
+
+  // Cliccare di nuovo sul tab Cassa mentre e' gia' attivo torna alla vista
+  // principale (movimenti, form chiuso) invece di restare bloccato su
+  // Incassi officina o su un modulo a meta'.
+  useEffect(() => {
+    if (resetSignal === undefined) return;
+    setSezione('movimenti');
+    setShowForm(false);
+    setEditId(null);
+    setTab('tutti');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal]);
 
   /** Apre il modulo gia' compilato con i dati di un movimento esistente. */
   const iniziaModifica = (m: Movimento) => {
