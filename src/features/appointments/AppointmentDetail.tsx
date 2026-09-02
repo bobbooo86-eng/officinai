@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Button, Card, Badge, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG, STATI_ORDINE, GRAVITA_CONFIG } from '@/lib/constants';
@@ -14,6 +14,7 @@ import { format, parseISO } from 'date-fns';
 import { it as itLocale } from 'date-fns/locale';
 import { AccettazioneVeicolo } from './AccettazioneVeicolo';
 import { StoricoVeicolo } from './StoricoVeicolo';
+import { VoiceButton } from '@/components/VoiceInput';
 import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, Difetto, PagamentoInfo, PagamentoStato } from '@/types/database';
 
 interface Props {
@@ -618,13 +619,16 @@ function TabStato({ app }: { app: Appuntamento }) {
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Nota (opzionale)</label>
-              <textarea
-                value={propostaNota}
-                onChange={(e) => setPropostaNota(e.target.value)}
-                placeholder="Es: Il tecnico è disponibile solo nel pomeriggio..."
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={2}
-              />
+              <div className="flex items-start gap-2">
+                <textarea
+                  value={propostaNota}
+                  onChange={(e) => setPropostaNota(e.target.value)}
+                  placeholder="Es: Il tecnico è disponibile solo nel pomeriggio..."
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={2}
+                />
+                <VoiceButton onResult={setPropostaNota} />
+              </div>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -961,55 +965,6 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
   );
 }
 
-// ==================== VOICE INPUT HOOK ====================
-function useVoiceInput(onResult: (text: string) => void) {
-  const [listening, setListening] = useState(false);
-  const recRef = useRef<any>(null);
-
-  const start = () => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-    const rec = new SR();
-    rec.lang = 'it-IT';
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    rec.onresult = (e: any) => {
-      const text = e.results[0][0].transcript;
-      onResult(text);
-      setListening(false);
-    };
-    rec.onerror = () => setListening(false);
-    rec.onend = () => setListening(false);
-    recRef.current = rec;
-    rec.start();
-    setListening(true);
-  };
-
-  const stop = () => {
-    recRef.current?.stop();
-    setListening(false);
-  };
-
-  return { listening, start, stop, supported: !!(typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) };
-}
-
-function VoiceButton({ onResult, className }: { onResult: (text: string) => void; className?: string }) {
-  const { listening, start, stop, supported } = useVoiceInput(onResult);
-  if (!supported) return null;
-  return (
-    <button
-      type="button"
-      onClick={listening ? stop : start}
-      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
-        listening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-      } ${className || ''}`}
-      title={listening ? 'Stop registrazione' : 'Parla per inserire'}
-    >
-      <span className="text-sm">{listening ? '⏹' : '🎤'}</span>
-    </button>
-  );
-}
-
 // ==================== TAB FOGLIO LAVORO ====================
 // Scheda semplificata: niente timer/tariffa/fatturazione da qui (la
 // fatturazione vive nel preventivo -> Fatture). Solo cio' che serve al
@@ -1288,15 +1243,23 @@ ${difetti.length > 0 ? `<div class="section"><h2>Difetti riscontrati</h2>${difet
       {/* Lavorazioni da eseguire */}
       <Card className="!p-3 space-y-2">
         <h3 className="text-sm font-semibold text-gray-900">Lavorazioni da eseguire</h3>
-        <textarea
-          value={lavorazioniDaEseguire}
-          onChange={(e) => setLavorazioniDaEseguire(e.target.value)}
-          onBlur={salvaLavorazioniDaEseguire}
-          disabled={isChiuso}
-          rows={5}
-          placeholder="Descrivi qui il lavoro da fare..."
-          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:opacity-60"
-        />
+        <div className="flex items-start gap-2">
+          <textarea
+            value={lavorazioniDaEseguire}
+            onChange={(e) => setLavorazioniDaEseguire(e.target.value)}
+            onBlur={salvaLavorazioniDaEseguire}
+            disabled={isChiuso}
+            rows={5}
+            placeholder="Descrivi qui il lavoro da fare..."
+            className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:opacity-60"
+          />
+          {!isChiuso && (
+            <VoiceButton onResult={(text) => {
+              setLavorazioniDaEseguire(text);
+              if (foglio) supabase.from('foglio_lavoro').update({ lavorazioni_da_eseguire: text || null }).eq('id', foglio.id);
+            }} />
+          )}
+        </div>
       </Card>
 
       {/* Difetti riscontrati */}

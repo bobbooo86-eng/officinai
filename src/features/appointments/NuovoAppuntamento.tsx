@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { VoiceButton } from '@/components/VoiceInput';
 import type { Cliente, Veicolo } from '@/types/database';
 
 interface NuovoAppuntamentoProps {
@@ -258,7 +259,10 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
               <input type="text" value={newClienteCF} onChange={(e) => setNewClienteCF(e.target.value.toUpperCase())} className={inputClass} placeholder="Codice Fiscale" />
               <input type="text" value={newClienteIndirizzo} onChange={(e) => setNewClienteIndirizzo(e.target.value)} className={inputClass} placeholder="Indirizzo" />
             </div>
-            <textarea value={newClienteNote} onChange={(e) => setNewClienteNote(e.target.value)} rows={2} className={inputClass + ' resize-none'} placeholder="Note cliente" />
+            <div className="flex items-start gap-2">
+              <textarea value={newClienteNote} onChange={(e) => setNewClienteNote(e.target.value)} rows={2} className={inputClass + ' resize-none flex-1'} placeholder="Note cliente" />
+              <VoiceButton onResult={setNewClienteNote} />
+            </div>
           </div>
         ) : (
           <div className="space-y-2">
@@ -397,13 +401,16 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
 
           <div>
             <label className={labelClass}>Descrizione lavoro *</label>
-            <textarea
-              value={problema}
-              onChange={(e) => setProblema(e.target.value)}
-              rows={3}
-              className={inputClass + ' resize-none'}
-              placeholder="Es: Tagliando completo, cambio olio e filtri..."
-            />
+            <div className="flex items-start gap-2">
+              <textarea
+                value={problema}
+                onChange={(e) => setProblema(e.target.value)}
+                rows={3}
+                className={inputClass + ' resize-none flex-1'}
+                placeholder="Es: Tagliando completo, cambio olio e filtri..."
+              />
+              <VoiceButton onResult={setProblema} />
+            </div>
           </div>
 
           <div>

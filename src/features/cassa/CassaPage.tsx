@@ -6,6 +6,7 @@ import {
   aggiornaLocale, aggiungiLocale, isLocale, leggiLocali, perSupabase, rimuoviLocale, svuotaLocali,
 } from '@/lib/cassaLocale';
 import { useAuthStore } from '@/stores/authStore';
+import { VoiceButton } from '@/components/VoiceInput';
 import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente, Appuntamento } from '@/types/database';
 
@@ -577,13 +578,16 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
           {/* Descrizione */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">Descrizione *</label>
-            <input
-              type="text"
-              value={newDescrizione}
-              onChange={(e) => setNewDescrizione(e.target.value)}
-              placeholder="Es: Vendita olio motore / Fattura fornitore / Prelievo cassa"
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newDescrizione}
+                onChange={(e) => setNewDescrizione(e.target.value)}
+                placeholder="Es: Vendita olio motore / Fattura fornitore / Prelievo cassa"
+                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <VoiceButton onResult={setNewDescrizione} />
+            </div>
           </div>
 
           {/* A chi si riferisce: dipendente per spesa dipendente, titolare per spesa titolare */}
@@ -629,13 +633,16 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
           {/* Note */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">Note (opzionale)</label>
-            <textarea
-              value={newNote}
-              onChange={(e) => setNewNote(e.target.value)}
-              placeholder="Note aggiuntive..."
-              rows={2}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            />
+            <div className="flex items-start gap-2">
+              <textarea
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                placeholder="Note aggiuntive..."
+                rows={2}
+                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+              <VoiceButton onResult={setNewNote} />
+            </div>
           </div>
 
           {error && (

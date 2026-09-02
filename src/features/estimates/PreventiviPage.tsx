@@ -7,6 +7,7 @@ import { generaDatiVeicolo, lookupTargaEsterna, DB_AUTO, type DatiVeicolo } from
 import type { Veicolo, Cliente, Appuntamento } from '@/types/database';
 import { PDFExport, buildPreventivoHtml, extractLogoColor } from './PDFExport';
 import { ShareDocument } from '@/components/ShareDocument';
+import { VoiceButton } from '@/components/VoiceInput';
 
 // ============================================================
 // TARIFFARIO STANDARD OFFICINE ITALIANE
@@ -1572,13 +1573,16 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
 
               {/* Note */}
               <div className="mt-3">
-                <textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="Note aggiuntive (opzionale)..."
-                  rows={2}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none"
-                />
+                <div className="flex items-start gap-2">
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Note aggiuntive (opzionale)..."
+                    rows={2}
+                    className="flex-1 px-3 py-2 text-xs rounded-lg border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none"
+                  />
+                  <VoiceButton onResult={setNote} />
+                </div>
               </div>
 
               {/* Totals */}
