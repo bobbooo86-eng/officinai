@@ -13,11 +13,61 @@ interface Props {
   embedded?: boolean;
 }
 
+/** Quanto e' stato davvero incassato per questo veicolo: pagato completo
+ * conta il totale, un acconto conta solo la parte gia' versata. Stessa
+ * logica di IncassiOfficina, duplicata qui perche' l'acconto va anche
+ * corretto da qui, non solo da Cassa. */
+function incassato(a: Appuntamento): number {
+  const p = a.pagamento;
+  if (!p) return 0;
+  if (p.stato === 'pagato') return p.importo_totale || 0;
+  if (p.stato === 'acconto') return p.importo_pagato || 0;
+  return 0;
+}
+
 export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props) {
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [preventivi, setPreventivi] = useState<Record<string, Preventivo>>({});
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingPagamentoId, setEditingPagamentoId] = useState<string | null>(null);
+  const [editPagato, setEditPagato] = useState('');
+  const [editTotale, setEditTotale] = useState('');
+  const [editRicambi, setEditRicambi] = useState('');
+  const [salvandoPagamento, setSalvandoPagamento] = useState<string | null>(null);
+
+  const apriModificaPagamento = (a: Appuntamento, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingPagamentoId(a.id);
+    setEditPagato(String(a.pagamento?.importo_pagato ?? 0));
+    setEditTotale(String(a.pagamento?.importo_totale ?? 0));
+    setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
+  };
+
+  // Stessa logica di Incassi officina: incassato finora, totale da pagare
+  // e costo ricambi si correggono insieme, e se l'incassato raggiunge il
+  // totale il pagamento passa da solo a "pagato".
+  const salvaModificaPagamento = async (a: Appuntamento, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!a.pagamento) return;
+    const nuovoPagato = parseFloat(editPagato) || 0;
+    const nuovoTotale = parseFloat(editTotale) || 0;
+    const nuovoRicambi = parseFloat(editRicambi) || 0;
+    const saldato = nuovoTotale > 0 && nuovoPagato >= nuovoTotale;
+    const nuovoPagamento = {
+      ...a.pagamento,
+      importo_pagato: nuovoPagato,
+      importo_totale: nuovoTotale,
+      costo_ricambi: nuovoRicambi,
+      stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
+    };
+    setSalvandoPagamento(a.id);
+    const { error } = await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
+    setSalvandoPagamento(null);
+    if (error) { alert('Modifica non salvata: ' + error.message); return; }
+    setAppuntamenti((prev) => prev.map((x) => (x.id === a.id ? { ...x, pagamento: nuovoPagamento } : x)));
+    setEditingPagamentoId(null);
+  };
 
   useEffect(() => {
     const fetch = async () => {
@@ -183,6 +233,90 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
                           <span>Totale</span>
                           <span className="text-emerald-700">{fmtEuro(prev.totale)}</span>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Pagamento: acconto e costo ricambi modificabili anche da qui,
+                        non solo da Cassa > Incassi officina */}
+                    {app.pagamento && (
+                      <div>
+                        <div className="text-[10px] text-gray-400 uppercase mb-1">Pagamento</div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-gray-700">
+                            Incassato: <span className="font-semibold">{fmtEuro(incassato(app))}</span>
+                            {app.pagamento.stato === 'acconto' && app.pagamento.importo_totale != null && (
+                              <span className="text-amber-600"> · Resto: {fmtEuro(Math.max(0, (app.pagamento.importo_totale || 0) - (app.pagamento.importo_pagato || 0)))}</span>
+                            )}
+                          </div>
+                          {editingPagamentoId !== app.id && (
+                            <button
+                              onClick={(e) => apriModificaPagamento(app, e)}
+                              className="text-gray-400 hover:text-emerald-600 cursor-pointer shrink-0 px-1"
+                              title="Modifica acconto e costo ricambi"
+                            >
+                              ✏️
+                            </button>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">
+                          Costo ricambi: <span className="font-semibold text-gray-700">{fmtEuro(app.pagamento.costo_ricambi || 0)}</span>
+                        </div>
+
+                        {editingPagamentoId === app.id && (
+                          <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <label className="text-[10px] text-gray-400 block">Incassato finora €</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min={0}
+                                  value={editPagato}
+                                  onChange={(e) => setEditPagato(e.target.value)}
+                                  className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <label className="text-[10px] text-gray-400 block">Totale da pagare €</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min={0}
+                                  value={editTotale}
+                                  onChange={(e) => setEditTotale(e.target.value)}
+                                  className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <label className="text-[10px] text-gray-400 block">Costo ricambi €</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min={0}
+                                  value={editRicambi}
+                                  onChange={(e) => setEditRicambi(e.target.value)}
+                                  className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={(e) => salvaModificaPagamento(app, e)}
+                                disabled={salvandoPagamento === app.id}
+                                className="flex-1 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
+                              >
+                                {salvandoPagamento === app.id ? 'Salvataggio...' : 'Salva'}
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setEditingPagamentoId(null); }}
+                                disabled={salvandoPagamento === app.id}
+                                className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
+                              >
+                                Annulla
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
