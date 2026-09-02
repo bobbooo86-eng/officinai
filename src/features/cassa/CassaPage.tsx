@@ -21,6 +21,10 @@ interface TipoConfig {
   sign: 1 | -1; // 1=incasso 0.-1=spesa
 }
 
+// "Anticipo dipendente" resta qui (serve a findTipo per calcolare segno,
+// icona e colore delle righe storiche gia' salvate con questo tipo) ma e'
+// escluso dal selettore di creazione (vedi TIPI_SELEZIONABILI) su richiesta:
+// non deve piu' essere possibile crearne di nuovi.
 const TIPI: TipoConfig[] = [
   { id: 'incasso_extra', label: 'Incasso extra', short: 'Incasso', icon: '💵', color: 'text-emerald-700', bg: 'bg-emerald-100', sign: 1 },
   { id: 'spesa_officina', label: 'Spesa officina', short: 'Spesa officina', icon: '🧾', color: 'text-red-700', bg: 'bg-red-100', sign: -1 },
@@ -28,6 +32,8 @@ const TIPI: TipoConfig[] = [
   { id: 'anticipo_dipendente', label: 'Anticipo dipendente', short: 'Anticipo', icon: '💶', color: 'text-amber-700', bg: 'bg-amber-100', sign: -1 },
   { id: 'spesa_dipendente', label: 'Spesa dipendente', short: 'Spesa dip.', icon: '👷', color: 'text-blue-700', bg: 'bg-blue-100', sign: -1 },
 ];
+
+const TIPI_SELEZIONABILI = TIPI.filter((t) => t.id !== 'anticipo_dipendente');
 
 const METODI: { id: MetodoPagamento; label: string; icon: string }[] = [
   { id: 'contanti', label: 'Contanti', icon: '💵' },
@@ -264,8 +270,11 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     const importo = parseFloat((newImporto || '').replace(',', '.'));
     if (!Number.isFinite(importo) || importo <= 0) { setError('Inserisci un importo valido'); return; }
     if (!newDescrizione.trim()) { setError('Inserisci una descrizione'); return; }
-    if ((newTipo === 'anticipo_dipendente' || newTipo === 'spesa_dipendente') && !newDipendenteId) {
+    if (newTipo === 'spesa_dipendente' && !newDipendenteId) {
       setError('Seleziona il dipendente'); return;
+    }
+    if (newTipo === 'spesa_titolare' && !newDipendenteId) {
+      setError('Seleziona il titolare'); return;
     }
     setSaving(true);
     setError('');
@@ -417,7 +426,8 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     return Array.from(set).sort().reverse();
   }, [movimenti]);
 
-  const showDipendenteField = newTipo === 'anticipo_dipendente' || newTipo === 'spesa_dipendente';
+  const showDipendenteField = newTipo === 'spesa_dipendente' || newTipo === 'spesa_titolare';
+  const dipendenteFieldLabel = newTipo === 'spesa_titolare' ? 'Titolare *' : 'Dipendente *';
 
   return (
     <div className="p-4 space-y-4">
@@ -472,7 +482,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">Tipo movimento</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {TIPI.map((t) => (
+              {TIPI_SELEZIONABILI.map((t) => (
                 <button
                   key={t.id}
                   type="button"
@@ -527,19 +537,19 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
             />
           </div>
 
-          {/* Dipendente (solo per anticipo/spesa dipendente) */}
+          {/* A chi si riferisce: dipendente per spesa dipendente, titolare per spesa titolare */}
           {showDipendenteField && (
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Dipendente *</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">{dipendenteFieldLabel}</label>
               <select
                 value={newDipendenteId}
                 onChange={(e) => setNewDipendenteId(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Seleziona dipendente...</option>
+                <option value="">{newTipo === 'spesa_titolare' ? 'Seleziona titolare...' : 'Seleziona dipendente...'}</option>
                 {dipendenti.map((d) => (
                   <option key={d.id} value={d.id}>
-                    {d.nome} ({d.ruolo})
+                    {d.nome}{d.ruolo ? ` (${d.ruolo})` : ''}
                   </option>
                 ))}
               </select>

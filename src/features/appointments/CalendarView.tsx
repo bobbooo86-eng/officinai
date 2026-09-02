@@ -208,6 +208,28 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
     );
   }, [appuntamenti, searchQuery]);
 
+  // Cercare una targa/cliente filtra la lista, ma nella vista Giorno o
+  // Settimana l'appuntamento resta invisibile se e' fuori dal giorno/
+  // settimana corrente: e' il motivo per cui la ricerca "funzionava solo
+  // in vista Lista". Con una ricerca attiva, sposta la vista sul giorno
+  // del primo risultato (il piu' vicino a quello attualmente mostrato).
+  useEffect(() => {
+    if (!searchQuery.trim() || searchFiltered.length === 0) return;
+    const inGiornoOSettimana = viewMode === 'giorno' || viewMode === 'settimana';
+    const giaVisibile = inGiornoOSettimana
+      ? searchFiltered.some((a) => {
+          const d = new Date(a.data_ora);
+          return viewMode === 'giorno' ? dateStr(d) === selectedStr : d >= weekDates[0] && d <= weekDates[6];
+        })
+      : true;
+    if (giaVisibile) return;
+    const piuVicino = [...searchFiltered].sort(
+      (a, b) => Math.abs(new Date(a.data_ora).getTime() - selectedDate.getTime()) - Math.abs(new Date(b.data_ora).getTime() - selectedDate.getTime())
+    )[0];
+    if (piuVicino) setSelectedDate(new Date(piuVicino.data_ora));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, searchFiltered]);
+
   const dayApps = useMemo(
     () => searchFiltered.filter((a) => appDay(a.data_ora) === selectedStr),
     [searchFiltered, selectedStr]
