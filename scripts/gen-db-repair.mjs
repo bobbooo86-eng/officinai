@@ -18,6 +18,7 @@ const SOURCES = [
   'supabase/migrations/022_preventivi_fermo_macchina.sql',
   'supabase/migrations/023_veicoli_foto_libretto.sql',
   'supabase/migrations/024_promemoria_nascosti.sql',
+  'supabase/migrations/025_clienti_cascade_eliminazione_definitiva.sql',
 ];
 const TARGET = 'src/lib/dbRepairSql.ts';
 

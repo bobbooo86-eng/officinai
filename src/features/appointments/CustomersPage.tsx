@@ -157,6 +157,20 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
     setClienti((prev) => prev.map((x) => (x.id === c.id ? { ...x, attivo: true } : x)));
   };
 
+  // Solo dall'archivio: una cancellazione vera, non piu' un'archiviazione.
+  // Su richiesta esplicita — cancella per sempre anche tutto lo storico
+  // collegato (appuntamenti, veicoli, preventivi, fatture, foto...), non
+  // solo il cliente. Non si puo' annullare.
+  const eliminaDefinitivamente = async (c: Cliente, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(
+      `Eliminare per sempre "${c.nome}"?\n\nQuesto cancella anche tutto lo storico collegato: veicoli, appuntamenti, preventivi, fatture, foto. Non si può annullare, a differenza di "Archivia".`
+    )) return;
+    const { error } = await supabase.from('clienti').delete().eq('id', c.id);
+    if (error) { alert('Errore eliminazione: ' + error.message); return; }
+    setClienti((prev) => prev.filter((x) => x.id !== c.id));
+  };
+
   return (
     <div className="p-4 space-y-3">
       <div className="flex items-center justify-between">
@@ -202,12 +216,21 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
                   </div>
                 </div>
                 {mostraArchiviati ? (
-                  <button
-                    onClick={(e) => ripristinaCliente(c, e)}
-                    className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 cursor-pointer px-2 py-1"
-                  >
-                    ↩ Ripristina
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => ripristinaCliente(c, e)}
+                      className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 cursor-pointer px-2 py-1"
+                    >
+                      ↩ Ripristina
+                    </button>
+                    <button
+                      onClick={(e) => eliminaDefinitivamente(c, e)}
+                      className="text-xs font-semibold text-red-600 hover:text-red-800 cursor-pointer px-2 py-1"
+                      title="Elimina per sempre, con tutto lo storico collegato"
+                    >
+                      🗑️ Elimina def.
+                    </button>
+                  </div>
                 ) : (
                   <svg className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
