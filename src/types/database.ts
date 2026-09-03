@@ -290,7 +290,11 @@ export type MovimentoTipo =
   | 'spesa_officina'
   | 'spesa_titolare'
   | 'anticipo_dipendente'
-  | 'spesa_dipendente';
+  | 'spesa_dipendente'
+  | 'spesa_revisione_gianni'
+  | 'spesa_centraline_daniele'
+  | 'costo_lavorazione'
+  | 'spesa_lavorazione';
 
 export type MetodoPagamento =
   | 'contanti'

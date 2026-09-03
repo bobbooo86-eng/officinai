@@ -32,6 +32,10 @@ const TIPI: TipoConfig[] = [
   { id: 'spesa_titolare', label: 'Spesa titolare', short: 'Spesa titolare', icon: '👔', color: 'text-purple-700', bg: 'bg-purple-100', sign: -1 },
   { id: 'anticipo_dipendente', label: 'Anticipo dipendente', short: 'Anticipo', icon: '💶', color: 'text-amber-700', bg: 'bg-amber-100', sign: -1 },
   { id: 'spesa_dipendente', label: 'Spesa dipendente', short: 'Spesa dip.', icon: '👷', color: 'text-blue-700', bg: 'bg-blue-100', sign: -1 },
+  { id: 'spesa_revisione_gianni', label: 'Revisione (Gianni)', short: 'Revisione Gianni', icon: '🔧', color: 'text-orange-700', bg: 'bg-orange-100', sign: -1 },
+  { id: 'spesa_centraline_daniele', label: 'Centraline (Daniele)', short: 'Centraline Daniele', icon: '💻', color: 'text-cyan-700', bg: 'bg-cyan-100', sign: -1 },
+  { id: 'costo_lavorazione', label: 'Costo lavorazione', short: 'Costo lavorazione', icon: '🛠️', color: 'text-indigo-700', bg: 'bg-indigo-100', sign: -1 },
+  { id: 'spesa_lavorazione', label: 'Spese per la lavorazione', short: 'Spese lavorazione', icon: '📦', color: 'text-rose-700', bg: 'bg-rose-100', sign: -1 },
 ];
 
 const TIPI_SELEZIONABILI = TIPI.filter((t) => t.id !== 'anticipo_dipendente');
