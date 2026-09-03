@@ -587,12 +587,25 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
   // Manual vehicle selection — nome cliente + 4 dropdown sequenziali
   const [manualOpen, setManualOpen] = useState(false);
   const [selClienteNome, setSelClienteNome] = useState('');
+  // Stessi campi cliente delle altre schermate (Clienti, Nuovo appuntamento):
+  // l'inserimento di un nuovo cliente deve raccogliere gli stessi dati
+  // ovunque, non solo il nome.
+  const [selClienteTel, setSelClienteTel] = useState('');
+  const [selClienteEmail, setSelClienteEmail] = useState('');
+  const [selClienteCF, setSelClienteCF] = useState('');
+  const [selClienteIndirizzo, setSelClienteIndirizzo] = useState('');
+  const [selClienteNote, setSelClienteNote] = useState('');
   const [selMarca, setSelMarca] = useState('');
   const [selModello, setSelModello] = useState('');
   const [selCarburante, setSelCarburante] = useState('');
   const [selAnno, setSelAnno] = useState('');
-  // Nome cliente inserito nella selezione manuale (usato per creare il cliente al salvataggio)
+  // Dati cliente inseriti nella selezione manuale (usati per creare il cliente al salvataggio)
   const [manualClienteNome, setManualClienteNome] = useState('');
+  const [manualClienteTel, setManualClienteTel] = useState('');
+  const [manualClienteEmail, setManualClienteEmail] = useState('');
+  const [manualClienteCF, setManualClienteCF] = useState('');
+  const [manualClienteIndirizzo, setManualClienteIndirizzo] = useState('');
+  const [manualClienteNote, setManualClienteNote] = useState('');
 
   const marcheOrdered = useMemo(() => DB_AUTO.map(b => b.marca).sort((a, b) => a.localeCompare(b)), []);
   const marcaObj = useMemo(() => DB_AUTO.find(b => b.marca === selMarca), [selMarca]);
@@ -632,6 +645,11 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     setNotFound(false);
     setRighe([]);
     setManualClienteNome(selClienteNome.trim());
+    setManualClienteTel(selClienteTel.trim());
+    setManualClienteEmail(selClienteEmail.trim());
+    setManualClienteCF(selClienteCF.trim());
+    setManualClienteIndirizzo(selClienteIndirizzo.trim());
+    setManualClienteNote(selClienteNote.trim());
     setDatiEsterni({
       targa: 'MANUALE',
       marca: selMarca,
@@ -656,6 +674,11 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
 
   const clearManualSelection = () => {
     setSelClienteNome('');
+    setSelClienteTel('');
+    setSelClienteEmail('');
+    setSelClienteCF('');
+    setSelClienteIndirizzo('');
+    setSelClienteNote('');
     setSelMarca('');
     setSelModello('');
     setSelCarburante('');
@@ -663,6 +686,11 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     // Va azzerato anche qui, altrimenti il preventivo successivo eredita
     // il nome cliente della selezione manuale precedente.
     setManualClienteNome('');
+    setManualClienteTel('');
+    setManualClienteEmail('');
+    setManualClienteCF('');
+    setManualClienteIndirizzo('');
+    setManualClienteNote('');
   };
 
   const segmento = veicolo
@@ -851,9 +879,13 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
             nome: datiEsterni.targa === 'MANUALE'
               ? (manualClienteNome.trim() || `Cliente ${datiEsterni.marca} ${datiEsterni.modello}`)
               : `Cliente ${datiEsterni.targa}`,
-            email: '',
-            tel: '',
-            note: datiEsterni.targa === 'MANUALE' ? `Aggiunto da preventivo selezione manuale - ${datiEsterni.marca} ${datiEsterni.modello}` : `Aggiunto da preventivo targa ${datiEsterni.targa}`,
+            email: datiEsterni.targa === 'MANUALE' ? manualClienteEmail.trim() : '',
+            tel: datiEsterni.targa === 'MANUALE' ? manualClienteTel.trim() : '',
+            codice_fiscale: datiEsterni.targa === 'MANUALE' ? (manualClienteCF.trim() || null) : null,
+            indirizzo: datiEsterni.targa === 'MANUALE' ? (manualClienteIndirizzo.trim() || null) : null,
+            note: datiEsterni.targa === 'MANUALE'
+              ? [manualClienteNote.trim(), `Aggiunto da preventivo selezione manuale - ${datiEsterni.marca} ${datiEsterni.modello}`].filter(Boolean).join(' | ')
+              : `Aggiunto da preventivo targa ${datiEsterni.targa}`,
           })
           .select()
           .single();
@@ -1227,14 +1259,77 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
             {/* Nome cliente */}
             <div>
               <label className="block text-[11px] font-bold text-gray-600 mb-1">Nome cliente *</label>
-              <input
-                type="text"
-                value={selClienteNome}
-                onChange={(e) => setSelClienteNome(e.target.value)}
-                placeholder="Nome e cognome del cliente"
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={selClienteNome}
+                  onChange={(e) => setSelClienteNome(e.target.value)}
+                  placeholder="Nome e cognome del cliente"
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <VoiceButton onResult={setSelClienteNome} />
+              </div>
             </div>
+
+            {/* Stessi campi cliente delle altre schermate */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1">Telefono</label>
+                <input
+                  type="tel"
+                  value={selClienteTel}
+                  onChange={(e) => setSelClienteTel(e.target.value)}
+                  placeholder="+39 333 1234567"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={selClienteEmail}
+                  onChange={(e) => setSelClienteEmail(e.target.value)}
+                  placeholder="mario@email.com"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1">Codice Fiscale</label>
+                <input
+                  type="text"
+                  value={selClienteCF}
+                  onChange={(e) => setSelClienteCF(e.target.value.toUpperCase())}
+                  placeholder="RSSMRA80A01H501Z"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1">Indirizzo</label>
+                <input
+                  type="text"
+                  value={selClienteIndirizzo}
+                  onChange={(e) => setSelClienteIndirizzo(e.target.value)}
+                  placeholder="Via Roma 1, Milano"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-gray-600 mb-1">Note cliente</label>
+              <div className="flex items-start gap-2">
+                <textarea
+                  value={selClienteNote}
+                  onChange={(e) => setSelClienteNote(e.target.value)}
+                  placeholder="Note aggiuntive..."
+                  rows={2}
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <VoiceButton onResult={setSelClienteNote} />
+              </div>
+            </div>
+
             {/* Riga 1: Marca + Modello */}
             <div className="grid grid-cols-2 gap-3">
               <div>
