@@ -64,6 +64,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<Periodo>('mese');
+  const [search, setSearch] = useState('');
   // Un solo pannello di modifica alla volta (acconto + costo ricambi
   // insieme), dietro una matita: prima si poteva scrivere direttamente
   // negli input, sempre visibili, che invitava a toccarli per sbaglio.
@@ -105,6 +106,21 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
     () => appuntamenti.filter((a) => inPeriodo(dataIncasso(a), periodo, oggi)),
     [appuntamenti, periodo, oggi]
   );
+
+  // Con una ricerca attiva si cerca su tutto lo storico, non solo nel
+  // periodo selezionato: altrimenti una targa fuori dal periodo mostrato
+  // sembrerebbe non trovata, anche se esiste.
+  const risultati = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const base = q ? appuntamenti : inRange;
+    if (!q) return base;
+    return base.filter((a) =>
+      a.clienti?.nome?.toLowerCase().includes(q) ||
+      a.veicoli?.targa?.toLowerCase().includes(q) ||
+      a.veicoli?.marca?.toLowerCase().includes(q) ||
+      a.veicoli?.modello?.toLowerCase().includes(q)
+    );
+  }, [appuntamenti, inRange, search]);
 
   const totaleIncassato = inRange.reduce((s, a) => s + incassato(a), 0);
   const totaleRicambi = inRange.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
@@ -170,6 +186,15 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
         ))}
       </div>
 
+      {/* Ricerca per targa o nome cliente */}
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Cerca per targa o nome cliente..."
+        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+      />
+
       {/* Riepilogo */}
       <Card className="!p-4 space-y-2 !bg-emerald-50/50 !border-emerald-200">
         <div className="flex justify-between items-baseline">
@@ -193,14 +218,16 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
         <div className="text-[11px] text-gray-400 pt-1">{inRange.length} veicol{inRange.length === 1 ? 'o' : 'i'} consegnat{inRange.length === 1 ? 'o' : 'i'}</div>
       </Card>
 
-      {/* Elenco veicoli consegnati nel periodo */}
+      {/* Elenco veicoli consegnati nel periodo (o risultati della ricerca) */}
       {loading ? (
         <div className="text-center py-6 text-sm text-gray-400">Caricamento...</div>
-      ) : inRange.length === 0 ? (
-        <div className="text-center py-6 text-sm text-gray-400">Nessuna consegna in questo periodo</div>
+      ) : risultati.length === 0 ? (
+        <div className="text-center py-6 text-sm text-gray-400">
+          {search.trim() ? 'Nessun risultato per la ricerca' : 'Nessuna consegna in questo periodo'}
+        </div>
       ) : (
         <div className="space-y-2">
-          {inRange.map((a) => {
+          {risultati.map((a) => {
             const p = a.pagamento!;
             const cfg = p.stato === 'pagato'
               ? { label: 'Pagato', color: '#065f46', bg: '#d1fae5' }

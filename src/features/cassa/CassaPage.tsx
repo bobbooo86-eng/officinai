@@ -83,6 +83,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   // Stesso selettore periodo di Incassi officina, cosi' i due resoconti si
   // leggono con lo stesso criterio invece di "questo mese" vs "oggi/settimana".
   const [periodo, setPeriodo] = useState<Periodo>('mese');
+  const [search, setSearch] = useState('');
   // Incassi officina (pagamenti alla consegna auto) mostrati anche qui,
   // dentro il tab "Incassi": prima si vedevano solo nella sezione separata.
   const [incassiAuto, setIncassiAuto] = useState<Appuntamento[]>([]);
@@ -427,16 +428,35 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   // avrebbe senso (Tutti / Incassi), non dentro Officina/Titolare/Dipendenti.
   const mostraIncassiAuto = tab === 'tutti' || tab === 'incasso_extra';
 
+  // Con una ricerca attiva si cerca su tutto lo storico (per targa/nome),
+  // non solo nel periodo selezionato: altrimenti un veicolo fuori dal
+  // periodo mostrato sembrerebbe non trovato, anche se esiste.
+  const q = search.trim().toLowerCase();
+
   const incassiAutoInRange = useMemo(() => {
     if (!mostraIncassiAuto) return [];
+    if (q) {
+      return incassiAuto.filter((a) =>
+        a.clienti?.nome?.toLowerCase().includes(q) ||
+        a.veicoli?.targa?.toLowerCase().includes(q) ||
+        a.veicoli?.marca?.toLowerCase().includes(q) ||
+        a.veicoli?.modello?.toLowerCase().includes(q)
+      );
+    }
     return incassiAuto.filter((a) => inPeriodo(dataIncasso(a), periodo, riferimento));
-  }, [incassiAuto, periodo, riferimento, mostraIncassiAuto]);
+  }, [incassiAuto, periodo, riferimento, mostraIncassiAuto, q]);
 
-  // Lista mostrata sotto: rispetta il filtro per tipo selezionato.
-  const monthMovimenti = useMemo(
-    () => filteredByTab.filter((m) => inPeriodo(dateFromDataStr(m.data), periodo, riferimento)),
-    [filteredByTab, periodo, riferimento]
-  );
+  // Lista mostrata sotto: rispetta il filtro per tipo selezionato, e la
+  // ricerca (per descrizione o nome dipendente/titolare) quando attiva.
+  const monthMovimenti = useMemo(() => {
+    if (q) {
+      return filteredByTab.filter((m) => {
+        const dip = m.dipendente_id ? dipendenti.find((d) => d.id === m.dipendente_id) : null;
+        return m.descrizione?.toLowerCase().includes(q) || dip?.nome?.toLowerCase().includes(q);
+      });
+    }
+    return filteredByTab.filter((m) => inPeriodo(dateFromDataStr(m.data), periodo, riferimento));
+  }, [filteredByTab, periodo, riferimento, q, dipendenti]);
 
   // Il riepilogo in cima rappresenta la cassa del periodo nel suo complesso:
   // se seguisse il filtro per tipo mostrerebbe incassi o spese sempre a zero.
@@ -699,6 +719,15 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
         </div>
       )}
 
+      {/* Ricerca per targa o nome cliente/dipendente */}
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Cerca per targa o nome..."
+        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+
       {/* Selettore periodo + Totali */}
       <Card className="!p-4">
         <div className="text-xs font-semibold text-gray-500 mb-2">Riepilogo</div>
@@ -764,8 +793,12 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
       ) : byDay.length === 0 ? (
         <Card className="!p-6 text-center">
           <div className="text-4xl mb-2">📭</div>
-          <div className="text-sm text-gray-500">Nessun movimento in questo periodo</div>
-          <div className="text-xs text-gray-400 mt-1">Clicca "+ Nuovo movimento" per iniziare</div>
+          <div className="text-sm text-gray-500">
+            {search.trim() ? 'Nessun risultato per la ricerca' : 'Nessun movimento in questo periodo'}
+          </div>
+          {!search.trim() && (
+            <div className="text-xs text-gray-400 mt-1">Clicca "+ Nuovo movimento" per iniziare</div>
+          )}
         </Card>
       ) : (
         <div className="space-y-3">
