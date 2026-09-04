@@ -22,10 +22,12 @@ interface TipoConfig {
   sign: 1 | -1; // 1=incasso 0.-1=spesa
 }
 
-// "Anticipo dipendente" resta qui (serve a findTipo per calcolare segno,
-// icona e colore delle righe storiche gia' salvate con questo tipo) ma e'
-// escluso dal selettore di creazione (vedi TIPI_SELEZIONABILI) su richiesta:
-// non deve piu' essere possibile crearne di nuovi.
+// "Anticipo dipendente", "Costo lavorazione" e "Spese per la lavorazione"
+// restano qui (servono a findTipo per calcolare segno, icona e colore delle
+// righe storiche gia' salvate con questi tipi) ma sono esclusi dal
+// selettore di creazione (vedi TIPI_SELEZIONABILI): "spese lavorazione" e'
+// diventato un campo dentro Revisione (Gianni) e Centraline (Daniele),
+// non piu' un tipo di movimento a se stante.
 const TIPI: TipoConfig[] = [
   { id: 'incasso_extra', label: 'Incasso extra', short: 'Incasso', icon: '💵', color: 'text-emerald-700', bg: 'bg-emerald-100', sign: 1 },
   { id: 'spesa_officina', label: 'Spesa officina', short: 'Spesa officina', icon: '🧾', color: 'text-red-700', bg: 'bg-red-100', sign: -1 },
@@ -38,7 +40,11 @@ const TIPI: TipoConfig[] = [
   { id: 'spesa_lavorazione', label: 'Spese per la lavorazione', short: 'Spese lavorazione', icon: '📦', color: 'text-rose-700', bg: 'bg-rose-100', sign: -1 },
 ];
 
-const TIPI_SELEZIONABILI = TIPI.filter((t) => t.id !== 'anticipo_dipendente');
+const TIPI_NON_SELEZIONABILI: MovimentoTipo[] = ['anticipo_dipendente', 'costo_lavorazione', 'spesa_lavorazione'];
+const TIPI_SELEZIONABILI = TIPI.filter((t) => !TIPI_NON_SELEZIONABILI.includes(t.id));
+// Tipi che, oltre all'importo pagato al collaboratore esterno, hanno anche
+// un campo separato per le spese sostenute dall'officina per la lavorazione.
+const TIPI_CON_SPESE_LAVORAZIONE: MovimentoTipo[] = ['spesa_revisione_gianni', 'spesa_centraline_daniele'];
 
 const METODI: { id: MetodoPagamento; label: string; icon: string }[] = [
   { id: 'contanti', label: 'Contanti', icon: '💵' },
@@ -98,6 +104,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   const [newMetodo, setNewMetodo] = useState<MetodoPagamento>('contanti');
   const [newData, setNewData] = useState<string>(todayISO());
   const [newDipendenteId, setNewDipendenteId] = useState<string>('');
+  const [newSpeseLavorazione, setNewSpeseLavorazione] = useState('');
   const [newNote, setNewNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -277,6 +284,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     setNewMetodo((m.metodo_pagamento as MetodoPagamento) || 'contanti');
     setNewData(m.data);
     setNewDipendenteId(m.dipendente_id || '');
+    setNewSpeseLavorazione(m.spese_lavorazione != null ? String(m.spese_lavorazione).replace('.', ',') : '');
     setNewNote(m.note || '');
     setError('');
     setShowForm(true);
@@ -295,6 +303,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     setNewMetodo('contanti');
     setNewData(todayISO());
     setNewDipendenteId('');
+    setNewSpeseLavorazione('');
     setNewNote('');
     setError('');
     setEditId(null);
@@ -324,6 +333,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
       dipendente_id: newDipendenteId || null,
       created_by: utente?.id || null,
       note: newNote.trim() || null,
+      spese_lavorazione: TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo)
+        ? (parseFloat((newSpeseLavorazione || '').replace(',', '.')) || null)
+        : null,
     };
 
     // --- Modifica di un movimento esistente ---
@@ -599,6 +611,22 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
             </div>
           </div>
 
+          {/* Spese lavorazione: solo per Revisione Gianni e Centraline Daniele */}
+          {TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Spese lavorazione (€)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={newSpeseLavorazione}
+                onChange={(e) => setNewSpeseLavorazione(e.target.value)}
+                placeholder="0.00"
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
+
           {/* Descrizione */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">Descrizione *</label>
@@ -853,6 +881,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                             {cfg.short}
                             {dip && ` · ${dip.nome}`}
                             {m.metodo_pagamento && ` · ${m.metodo_pagamento}`}
+                            {m.spese_lavorazione != null && ` · Spese lavorazione: ${fmtEuro(m.spese_lavorazione)}`}
                           </div>
                         </div>
                         <div className={`text-sm font-bold ${cfg.sign === 1 ? 'text-emerald-600' : 'text-red-600'}`}>

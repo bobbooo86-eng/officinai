@@ -315,6 +315,10 @@ export interface Movimento {
   dipendente_id?: string | null;
   created_by?: string | null;
   note?: string | null;
+  // Spese sostenute dall'officina per la lavorazione, distinte da "importo"
+  // (quanto pagato al collaboratore esterno): solo per Revisione (Gianni)
+  // e Centraline (Daniele).
+  spese_lavorazione?: number | null;
   created_at?: string;
   // Relations (joined)
   dipendente?: Utente | null;

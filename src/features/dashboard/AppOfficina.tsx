@@ -381,8 +381,6 @@ export function AppOfficina() {
               { id: 'spesa_tit', icon: '👔', label: 'Spesa titolare', desc: 'Prelievo cassa, spesa personale', onClick: () => fabApriCassaConTipo('spesa_titolare'), color: 'from-purple-50 to-fuchsia-50 border-purple-200' },
               { id: 'revisione_gianni', icon: '🔧', label: 'Revisione (Gianni)', desc: 'Spesa per revisioni fatte da Gianni', onClick: () => fabApriCassaConTipo('spesa_revisione_gianni'), color: 'from-orange-50 to-amber-50 border-orange-200' },
               { id: 'centraline_daniele', icon: '💻', label: 'Centraline (Daniele)', desc: 'Spesa per centraline fatte da Daniele', onClick: () => fabApriCassaConTipo('spesa_centraline_daniele'), color: 'from-cyan-50 to-sky-50 border-cyan-200' },
-              { id: 'costo_lav', icon: '🛠️', label: 'Costo lavorazione', desc: 'Costo della manodopera per un lavoro', onClick: () => fabApriCassaConTipo('costo_lavorazione'), color: 'from-indigo-50 to-blue-50 border-indigo-200' },
-              { id: 'spesa_lav', icon: '📦', label: 'Spese per la lavorazione', desc: 'Spese sostenute dall\'officina per eseguire un lavoro', onClick: () => fabApriCassaConTipo('spesa_lavorazione'), color: 'from-rose-50 to-pink-50 border-rose-200' },
             ]).map((opt) => (
               <button
                 key={opt.id}
