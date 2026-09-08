@@ -99,6 +99,8 @@ jobs:
               --data "$(jq -n --arg q "$1" '{query: $q}')"
             echo
           }
+          echo "== Le altre officine: dettagli e utenti collegati =="
+          verifica "SELECT o.id, o.nome, o.email, o.tel, o.indirizzo, o.piano, o.created_at, (SELECT count(*) FROM utenti u WHERE u.officina_id = o.id) AS utenti, (SELECT count(*) FROM clienti c WHERE c.officina_id = o.id) AS clienti, (SELECT count(*) FROM appuntamenti a WHERE a.officina_id = o.id) AS appuntamenti FROM officine o WHERE o.id IN ('00000000-0000-0000-0000-000000000001','7476f481-289e-4b67-b3d8-3bbb424f242b','a9c10e6c-e64b-4602-ab25-bbf6ac7c62f3','590d49b4-fbf9-42dc-b2b1-15ec9895c532','23fd57de-ae52-4c62-89a6-b6c741d9561d') ORDER BY o.nome;"
           echo "== Tabella movimenti =="
           verifica "SELECT count(*) FROM movimenti;"
           echo "== Tabella impostazioni_email =="
