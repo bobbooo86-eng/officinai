@@ -6,7 +6,8 @@ import { fmtData, fmtOra, dayKey, todayKey } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { VehicleAlerts } from './VehicleAlerts';
 import { leggiPromemoriaNascosti, nascondiPromemoria } from '@/lib/promemoriaNascosti';
-import type { Appuntamento, Magazzino } from '@/types/database';
+import { PERIODI, inPeriodo, dataIncasso, incassato, type Periodo } from '@/features/cassa/IncassiOfficina';
+import type { Appuntamento, Magazzino, Movimento } from '@/types/database';
 
 interface DashboardProps {
   onSelectAppuntamento: (a: Appuntamento) => void;
@@ -25,6 +26,10 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
   const [error, setError] = useState<string | null>(null);
   const [meseStats, setMeseStats] = useState<{ fatturato: number; lavori: number; nonFatturati: number } | null>(null);
   const [creditiNascosti, setCreditiNascosti] = useState<Set<string>>(new Set());
+  const [movimenti, setMovimenti] = useState<Movimento[]>([]);
+  // Stesso selettore periodo di Cassa > Incassi officina, per leggere gli
+  // incassi/spese con lo stesso criterio ovunque nell'app.
+  const [periodo, setPeriodo] = useState<Periodo>('mese');
 
   const fetchData = useCallback(async () => {
     if (!officina) return;
@@ -41,7 +46,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
       // azzerando il fatturato per 5 mesi l'anno.
       const inizioMeseProssimo = dayKey(new Date(oggiDate.getFullYear(), oggiDate.getMonth() + 1, 1));
 
-      const [appsResult, magazzinoResult, obdResult, prevResult, fattureResult, tutteFattureResult, nascosti] = await Promise.all([
+      const [appsResult, magazzinoResult, obdResult, prevResult, fattureResult, tutteFattureResult, nascosti, movimentiResult] = await Promise.all([
         supabase
           .from('appuntamenti')
           .select('*, clienti(nome,tel,email), veicoli(marca,modello,targa,km)')
@@ -76,11 +81,16 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
           .select('appuntamento_id')
           .eq('officina_id', officina.id),
         leggiPromemoriaNascosti(officina.id),
+        supabase
+          .from('movimenti')
+          .select('tipo, importo, data')
+          .eq('officina_id', officina.id),
       ]);
 
       if (appsResult.error) throw appsResult.error;
       if (fattureResult.error) throw fattureResult.error;
       setCreditiNascosti(nascosti);
+      setMovimenti((movimentiResult.data as Movimento[]) || []);
 
       const apps = appsResult.data || [];
       setAppuntamenti(apps);
@@ -172,6 +182,19 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
 
   const isNuovoUtente = appuntamenti.length === 0;
 
+  // Incassi/spese nel periodo selezionato: stessa logica di Cassa >
+  // Incassi officina, cosi' il numero e' identico ovunque compaia. Un
+  // lavoro fatturato resta comunque contato qui (non e' un doppione: qui
+  // non si guarda affatto la tabella fatture, solo l'incasso registrato
+  // alla consegna), senza mai sommare l'IVA della fattura.
+  const riferimento = new Date();
+  const incassiPeriodo = appuntamenti
+    .filter((a) => a.stato === 'consegnato' && a.pagamento && inPeriodo(dataIncasso(a), periodo, riferimento))
+    .reduce((s, a) => s + incassato(a), 0);
+  const spesePeriodo = movimenti
+    .filter((m) => m.tipo !== 'incasso_extra' && inPeriodo(new Date(m.data + 'T00:00:00'), periodo, riferimento))
+    .reduce((s, m) => s + Number(m.importo), 0);
+
   // Nasconde solo dalla Home: il credito resta sull'appuntamento, ancora
   // modificabile da Cassa > Incassi officina o dallo storico del veicolo.
   const nascondiCredito = async (a: Appuntamento, e: React.MouseEvent) => {
@@ -212,39 +235,40 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         </div>
       </div>
 
-      {meseStats !== null && (
-        <div className="grid grid-cols-3 gap-2 animate-fade-in">
+      <div className="animate-fade-in">
+        <div className="grid grid-cols-4 gap-1.5 mb-2">
+          {PERIODI.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setPeriodo(p.id)}
+              className={`py-2 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                periodo === p.id ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
           <Card className="!p-3 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 !border-emerald-200 dark:!border-emerald-700">
-            <div className="text-[10px] text-emerald-600 font-semibold mb-1">💶 Fatturato</div>
+            <div className="text-[10px] text-emerald-600 font-semibold mb-1">💶 Incassi officina</div>
             <div className="text-lg font-black text-emerald-700 tabular-nums leading-tight">
-              {meseStats.fatturato > 0
-                ? `€${meseStats.fatturato.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`
+              {incassiPeriodo > 0
+                ? `€${incassiPeriodo.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`
                 : '—'}
             </div>
-            <div className="text-[10px] text-emerald-500 mt-0.5">questo mese</div>
           </Card>
 
-          <Card className="!p-3 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 !border-blue-200 dark:!border-blue-700">
-            <div className="text-[10px] text-blue-600 font-semibold mb-1">🧾 Fatturati</div>
-            <div className="text-lg font-black text-blue-700 tabular-nums leading-tight">{meseStats.lavori}</div>
-            <div className="text-[10px] text-blue-500 mt-0.5">lavori</div>
+          <Card className="!p-3 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 !border-red-200 dark:!border-red-700">
+            <div className="text-[10px] text-red-600 font-semibold mb-1">🧾 Spese officina</div>
+            <div className="text-lg font-black text-red-700 tabular-nums leading-tight">
+              {spesePeriodo > 0
+                ? `€${spesePeriodo.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`
+                : '—'}
+            </div>
           </Card>
-
-          <button onClick={() => onNavigateToAgenda?.('non_fatturati')} className="text-left cursor-pointer">
-            <Card hover className={`!p-3 ${meseStats.nonFatturati > 0 ? 'bg-gradient-to-br from-yellow-50 to-amber-50 !border-yellow-300' : 'bg-gray-50 !border-gray-200'}`}>
-              <div className={`text-[10px] font-semibold mb-1 ${meseStats.nonFatturati > 0 ? 'text-yellow-700' : 'text-gray-500'}`}>
-                🔧 Non fatt.
-              </div>
-              <div className={`text-lg font-black tabular-nums leading-tight ${meseStats.nonFatturati > 0 ? 'text-yellow-700' : 'text-gray-400'}`}>
-                {meseStats.nonFatturati}
-              </div>
-              <div className={`text-[10px] mt-0.5 ${meseStats.nonFatturati > 0 ? 'text-yellow-600' : 'text-gray-400'}`}>
-                {meseStats.nonFatturati > 0 ? 'da fare →' : 'ok ✓'}
-              </div>
-            </Card>
-          </button>
         </div>
-      )}
+      </div>
 
       {richieste.length > 0 && (
         <Card className="!p-4 bg-purple-50 dark:bg-purple-900/20 !border-purple-200 dark:!border-purple-700 animate-fade-in">
