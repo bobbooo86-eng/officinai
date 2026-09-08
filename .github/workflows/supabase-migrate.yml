@@ -86,6 +86,29 @@ jobs:
           fi
           echo "Tutte le migrazioni correttive sono state applicate."
 
+      - name: "ONE-OFF: azzera la storia di Flavio Graziani, tenendo solo la scheda cliente"
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          [ -z "$TOKEN" ] && exit 0
+          esegui() {
+            curl -sS -X POST "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data "$(jq -n --arg q "$1" '{query: $q}')"
+            echo
+          }
+          # Cancella i veicoli di Flavio Graziani (09522b68-...): a cascata
+          # (migrazione 025) porta via anche i suoi appuntamenti, preventivi,
+          # fatture, incassi (dentro appuntamenti.pagamento), foto, ecc. La
+          # riga clienti resta intatta: e' l'unica cosa che deve restare.
+          echo "== Veicoli di Flavio eliminati (a cascata: appuntamenti, preventivi, fatture, incassi) =="
+          esegui "DELETE FROM veicoli WHERE cliente_id = '09522b68-cdab-45dc-9dd0-3b4dd9283d40' RETURNING id, marca, modello, targa;"
+          echo "== Scheda cliente di Flavio, rimasta =="
+          esegui "SELECT id, nome, email, tel FROM clienti WHERE id = '09522b68-cdab-45dc-9dd0-3b4dd9283d40';"
+          echo "== Stato finale GARAGE257 =="
+          esegui "SELECT (SELECT count(*) FROM veicoli v JOIN clienti c ON c.id = v.cliente_id WHERE c.officina_id = 'b8649655-5123-458d-bb84-e7c729cc4952') AS veicoli, (SELECT count(*) FROM appuntamenti WHERE officina_id = 'b8649655-5123-458d-bb84-e7c729cc4952') AS appuntamenti, (SELECT count(*) FROM movimenti WHERE officina_id = 'b8649655-5123-458d-bb84-e7c729cc4952') AS movimenti;"
+
       - name: Verifica finale
         if: always()
         env:
