@@ -99,6 +99,15 @@ jobs:
               --data "$(jq -n --arg q "$1" '{query: $q}')"
             echo
           }
+          echo "== Officina 'Garage 257' (05179ff2): dettagli =="
+          verifica "SELECT id, nome, email, tel, indirizzo, p_iva, piano, created_at FROM officine WHERE id = '05179ff2-63af-4ff4-882b-506887c2ab3a';"
+          echo "== Officina 'Garage 257': utenti collegati =="
+          verifica "SELECT id, nome, email, ruolo, attivo FROM utenti WHERE officina_id = '05179ff2-63af-4ff4-882b-506887c2ab3a';"
+          echo "== Officina 'Garage 257': conteggi =="
+          verifica "SELECT (SELECT count(*) FROM clienti WHERE officina_id = '05179ff2-63af-4ff4-882b-506887c2ab3a') AS clienti, (SELECT count(*) FROM appuntamenti WHERE officina_id = '05179ff2-63af-4ff4-882b-506887c2ab3a') AS appuntamenti, (SELECT count(*) FROM movimenti WHERE officina_id = '05179ff2-63af-4ff4-882b-506887c2ab3a') AS movimenti;"
+          echo "== Confronto: officina GARAGE257 (tua, b8649655) =="
+          verifica "SELECT id, nome, email, tel, indirizzo, p_iva, piano, created_at FROM officine WHERE id = 'b8649655-5123-458d-bb84-e7c729cc4952';"
+          verifica "SELECT id, nome, email, ruolo, attivo FROM utenti WHERE officina_id = 'b8649655-5123-458d-bb84-e7c729cc4952';"
           echo "== Tabella movimenti =="
           verifica "SELECT count(*) FROM movimenti;"
           echo "== Tabella impostazioni_email =="
