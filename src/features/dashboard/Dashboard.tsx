@@ -163,7 +163,9 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
     .filter((a) => a.data_ora && dayKey(a.data_ora) === oggi)
     .sort((a, b) => a.data_ora.localeCompare(b.data_ora));
   const richieste = appuntamenti.filter((a) => a.stato === 'richiesta');
-  const autoInOfficina = appuntamenti.filter((a) => a.stato !== 'consegnato' && a.stato !== 'annullato' && a.stato !== 'richiesta');
+  // "In officina" solo da quando l'auto viene accettata (stato oltre prenotato):
+  // finche' e' solo prenotato non e' ancora arrivata fisicamente in officina.
+  const autoInOfficina = appuntamenti.filter((a) => a.stato !== 'richiesta' && a.stato !== 'prenotato' && a.stato !== 'consegnato' && a.stato !== 'annullato');
   const pronti = appuntamenti.filter((a) => a.stato === 'pronto');
   // La lista e' ordinata per data decrescente: senza filtrare il futuro,
   // "Attivita recente" mostrava le prenotazioni piu' lontane nel tempo.
