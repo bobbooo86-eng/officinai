@@ -30,6 +30,15 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
   const [arrivando, setArrivando] = useState(false);
   const [erroreArrivo, setErroreArrivo] = useState<string | null>(null);
   const [showStorico, setShowStorico] = useState(false);
+  // Modifica diretta di data/ora dell'appuntamento: a differenza della
+  // "controproposta" (che avvisa il cliente e aspetta la sua conferma),
+  // questa aggiorna subito data_ora, per correggere un errore o rispianificare
+  // senza dover passare da quel flusso.
+  const [editingData, setEditingData] = useState(false);
+  const [editDataApp, setEditDataApp] = useState('');
+  const [editOraApp, setEditOraApp] = useState('');
+  const [savingData, setSavingData] = useState(false);
+  const [erroreData, setErroreData] = useState('');
 
   // Realtime updates
   useEffect(() => {
@@ -67,6 +76,28 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
     } finally {
       setArrivando(false);
     }
+  };
+
+  const apriModificaData = () => {
+    const d = new Date(app.data_ora);
+    const mese = (d.getMonth() + 1).toString().padStart(2, '0');
+    const giorno = d.getDate().toString().padStart(2, '0');
+    setEditDataApp(`${d.getFullYear()}-${mese}-${giorno}`);
+    setEditOraApp(`${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`);
+    setErroreData('');
+    setEditingData(true);
+  };
+
+  const salvaData = async () => {
+    if (!editDataApp || !editOraApp) return;
+    setSavingData(true);
+    setErroreData('');
+    const nuovaIso = new Date(`${editDataApp}T${editOraApp}:00`).toISOString();
+    const { error } = await supabase.from('appuntamenti').update({ data_ora: nuovaIso }).eq('id', app.id);
+    setSavingData(false);
+    if (error) { setErroreData('Data non aggiornata: ' + error.message); return; }
+    setApp((prev) => ({ ...prev, data_ora: nuovaIso }));
+    setEditingData(false);
   };
 
   const tabs: { id: Tab; label: string; icon: string; disabled?: boolean }[] = [
@@ -111,6 +142,65 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
           {STATO_CONFIG[app.stato].icon} {STATO_CONFIG[app.stato].label}
         </Badge>
       </div>
+
+      {/* Data e ora appuntamento — modificabile subito, senza passare dalla controproposta al cliente */}
+      <Card className="!p-3">
+        {!editingData ? (
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-xs text-gray-400 mb-0.5">Data e ora appuntamento</div>
+              <div className="text-sm font-semibold text-gray-900">{fmtDataOra(app.data_ora)}</div>
+            </div>
+            <button
+              onClick={apriModificaData}
+              className="text-gray-400 hover:text-blue-600 cursor-pointer text-xs px-1 shrink-0"
+              title="Modifica data e ora"
+            >
+              ✏️
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Data</label>
+                <input
+                  type="date"
+                  value={editDataApp}
+                  onChange={(e) => setEditDataApp(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Ora</label>
+                <input
+                  type="time"
+                  value={editOraApp}
+                  onChange={(e) => setEditOraApp(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            {erroreData && <div className="text-xs text-red-600">{erroreData}</div>}
+            <div className="flex gap-2">
+              <button
+                onClick={salvaData}
+                disabled={savingData}
+                className="flex-1 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors"
+              >
+                {savingData ? 'Salvataggio...' : 'Salva'}
+              </button>
+              <button
+                onClick={() => setEditingData(false)}
+                disabled={savingData}
+                className="px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
+              >
+                Annulla
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
 
       {/* Problem */}
       <Card className="!p-3">
