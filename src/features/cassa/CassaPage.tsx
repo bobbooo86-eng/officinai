@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, Button } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { insertTolerant, isMissingTable, isAuthMismatch } from '@/lib/resilientDb';
@@ -97,6 +97,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
 
   // Nuovo movimento
   const [showForm, setShowForm] = useState(false);
+  // Il modulo si apre in cima alla pagina: cliccando la matita su un
+  // movimento in fondo a un elenco lungo, senza scorrere fino a qui
+  // sembrava che non fosse successo nulla.
+  const formRef = useRef<HTMLDivElement>(null);
   // Id del movimento in modifica; null quando se ne sta creando uno nuovo.
   const [editId, setEditId] = useState<string | null>(null);
   const [newTipo, setNewTipo] = useState<MovimentoTipo>('incasso_extra');
@@ -197,6 +201,13 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [officinaId, loadMovimenti]);
+
+  // Il modulo compare in cima alla pagina: senza questo, apparire "senza
+  // fare nulla" era l'effetto piu' probabile cliccando la matita mentre
+  // si guardava un movimento in fondo a un elenco lungo e scorso in basso.
+  useEffect(() => {
+    if (showForm) formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [showForm, editId]);
 
   // Il database puo' diventare disponibile mentre l'app e' aperta, e altri
   // dispositivi possono aggiungere movimenti: si ricontrolla al rientro
@@ -564,6 +575,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
 
       {/* Form nuovo movimento */}
       {showForm && (
+        <div ref={formRef}>
         <Card className="!p-4 space-y-3 !border-blue-200 !bg-blue-50/40">
           <div className="text-sm font-bold text-gray-900">
             {editId ? 'Modifica movimento' : 'Nuovo movimento'}
@@ -719,6 +731,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
             )}
           </div>
         </Card>
+        </div>
       )}
 
       {soloLocale && (
