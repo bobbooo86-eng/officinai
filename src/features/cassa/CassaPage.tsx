@@ -501,8 +501,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     [monthTutti, incassiAutoTotaliInRange]
   );
   const totalSpese = useMemo(
-    () => monthTutti.reduce((a, m) => a + spesaMovimento(m), 0),
-    [monthTutti]
+    () =>
+      monthTutti.reduce((a, m) => a + spesaMovimento(m), 0) +
+      incassiAutoTotaliInRange.reduce((a, app) => a + (app.pagamento?.costo_ricambi || 0), 0),
+    [monthTutti, incassiAutoTotaliInRange]
   );
   const saldo = totalIncassi - totalSpese;
   const totalDaIncassare = useMemo(
@@ -856,7 +858,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
             const dayIncassi =
               items.movimenti.reduce((a, m) => a + incassoMovimento(m), 0) +
               items.auto.reduce((a, app) => a + incassatoAuto(app), 0);
-            const daySpese = items.movimenti.reduce((a, m) => a + spesaMovimento(m), 0);
+            const daySpese =
+              items.movimenti.reduce((a, m) => a + spesaMovimento(m), 0) +
+              items.auto.reduce((a, app) => a + (app.pagamento?.costo_ricambi || 0), 0);
             const daySaldo = dayIncassi - daySpese;
             const dt = new Date(giorno + 'T00:00');
             const label = dt.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });

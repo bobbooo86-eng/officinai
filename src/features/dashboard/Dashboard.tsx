@@ -197,7 +197,10 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
     .reduce((s, a) => s + incassato(a), 0);
   const spesePeriodo = movimenti
     .filter((m) => inPeriodo(new Date(m.data + 'T00:00:00'), periodo, riferimento))
-    .reduce((s, m) => s + spesaMovimento(m), 0);
+    .reduce((s, m) => s + spesaMovimento(m), 0) +
+    appuntamenti
+      .filter((a) => a.stato === 'consegnato' && a.pagamento && inPeriodo(dataIncasso(a), periodo, riferimento))
+      .reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
 
   // Nasconde solo dalla Home: il credito resta sull'appuntamento, ancora
   // modificabile da Cassa > Incassi officina o dallo storico del veicolo.
