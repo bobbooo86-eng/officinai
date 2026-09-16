@@ -32,6 +32,10 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
   const [newClienteCF, setNewClienteCF] = useState('');
   const [newClienteIndirizzo, setNewClienteIndirizzo] = useState('');
   const [newClienteNote, setNewClienteNote] = useState('');
+  // Per prendere un appuntamento veloce (nome, targa, marca/modello) senza
+  // dover compilare la scheda cliente completa: si finisce di compilarla
+  // quando arriva davvero l'auto in officina.
+  const [mostraAltriDettagliCliente, setMostraAltriDettagliCliente] = useState(false);
 
   // Veicolo search/create
   const [veicoli, setVeicoli] = useState<Veicolo[]>([]);
@@ -49,6 +53,7 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
   const [newScadAssicurazione, setNewScadAssicurazione] = useState('');
   const [newScadBollo, setNewScadBollo] = useState('');
   const [newFotoLibretto, setNewFotoLibretto] = useState<File | null>(null);
+  const [mostraAltriDettagliVeicolo, setMostraAltriDettagliVeicolo] = useState(false);
   const carburanti = ['benzina', 'diesel', 'gpl', 'metano', 'ibrido', 'elettrico'];
 
   // Appuntamento fields
@@ -250,19 +255,31 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
               <span className="text-xs font-bold text-gray-500">Nuovo cliente</span>
               <button onClick={() => setShowNewCliente(false)} className="text-xs text-blue-600 cursor-pointer">Cerca esistente</button>
             </div>
-            <input type="text" value={newClienteNome} onChange={(e) => setNewClienteNome(e.target.value)} className={inputClass} placeholder="Nome e cognome *" />
-            <div className="grid grid-cols-2 gap-2">
-              <input type="tel" value={newClienteTel} onChange={(e) => setNewClienteTel(e.target.value)} className={inputClass} placeholder="Telefono" />
-              <input type="email" value={newClienteEmail} onChange={(e) => setNewClienteEmail(e.target.value)} className={inputClass} placeholder="Email" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input type="text" value={newClienteCF} onChange={(e) => setNewClienteCF(e.target.value.toUpperCase())} className={inputClass} placeholder="Codice Fiscale" />
-              <input type="text" value={newClienteIndirizzo} onChange={(e) => setNewClienteIndirizzo(e.target.value)} className={inputClass} placeholder="Indirizzo" />
-            </div>
-            <div className="flex items-start gap-2">
-              <textarea value={newClienteNote} onChange={(e) => setNewClienteNote(e.target.value)} rows={2} className={inputClass + ' resize-none flex-1'} placeholder="Note cliente" />
-              <VoiceButton onResult={setNewClienteNote} />
-            </div>
+            <input type="text" value={newClienteNome} onChange={(e) => setNewClienteNome(e.target.value)} className={inputClass} placeholder="Nome e cognome *" autoFocus />
+            {!mostraAltriDettagliCliente ? (
+              <button
+                type="button"
+                onClick={() => setMostraAltriDettagliCliente(true)}
+                className="w-full py-2 text-xs text-blue-600 font-semibold hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors cursor-pointer"
+              >
+                + Altri dettagli cliente (opzionale — puoi compilarli dopo, quando arriva l'auto)
+              </button>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="tel" value={newClienteTel} onChange={(e) => setNewClienteTel(e.target.value)} className={inputClass} placeholder="Telefono" />
+                  <input type="email" value={newClienteEmail} onChange={(e) => setNewClienteEmail(e.target.value)} className={inputClass} placeholder="Email" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" value={newClienteCF} onChange={(e) => setNewClienteCF(e.target.value.toUpperCase())} className={inputClass} placeholder="Codice Fiscale" />
+                  <input type="text" value={newClienteIndirizzo} onChange={(e) => setNewClienteIndirizzo(e.target.value)} className={inputClass} placeholder="Indirizzo" />
+                </div>
+                <div className="flex items-start gap-2">
+                  <textarea value={newClienteNote} onChange={(e) => setNewClienteNote(e.target.value)} rows={2} className={inputClass + ' resize-none flex-1'} placeholder="Note cliente" />
+                  <VoiceButton onResult={setNewClienteNote} />
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
@@ -328,43 +345,55 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
                 <input type="text" value={newMarca} onChange={(e) => setNewMarca(e.target.value)} className={inputClass} placeholder="Marca (es. Fiat)" />
                 <input type="text" value={newModello} onChange={(e) => setNewModello(e.target.value)} className={inputClass} placeholder="Modello (es. Panda)" />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <input type="number" value={newAnno} onChange={(e) => setNewAnno(e.target.value)} className={inputClass} placeholder="Anno" />
-                <input type="number" value={newKm} onChange={(e) => setNewKm(e.target.value)} className={inputClass} placeholder="Km" />
-              </div>
-              <div className="grid grid-cols-3 gap-1.5">
-                {carburanti.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setNewCarburante(c)}
-                    className={`py-2 rounded-lg text-xs font-medium capitalize transition-colors cursor-pointer ${
-                      newCarburante === c ? 'bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Scadenze (opzionale)</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="date" value={newScadRevisione} onChange={(e) => setNewScadRevisione(e.target.value)} className={inputClass} placeholder="Revisione" />
-                  <input type="date" value={newScadTagliando} onChange={(e) => setNewScadTagliando(e.target.value)} className={inputClass} placeholder="Tagliando" />
-                </div>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <input type="date" value={newScadAssicurazione} onChange={(e) => setNewScadAssicurazione(e.target.value)} className={inputClass} placeholder="Assicurazione" />
-                  <input type="date" value={newScadBollo} onChange={(e) => setNewScadBollo(e.target.value)} className={inputClass} placeholder="Bollo" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Foto libretto di circolazione</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setNewFotoLibretto(e.target.files?.[0] || null)}
-                  className="w-full text-xs text-gray-600 dark:text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:text-xs file:font-semibold hover:file:bg-emerald-100 cursor-pointer"
-                />
-              </div>
+              {!mostraAltriDettagliVeicolo ? (
+                <button
+                  type="button"
+                  onClick={() => setMostraAltriDettagliVeicolo(true)}
+                  className="w-full py-2 text-xs text-emerald-600 font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors cursor-pointer"
+                >
+                  + Altri dettagli veicolo (opzionale — puoi compilarli dopo, quando arriva l'auto)
+                </button>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="number" value={newAnno} onChange={(e) => setNewAnno(e.target.value)} className={inputClass} placeholder="Anno" />
+                    <input type="number" value={newKm} onChange={(e) => setNewKm(e.target.value)} className={inputClass} placeholder="Km" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {carburanti.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setNewCarburante(c)}
+                        className={`py-2 rounded-lg text-xs font-medium capitalize transition-colors cursor-pointer ${
+                          newCarburante === c ? 'bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Scadenze (opzionale)</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="date" value={newScadRevisione} onChange={(e) => setNewScadRevisione(e.target.value)} className={inputClass} placeholder="Revisione" />
+                      <input type="date" value={newScadTagliando} onChange={(e) => setNewScadTagliando(e.target.value)} className={inputClass} placeholder="Tagliando" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <input type="date" value={newScadAssicurazione} onChange={(e) => setNewScadAssicurazione(e.target.value)} className={inputClass} placeholder="Assicurazione" />
+                      <input type="date" value={newScadBollo} onChange={(e) => setNewScadBollo(e.target.value)} className={inputClass} placeholder="Bollo" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Foto libretto di circolazione</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setNewFotoLibretto(e.target.files?.[0] || null)}
+                      className="w-full text-xs text-gray-600 dark:text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:text-xs file:font-semibold hover:file:bg-emerald-100 cursor-pointer"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
