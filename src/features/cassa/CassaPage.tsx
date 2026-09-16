@@ -86,7 +86,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   const [loading, setLoading] = useState(true);
   // Stesso selettore periodo di Incassi officina, cosi' i due resoconti si
   // leggono con lo stesso criterio invece di "questo mese" vs "oggi/settimana".
-  const [periodo, setPeriodo] = useState<Periodo>('mese');
+  const [periodo, setPeriodo] = useState<Periodo>('settimana');
   const [search, setSearch] = useState('');
   // Incassi officina (pagamenti alla consegna auto) mostrati anche qui,
   // dentro il tab "Incassi": prima si vedevano solo nella sezione separata.

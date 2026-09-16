@@ -31,7 +31,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
   const [movimenti, setMovimenti] = useState<Movimento[]>([]);
   // Stesso selettore periodo di Cassa > Incassi officina, per leggere gli
   // incassi/spese con lo stesso criterio ovunque nell'app.
-  const [periodo, setPeriodo] = useState<Periodo>('mese');
+  const [periodo, setPeriodo] = useState<Periodo>('settimana');
 
   const fetchData = useCallback(async () => {
     if (!officina) return;

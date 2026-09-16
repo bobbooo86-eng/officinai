@@ -146,7 +146,7 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(initialDate || new Date());
-  const [viewMode, setViewMode] = useState<CalendarMode>('giorno');
+  const [viewMode, setViewMode] = useState<CalendarMode>('settimana');
 
   useEffect(() => {
     if (initialDate) setSelectedDate(initialDate);

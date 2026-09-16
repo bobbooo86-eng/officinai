@@ -30,8 +30,8 @@ export function AnalyticsPage() {
   const [periodo, setPeriodo] = useState<'7d' | '30d' | '90d' | 'anno'>('30d');
   // Periodo del report per collaboratore: giorno/settimana/mese/anno, come
   // in Cassa > Incassi officina, non i 7/30/90 giorni del resto della pagina.
-  const [periodoCollab, setPeriodoCollab] = useState<Periodo>('mese');
-  const [periodoSpese, setPeriodoSpese] = useState<Periodo>('mese');
+  const [periodoCollab, setPeriodoCollab] = useState<Periodo>('settimana');
+  const [periodoSpese, setPeriodoSpese] = useState<Periodo>('settimana');
   // Collaboratore i cui lavori/spese sono espansi (un solo elenco alla volta per finestra).
   const [collabEspanso, setCollabEspanso] = useState<string | null>(null);
   const [speseEspanse, setSpeseEspanse] = useState<string | null>(null);

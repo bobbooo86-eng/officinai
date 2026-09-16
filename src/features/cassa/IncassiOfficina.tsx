@@ -237,7 +237,7 @@ export const PERIODI: { id: Periodo; label: string }[] = [
 export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [loading, setLoading] = useState(true);
-  const [periodo, setPeriodo] = useState<Periodo>('mese');
+  const [periodo, setPeriodo] = useState<Periodo>('settimana');
   const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
