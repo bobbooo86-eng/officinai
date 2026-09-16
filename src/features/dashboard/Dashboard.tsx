@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { VehicleAlerts } from './VehicleAlerts';
 import { leggiPromemoriaNascosti, nascondiPromemoria } from '@/lib/promemoriaNascosti';
 import { PERIODI, inPeriodo, dataIncasso, incassato, type Periodo } from '@/features/cassa/IncassiOfficina';
+import { spesaMovimento } from '@/features/cassa/movimentiTotali';
 import type { Appuntamento, Magazzino, Movimento } from '@/types/database';
 
 interface DashboardProps {
@@ -194,8 +195,8 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
     .filter((a) => a.stato === 'consegnato' && a.pagamento && inPeriodo(dataIncasso(a), periodo, riferimento))
     .reduce((s, a) => s + incassato(a), 0);
   const spesePeriodo = movimenti
-    .filter((m) => m.tipo !== 'incasso_extra' && inPeriodo(new Date(m.data + 'T00:00:00'), periodo, riferimento))
-    .reduce((s, m) => s + Number(m.importo), 0);
+    .filter((m) => inPeriodo(new Date(m.data + 'T00:00:00'), periodo, riferimento))
+    .reduce((s, m) => s + spesaMovimento(m), 0);
 
   // Nasconde solo dalla Home: il credito resta sull'appuntamento, ancora
   // modificabile da Cassa > Incassi officina o dallo storico del veicolo.

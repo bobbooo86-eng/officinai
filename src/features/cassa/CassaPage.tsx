@@ -8,6 +8,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { VoiceButton } from '@/components/VoiceInput';
 import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
+import { SEGNO, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento } from './movimentiTotali';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente, Appuntamento } from '@/types/database';
 
 type CassaTab = 'tutti' | 'incasso_extra' | 'spesa_officina' | 'spesa_titolare' | 'dipendenti';
@@ -29,22 +30,19 @@ interface TipoConfig {
 // diventato un campo dentro Revisione (Gianni) e Centraline (Daniele),
 // non piu' un tipo di movimento a se stante.
 const TIPI: TipoConfig[] = [
-  { id: 'incasso_extra', label: 'Incasso extra', short: 'Incasso', icon: '💵', color: 'text-emerald-700', bg: 'bg-emerald-100', sign: 1 },
-  { id: 'spesa_officina', label: 'Spesa officina', short: 'Spesa officina', icon: '🧾', color: 'text-red-700', bg: 'bg-red-100', sign: -1 },
-  { id: 'spesa_titolare', label: 'Spesa titolare', short: 'Spesa titolare', icon: '👔', color: 'text-purple-700', bg: 'bg-purple-100', sign: -1 },
-  { id: 'anticipo_dipendente', label: 'Anticipo dipendente', short: 'Anticipo', icon: '💶', color: 'text-amber-700', bg: 'bg-amber-100', sign: -1 },
-  { id: 'spesa_dipendente', label: 'Spesa dipendente', short: 'Spesa dip.', icon: '👷', color: 'text-blue-700', bg: 'bg-blue-100', sign: -1 },
-  { id: 'spesa_revisione_gianni', label: 'Revisione (Gianni)', short: 'Revisione Gianni', icon: '🔧', color: 'text-orange-700', bg: 'bg-orange-100', sign: -1 },
-  { id: 'spesa_centraline_daniele', label: 'Centraline (Daniele)', short: 'Centraline Daniele', icon: '💻', color: 'text-cyan-700', bg: 'bg-cyan-100', sign: -1 },
-  { id: 'costo_lavorazione', label: 'Costo lavorazione', short: 'Costo lavorazione', icon: '🛠️', color: 'text-indigo-700', bg: 'bg-indigo-100', sign: -1 },
-  { id: 'spesa_lavorazione', label: 'Spese per la lavorazione', short: 'Spese lavorazione', icon: '📦', color: 'text-rose-700', bg: 'bg-rose-100', sign: -1 },
+  { id: 'incasso_extra', label: 'Incasso extra', short: 'Incasso', icon: '💵', color: 'text-emerald-700', bg: 'bg-emerald-100', sign: SEGNO.incasso_extra },
+  { id: 'spesa_officina', label: 'Spesa officina', short: 'Spesa officina', icon: '🧾', color: 'text-red-700', bg: 'bg-red-100', sign: SEGNO.spesa_officina },
+  { id: 'spesa_titolare', label: 'Spesa titolare', short: 'Spesa titolare', icon: '👔', color: 'text-purple-700', bg: 'bg-purple-100', sign: SEGNO.spesa_titolare },
+  { id: 'anticipo_dipendente', label: 'Anticipo dipendente', short: 'Anticipo', icon: '💶', color: 'text-amber-700', bg: 'bg-amber-100', sign: SEGNO.anticipo_dipendente },
+  { id: 'spesa_dipendente', label: 'Spesa dipendente', short: 'Spesa dip.', icon: '👷', color: 'text-blue-700', bg: 'bg-blue-100', sign: SEGNO.spesa_dipendente },
+  { id: 'spesa_revisione_gianni', label: 'Revisione (Gianni)', short: 'Revisione Gianni', icon: '🔧', color: 'text-orange-700', bg: 'bg-orange-100', sign: SEGNO.spesa_revisione_gianni },
+  { id: 'spesa_centraline_daniele', label: 'Centraline (Daniele)', short: 'Centraline Daniele', icon: '💻', color: 'text-cyan-700', bg: 'bg-cyan-100', sign: SEGNO.spesa_centraline_daniele },
+  { id: 'costo_lavorazione', label: 'Costo lavorazione', short: 'Costo lavorazione', icon: '🛠️', color: 'text-indigo-700', bg: 'bg-indigo-100', sign: SEGNO.costo_lavorazione },
+  { id: 'spesa_lavorazione', label: 'Spese per la lavorazione', short: 'Spese lavorazione', icon: '📦', color: 'text-rose-700', bg: 'bg-rose-100', sign: SEGNO.spesa_lavorazione },
 ];
 
 const TIPI_NON_SELEZIONABILI: MovimentoTipo[] = ['anticipo_dipendente', 'costo_lavorazione', 'spesa_lavorazione'];
 const TIPI_SELEZIONABILI = TIPI.filter((t) => !TIPI_NON_SELEZIONABILI.includes(t.id));
-// Tipi che, oltre all'importo pagato al collaboratore esterno, hanno anche
-// un campo separato per le spese sostenute dall'officina per la lavorazione.
-const TIPI_CON_SPESE_LAVORAZIONE: MovimentoTipo[] = ['spesa_revisione_gianni', 'spesa_centraline_daniele'];
 
 const METODI: { id: MetodoPagamento; label: string; icon: string }[] = [
   { id: 'contanti', label: 'Contanti', icon: '💵' },
@@ -484,12 +482,12 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
 
   const totalIncassi = useMemo(
     () =>
-      monthTutti.filter((m) => findTipo(m.tipo).sign === 1).reduce((a, m) => a + Number(m.importo), 0) +
+      monthTutti.reduce((a, m) => a + incassoMovimento(m), 0) +
       incassiAutoTotaliInRange.reduce((a, app) => a + incassatoAuto(app), 0),
     [monthTutti, incassiAutoTotaliInRange]
   );
   const totalSpese = useMemo(
-    () => monthTutti.filter((m) => findTipo(m.tipo).sign === -1).reduce((a, m) => a + Number(m.importo), 0),
+    () => monthTutti.reduce((a, m) => a + spesaMovimento(m), 0),
     [monthTutti]
   );
   const saldo = totalIncassi - totalSpese;
@@ -832,9 +830,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
         <div className="space-y-3">
           {byDay.map(([giorno, items]) => {
             const dayIncassi =
-              items.movimenti.filter((m) => findTipo(m.tipo).sign === 1).reduce((a, m) => a + Number(m.importo), 0) +
+              items.movimenti.reduce((a, m) => a + incassoMovimento(m), 0) +
               items.auto.reduce((a, app) => a + incassatoAuto(app), 0);
-            const daySpese = items.movimenti.filter((m) => findTipo(m.tipo).sign === -1).reduce((a, m) => a + Number(m.importo), 0);
+            const daySpese = items.movimenti.reduce((a, m) => a + spesaMovimento(m), 0);
             const daySaldo = dayIncassi - daySpese;
             const dt = new Date(giorno + 'T00:00');
             const label = dt.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -870,6 +868,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                   {items.movimenti.map((m) => {
                     const cfg = findTipo(m.tipo);
                     const dip = m.dipendente_id ? dipendenti.find((d) => d.id === m.dipendente_id) : null;
+                    // Per Revisione Gianni/Centraline Daniele l'importo e' un incasso
+                    // (pagato dal cliente), non una spesa: solo le "spese lavorazione"
+                    // sono la spesa vera e propria pagata al collaboratore esterno.
+                    const isIncasso = cfg.sign === 1 || TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo);
                     return (
                       <div key={m.id} className="flex items-center gap-3 py-2 px-1 group">
                         <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-base ${cfg.bg}`}>
@@ -881,11 +883,15 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                             {cfg.short}
                             {dip && ` · ${dip.nome}`}
                             {m.metodo_pagamento && ` · ${m.metodo_pagamento}`}
-                            {m.spese_lavorazione != null && ` · Spese lavorazione: ${fmtEuro(m.spese_lavorazione)}`}
                           </div>
+                          {m.spese_lavorazione != null && (
+                            <div className="text-[11px] text-red-500 truncate">
+                              − Spese lavorazione: {fmtEuro(m.spese_lavorazione)}
+                            </div>
+                          )}
                         </div>
-                        <div className={`text-sm font-bold ${cfg.sign === 1 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {cfg.sign === 1 ? '+' : '−'}{fmtEuro(Number(m.importo))}
+                        <div className={`text-sm font-bold ${isIncasso ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {isIncasso ? '+' : '−'}{fmtEuro(Number(m.importo))}
                         </div>
                         <button
                           onClick={() => iniziaModifica(m)}
