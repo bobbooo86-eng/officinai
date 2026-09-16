@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Card, Loader, Button, Input, Badge } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { insertTolerant } from '@/lib/resilientDb';
@@ -26,7 +26,7 @@ function statoScadenza(dataStr?: string): { label: string; color: string; bg: st
   return { label: dataFmt, color: '#374151', bg: '#f3f4f6' };
 }
 
-export function CustomersPage({ initialClienteId, resetSignal }: { initialClienteId?: string; resetSignal?: number } = {}) {
+export function CustomersPage({ initialClienteId, resetSignal, apriNuovoCliente }: { initialClienteId?: string; resetSignal?: number; apriNuovoCliente?: number } = {}) {
   const { officina } = useAuthStore();
   const [clienti, setClienti] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,6 +45,15 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
     setSelectedVeicolo(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetSignal]);
+
+  // Aperto dal FAB "Nuovo cliente" (da qualsiasi schermata): un contatore
+  // che cambia a ogni click, non un booleano, cosi' funziona anche se si
+  // clicca di nuovo mentre si e' gia' su questa pagina.
+  useEffect(() => {
+    if (!apriNuovoCliente) return;
+    setView('add');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apriNuovoCliente]);
 
   const fetchClienti = async () => {
     // Senza officina non c'e' nulla da caricare, ma il loader va comunque
@@ -106,6 +115,10 @@ export function CustomersPage({ initialClienteId, resetSignal }: { initialClient
           setView('list');
         }}
         onSelectVeicolo={(v) => { setSelectedVeicolo(v); setView('storicoVeicolo'); }}
+        onUpdated={(c) => {
+          setClienti((prev) => prev.map((x) => (x.id === c.id ? c : x)).sort((a, b) => a.nome.localeCompare(b.nome)));
+          setSelectedCliente(c);
+        }}
       />
     );
   }
@@ -274,12 +287,16 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [errNome, setErrNome] = useState<string | null>(null);
+  // Un doppio tocco molto rapido (tipico su touchscreen) poteva far partire
+  // due volte l'inserimento prima che "saving" disabilitasse il pulsante.
+  const submittingRef = useRef(false);
 
   const carburanti = ['benzina', 'diesel', 'gpl', 'metano', 'ibrido', 'elettrico'];
 
   const submit = async () => {
     if (!nome.trim()) { setErrNome('Il nome è obbligatorio'); return; }
-    if (!officina) return;
+    if (!officina || submittingRef.current) return;
+    submittingRef.current = true;
 
     setSaving(true);
     setSaveError('');
@@ -301,6 +318,7 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
 
     if (error || !cliente) {
       setSaving(false);
+      submittingRef.current = false;
       setSaveError('Errore salvataggio cliente: ' + (error?.message || 'nessun dato restituito'));
       return;
     }
@@ -332,6 +350,7 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
       }, ['cliente_id', 'targa'], { returning: true });
       if (vErr) {
         setSaving(false);
+        submittingRef.current = false;
         setSaveError('Cliente salvato, ma il veicolo non e stato registrato: ' + vErr.message);
         return;
       }
@@ -349,6 +368,7 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
     }
 
     setSaving(false);
+    submittingRef.current = false;
     onSaved(cliente);
   };
 
@@ -574,16 +594,58 @@ function AddClienteForm({ onBack, onSaved }: { onBack: () => void; onSaved: (c: 
 }
 
 // ==================== CLIENTE DETAIL ====================
-function ClienteDetail({ cliente, onBack, onAddVeicolo, onDeleted, onSelectVeicolo, onEditVeicolo }: {
+function ClienteDetail({ cliente, onBack, onAddVeicolo, onDeleted, onSelectVeicolo, onEditVeicolo, onUpdated }: {
   cliente: Cliente;
   onBack: () => void;
   onAddVeicolo: () => void;
   onDeleted: () => void;
   onSelectVeicolo: (v: Veicolo) => void;
   onEditVeicolo: (v: Veicolo) => void;
+  onUpdated: (c: Cliente) => void;
 }) {
   const [veicoli, setVeicoli] = useState<Veicolo[]>([]);
   const [loading, setLoading] = useState(true);
+  // Modifica dei dati del cliente stesso (non del veicolo): prima si poteva
+  // solo vedere nome/telefono/email, non correggerli.
+  const [editingCliente, setEditingCliente] = useState(false);
+  const [editNome, setEditNome] = useState('');
+  const [editTel, setEditTel] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editCF, setEditCF] = useState('');
+  const [editIndirizzo, setEditIndirizzo] = useState('');
+  const [editNote, setEditNote] = useState('');
+  const [savingCliente, setSavingCliente] = useState(false);
+  const [erroreCliente, setErroreCliente] = useState('');
+
+  const apriModificaCliente = () => {
+    setEditNome(cliente.nome || '');
+    setEditTel(cliente.tel || '');
+    setEditEmail(cliente.email || '');
+    setEditCF(cliente.codice_fiscale || '');
+    setEditIndirizzo(cliente.indirizzo || '');
+    setEditNote(cliente.note || '');
+    setErroreCliente('');
+    setEditingCliente(true);
+  };
+
+  const salvaCliente = async () => {
+    if (!editNome.trim()) { setErroreCliente('Il nome è obbligatorio'); return; }
+    setSavingCliente(true);
+    setErroreCliente('');
+    const dati = {
+      nome: editNome.trim(),
+      tel: editTel.trim(),
+      email: editEmail.trim(),
+      codice_fiscale: editCF.trim() || null,
+      indirizzo: editIndirizzo.trim() || null,
+      note: editNote.trim() || null,
+    };
+    const { error } = await supabase.from('clienti').update(dati).eq('id', cliente.id);
+    setSavingCliente(false);
+    if (error) { setErroreCliente('Modifica non salvata: ' + error.message); return; }
+    setEditingCliente(false);
+    onUpdated({ ...cliente, ...dati });
+  };
   const [editScadenzeId, setEditScadenzeId] = useState<string | null>(null);
   const [editRevisione, setEditRevisione] = useState('');
   const [editTagliando, setEditTagliando] = useState('');
@@ -648,10 +710,79 @@ function ClienteDetail({ cliente, onBack, onAddVeicolo, onDeleted, onSelectVeico
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <h2 className="text-lg font-bold text-gray-900">{cliente.nome}</h2>
+        <h2 className="text-lg font-bold text-gray-900 flex-1">{cliente.nome}</h2>
+        {!editingCliente && (
+          <button
+            onClick={apriModificaCliente}
+            className="text-gray-400 hover:text-blue-600 cursor-pointer text-sm px-1"
+            title="Modifica dati cliente"
+          >
+            ✏️
+          </button>
+        )}
       </div>
 
-      {/* Contact info */}
+      {/* Dati cliente: sola lettura, o modulo di modifica */}
+      {editingCliente ? (
+        <Card className="!p-4 space-y-2 !border-blue-200 !bg-blue-50/40">
+          <input
+            type="text"
+            value={editNome}
+            onChange={(e) => setEditNome(e.target.value)}
+            placeholder="Nome e cognome *"
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="tel"
+              value={editTel}
+              onChange={(e) => setEditTel(e.target.value)}
+              placeholder="Telefono"
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="email"
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+              placeholder="Email"
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="text"
+              value={editCF}
+              onChange={(e) => setEditCF(e.target.value.toUpperCase())}
+              placeholder="Codice Fiscale"
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="text"
+              value={editIndirizzo}
+              onChange={(e) => setEditIndirizzo(e.target.value)}
+              placeholder="Indirizzo"
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex items-start gap-2">
+            <textarea
+              value={editNote}
+              onChange={(e) => setEditNote(e.target.value)}
+              rows={2}
+              placeholder="Note"
+              className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <VoiceButton onResult={setEditNote} />
+          </div>
+          {erroreCliente && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg p-2">⚠️ {erroreCliente}</div>
+          )}
+          <div className="flex gap-2">
+            <Button onClick={salvaCliente} loading={savingCliente} fullWidth>💾 Salva</Button>
+            <Button variant="secondary" onClick={() => setEditingCliente(false)} disabled={savingCliente}>Annulla</Button>
+          </div>
+        </Card>
+      ) : (
       <Card className="!p-4">
         <div className="space-y-2">
           {cliente.email && (
@@ -666,17 +797,30 @@ function ClienteDetail({ cliente, onBack, onAddVeicolo, onDeleted, onSelectVeico
               <a href={`tel:${cliente.tel}`} className="text-sm text-blue-600 hover:underline">{cliente.tel}</a>
             </div>
           )}
+          {cliente.codice_fiscale && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm">🪪</span>
+              <span className="text-sm text-gray-600 font-mono">{cliente.codice_fiscale}</span>
+            </div>
+          )}
+          {cliente.indirizzo && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm">📍</span>
+              <span className="text-sm text-gray-600">{cliente.indirizzo}</span>
+            </div>
+          )}
           {cliente.note && (
             <div className="flex items-center gap-3">
               <span className="text-sm">📝</span>
               <span className="text-sm text-gray-600">{cliente.note}</span>
             </div>
           )}
-          {!cliente.email && !cliente.tel && (
+          {!cliente.email && !cliente.tel && !cliente.codice_fiscale && !cliente.indirizzo && (
             <div className="text-xs text-gray-400">Nessun contatto registrato</div>
           )}
         </div>
       </Card>
+      )}
 
       {/* Veicoli */}
       <div className="flex items-center justify-between">

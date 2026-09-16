@@ -54,6 +54,7 @@ export function AppOfficina() {
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [cassaOpenTipo, setCassaOpenTipo] = useState<MovimentoTipo | null>(null);
   const [resetSignal, setResetSignal] = useState(0);
+  const [apriNuovoCliente, setApriNuovoCliente] = useState(0);
 
   const loadRichiesteCount = useCallback(async () => {
     if (!officina) return;
@@ -87,6 +88,15 @@ export function AppOfficina() {
     setSubPage(null);
     setSelectedApp(null);
     setShowNewApp(true);
+  };
+
+  const fabNuovoCliente = () => {
+    setShowFabMenu(false);
+    setActiveTab('clienti');
+    setSubPage(null);
+    setSelectedApp(null);
+    setShowNewApp(false);
+    setApriNuovoCliente((s) => s + 1);
   };
 
   const fabApriCassaConTipo = (tipo: MovimentoTipo) => {
@@ -178,7 +188,15 @@ export function AppOfficina() {
   if (selectedApp) {
     return (
       <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={handleTabChange} onSearchSelect={handleSearchSelect}>
-        <AppointmentDetail appuntamento={selectedApp} onBack={handleBack} />
+        <AppointmentDetail
+          appuntamento={selectedApp}
+          onBack={handleBack}
+          onNavigateToCliente={(clienteId) => {
+            setSelectedApp(null);
+            setSelectedClienteId(clienteId);
+            setActiveTab('clienti');
+          }}
+        />
       </Layout>
     );
   }
@@ -279,7 +297,7 @@ export function AppOfficina() {
         )
       )}
       {activeTab === 'preventivi' && <Suspense fallback={<PageSkeleton />}><PreventiviPage onSelectAppuntamento={handleSelectApp} onNavigateToCalendar={(date) => { setCalendarDate(date); setAgendaView('calendario'); setActiveTab('agenda'); }} onNavigateToFatture={() => setActiveTab('fatture')} externalSearch={preventiviSearch} resetSignal={resetSignal} /></Suspense>}
-      {activeTab === 'clienti' && <CustomersPage initialClienteId={selectedClienteId} resetSignal={resetSignal} />}
+      {activeTab === 'clienti' && <CustomersPage initialClienteId={selectedClienteId} resetSignal={resetSignal} apriNuovoCliente={apriNuovoCliente} />}
       {activeTab === 'magazzino' && <Suspense fallback={<PageSkeleton />}><InventoryPage resetSignal={resetSignal} /></Suspense>}
       {activeTab === 'analytics' && <Suspense fallback={<PageSkeleton />}><AnalyticsPage /></Suspense>}
       {activeTab === 'fatture' && <Suspense fallback={<PageSkeleton />}><InvoicePage resetSignal={resetSignal} /></Suspense>}
@@ -379,6 +397,7 @@ export function AppOfficina() {
             </div>
             {([
               { id: 'app', icon: '📅', label: 'Nuovo appuntamento', desc: 'Prenota lavoro per un cliente', onClick: fabNuovoAppuntamento, color: 'from-blue-50 to-indigo-50 border-blue-200' },
+              { id: 'cliente', icon: '👤', label: 'Nuovo cliente', desc: 'Registra un cliente con tutti i dati', onClick: fabNuovoCliente, color: 'from-teal-50 to-cyan-50 border-teal-200' },
               { id: 'incasso', icon: '💵', label: 'Incasso extra', desc: 'Vendita al banco, entrata fuori appuntamento', onClick: () => fabApriCassaConTipo('incasso_extra'), color: 'from-emerald-50 to-green-50 border-emerald-200' },
               { id: 'spesa_off', icon: '🧾', label: 'Spesa officina', desc: 'Fattura fornitore, materiali, bollette', onClick: () => fabApriCassaConTipo('spesa_officina'), color: 'from-red-50 to-rose-50 border-red-200' },
               { id: 'spesa_tit', icon: '👔', label: 'Spesa titolare', desc: 'Prelievo cassa, spesa personale', onClick: () => fabApriCassaConTipo('spesa_titolare'), color: 'from-purple-50 to-fuchsia-50 border-purple-200' },

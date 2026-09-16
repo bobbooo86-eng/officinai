@@ -20,11 +20,14 @@ import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, Difetto, P
 interface Props {
   appuntamento: Appuntamento;
   onBack: () => void;
+  /** Apre la scheda cliente completa (tel/email/CF/indirizzo/note, scadenze e foto veicolo):
+   * un appuntamento preso al volo crea un cliente/veicolo minimo, da completare qui. */
+  onNavigateToCliente?: (clienteId: string) => void;
 }
 
 type Tab = 'accettazione' | 'stato' | 'preventivo' | 'foglio' | 'foto' | 'chat' | 'wa' | 'ai';
 
-export function AppointmentDetail({ appuntamento, onBack }: Props) {
+export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }: Props) {
   const [tab, setTab] = useState<Tab>('stato');
   const [app, setApp] = useState(appuntamento);
   const [arrivando, setArrivando] = useState(false);
@@ -142,6 +145,15 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
                 className="text-[10px] text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-lg transition-colors cursor-pointer font-medium whitespace-nowrap"
               >
                 Storico veicolo
+              </button>
+            )}
+            {app.cliente_id && onNavigateToCliente && (
+              <button
+                onClick={() => onNavigateToCliente(app.cliente_id!)}
+                className="text-[10px] text-teal-700 bg-teal-50 hover:bg-teal-100 px-2 py-0.5 rounded-lg transition-colors cursor-pointer font-medium whitespace-nowrap"
+                title="Completa dati cliente, scadenze e foto veicolo"
+              >
+                🪪 Genera cliente
               </button>
             )}
           </div>

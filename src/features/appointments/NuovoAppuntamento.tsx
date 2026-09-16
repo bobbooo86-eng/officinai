@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { VoiceButton } from '@/components/VoiceInput';
@@ -126,8 +126,15 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
     return () => { cancelled = true; };
   }, [selectedCliente]);
 
+  // Un ref invece di solo "loading": lo stato aggiornato da setLoading non e'
+  // ancora visibile al render successivo, quindi un doppio tocco molto
+  // rapido (tipico su touchscreen) poteva far partire due volte l'inserimento
+  // di cliente/veicolo/appuntamento prima che il pulsante si disabilitasse.
+  const submittingRef = useRef(false);
+
   const handleSubmit = async () => {
-    if (!officina?.id) return;
+    if (!officina?.id || submittingRef.current) return;
+    submittingRef.current = true;
     setError('');
     setLoading(true);
 
@@ -218,6 +225,7 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
       setError(err.message || 'Errore');
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 

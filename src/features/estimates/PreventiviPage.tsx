@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, Badge, Button, Loader } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { fmtEuro } from '@/lib/format';
@@ -568,6 +568,10 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
   const [note, setNote] = useState('');
   const [fermoMacchina, setFermoMacchina] = useState('');
   const [saving, setSaving] = useState(false);
+  // Un doppio tocco molto rapido (tipico su touchscreen) poteva far partire
+  // due volte l'inserimento di cliente/veicolo prima che "saving" disabilitasse
+  // il pulsante: setSaving aggiorna lo stato solo al render successivo.
+  const savingRef = useRef(false);
   const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState(false);
   const [savedPdfUrl, setSavedPdfUrl] = useState<string | null>(null);
@@ -861,7 +865,8 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
   const vCarburante = veicolo?.carburante || datiEsterni?.carburante || '';
 
   const handleSave = async () => {
-    if ((!veicolo && !datiEsterni) || righe.length === 0) return;
+    if ((!veicolo && !datiEsterni) || righe.length === 0 || savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setSaveError('');
 
@@ -890,7 +895,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
           .select()
           .single();
         if (cliErr || !newCliente) {
-          setSaving(false);
+          setSaving(false); savingRef.current = false;
           setSaveError('Cliente non creato: ' + (cliErr?.message || 'errore sconosciuto'));
           return;
         }
@@ -912,7 +917,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
           .select()
           .single();
         if (veiErr || !newVeicolo) {
-          setSaving(false);
+          setSaving(false); savingRef.current = false;
           setSaveError('Veicolo non creato: ' + (veiErr?.message || 'errore sconosciuto'));
           return;
         }
@@ -921,7 +926,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     }
 
     if (!veicoloId || !clienteId || !officina) {
-      setSaving(false);
+      setSaving(false); savingRef.current = false;
       setSaveError('Dati incompleti: seleziona un veicolo prima di salvare.');
       return;
     }
@@ -946,7 +951,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
       .select()
       .single();
     if (appErr || !newApp) {
-      setSaving(false);
+      setSaving(false); savingRef.current = false;
       setSaveError('Appuntamento non creato: ' + (appErr?.message || 'errore sconosciuto'));
       return;
     }
@@ -970,7 +975,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
       // Solo un inserimento andato a buon fine puo' sbloccare l'invio:
       // prima bastava arrivare qui per mostrare "Salvato!" anche in errore.
       if (prevErr || !newPreventivo) {
-        setSaving(false);
+        setSaving(false); savingRef.current = false;
         setSaveError('Preventivo non salvato: ' + (prevErr?.message || 'errore sconosciuto'));
         return;
       }
@@ -1046,7 +1051,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
       }
     }
 
-    setSaving(false);
+    setSaving(false); savingRef.current = false;
   };
 
   // Eliminare il preventivo appena salvato senza dover uscire e ricercarlo

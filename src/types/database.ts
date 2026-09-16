@@ -65,7 +65,9 @@ export interface Cliente {
   nome: string;
   email: string;
   tel: string;
-  note?: string;
+  codice_fiscale?: string | null;
+  indirizzo?: string | null;
+  note?: string | null;
   // "Elimina" archivia (attivo: false) invece di cancellare davvero: quasi
   // ogni cliente ha appuntamenti/recensioni collegati senza CASCADE, e la
   // cancellazione vera perderebbe lo storico. Ripristinabile.
