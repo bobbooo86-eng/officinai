@@ -6,7 +6,7 @@ import { STATO_CONFIG } from '@/lib/constants';
 import { useAuthStore } from '@/stores/authStore';
 import { dataIncasso, inPeriodo, valoreLavoro, PERIODI, type Periodo } from '@/features/cassa/IncassiOfficina';
 import { incassoMovimento, spesaMovimento } from '@/features/cassa/movimentiTotali';
-import type { Appuntamento, Preventivo, Recensione, Movimento } from '@/types/database';
+import type { Appuntamento, Preventivo, Recensione, Movimento, Utente } from '@/types/database';
 
 // Nomi da cercare ovunque compaiano — nel campo "operaio" della consegna,
 // nella descrizione/nota di un movimento, o gia' attribuiti dal tipo
@@ -25,18 +25,21 @@ export function AnalyticsPage() {
   const [preventivi, setPreventivi] = useState<Preventivo[]>([]);
   const [recensioni, setRecensioni] = useState<Recensione[]>([]);
   const [movimenti, setMovimenti] = useState<Movimento[]>([]);
+  const [dipendenti, setDipendenti] = useState<Utente[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<'7d' | '30d' | '90d' | 'anno'>('30d');
   // Periodo del report per collaboratore: giorno/settimana/mese/anno, come
   // in Cassa > Incassi officina, non i 7/30/90 giorni del resto della pagina.
   const [periodoCollab, setPeriodoCollab] = useState<Periodo>('mese');
-  // Collaboratore i cui lavori sono espansi (un solo elenco alla volta).
+  const [periodoSpese, setPeriodoSpese] = useState<Periodo>('mese');
+  // Collaboratore i cui lavori/spese sono espansi (un solo elenco alla volta per finestra).
   const [collabEspanso, setCollabEspanso] = useState<string | null>(null);
+  const [speseEspanse, setSpeseEspanse] = useState<string | null>(null);
 
   useEffect(() => {
     if (!officina) return;
     const fetch = async () => {
-      const [{ data: apps }, { data: prev }, { data: rec }, { data: mov }] = await Promise.all([
+      const [{ data: apps }, { data: prev }, { data: rec }, { data: mov }, { data: dip }] = await Promise.all([
         supabase
           .from('appuntamenti')
           .select('*')
@@ -57,11 +60,16 @@ export function AnalyticsPage() {
           .from('movimenti')
           .select('*')
           .eq('officina_id', officina.id),
+        supabase
+          .from('utenti')
+          .select('*')
+          .eq('officina_id', officina.id),
       ]);
       setAppuntamenti(apps || []);
       setPreventivi(prev || []);
       setRecensioni(rec || []);
       setMovimenti(mov || []);
+      setDipendenti(dip || []);
       setLoading(false);
     };
     fetch();
@@ -179,6 +187,45 @@ export function AnalyticsPage() {
       return { nome, incassi, spese, netto: incassi - spese, lavori: dettagli.length, dettagli };
     });
   }, [appuntamenti, movimenti, periodoCollab]);
+
+  // Spese per collaboratore: qui invece il contrario — solo le spese
+  // titolare/dipendente/acconti prese dalla cassa per lui, scelte dal
+  // menu a tendina (dipendente_id) o scritte nella descrizione/nota.
+  // Esclusi i movimenti Revisione Gianni/Centraline Daniele, che sono
+  // gia' contati (come lavorazione) nella finestra "Guadagno".
+  const spesePerCollaboratore = useMemo(() => {
+    const riferimento = new Date();
+    const movimentiInPeriodo = movimenti.filter(
+      (m) =>
+        m.tipo !== 'spesa_revisione_gianni' && m.tipo !== 'spesa_centraline_daniele' &&
+        inPeriodo(dataMovimento(m), periodoSpese, riferimento)
+    );
+
+    return COLLABORATORI.map((nome) => {
+      let spese = 0;
+      const dettagli: { id: string; data: Date; label: string; sub: string; spesa: number }[] = [];
+
+      movimentiInPeriodo.forEach((m) => {
+        const dipendente = m.dipendente_id ? dipendenti.find((d) => d.id === m.dipendente_id) : null;
+        const perDipendente = !!dipendente && menziona(dipendente.nome, nome);
+        const perTestoLibero = menziona(m.descrizione, nome) || menziona(m.note, nome);
+        if (!perDipendente && !perTestoLibero) return;
+        const spesa = spesaMovimento(m);
+        if (spesa <= 0) return;
+        spese += spesa;
+        dettagli.push({
+          id: `spesa-${m.id}`,
+          data: dataMovimento(m),
+          label: m.descrizione || m.tipo.replace(/_/g, ' '),
+          sub: m.tipo.replace(/_/g, ' '),
+          spesa,
+        });
+      });
+
+      dettagli.sort((x, y) => y.data.getTime() - x.data.getTime());
+      return { nome, spese, voci: dettagli.length, dettagli };
+    });
+  }, [movimenti, dipendenti, periodoSpese]);
 
   const exportCSV = () => {
     const days = periodo === '7d' ? 7 : periodo === '30d' ? 30 : periodo === '90d' ? 90 : 365;
@@ -353,6 +400,71 @@ export function AnalyticsPage() {
         </div>
         <div className="text-[10px] text-gray-400 mt-2">
           Solo lavorazioni: campo "operaio" della consegna auto e movimenti Revisione Gianni/Centraline Daniele — non spese titolare/dipendente. Clicca su un nome per vedere i lavori.
+        </div>
+      </Card>
+
+      {/* Spese per collaboratore */}
+      <Card className="!p-4">
+        <h3 className="text-xs font-semibold text-gray-500 mb-3">SPESE PER COLLABORATORE</h3>
+        <div className="grid grid-cols-4 gap-1.5 mb-3">
+          {PERIODI.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setPeriodoSpese(p.id)}
+              className={`py-2 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                periodoSpese === p.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-2">
+          {spesePerCollaboratore.map((c) => {
+            const espanso = speseEspanse === c.nome;
+            return (
+              <div key={c.nome} className="rounded-xl border border-gray-100 bg-gray-50/50 overflow-hidden">
+                <button
+                  onClick={() => setSpeseEspanse(espanso ? null : c.nome)}
+                  className="w-full text-left p-2.5 cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-800">
+                      {c.nome} <span className="text-gray-400 text-xs">{espanso ? '▲' : '▼'}</span>
+                    </span>
+                    <span className="text-sm font-bold text-red-600">
+                      {fmtEuro(c.spese)}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">
+                    {c.voci} voc{c.voci === 1 ? 'e' : 'i'}
+                  </div>
+                </button>
+                {espanso && (
+                  <div className="border-t border-gray-200 divide-y divide-gray-100 bg-white">
+                    {c.dettagli.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-gray-400">Nessuna spesa in questo periodo</div>
+                    ) : (
+                      c.dettagli.map((d) => (
+                        <div key={d.id} className="p-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-gray-800 truncate">{d.label}</span>
+                            <span className="text-xs font-bold text-red-600 shrink-0">− {fmtEuro(d.spesa)}</span>
+                          </div>
+                          <div className="text-[10px] text-gray-400 mt-0.5 truncate">
+                            {d.sub} · {d.data.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="text-[10px] text-gray-400 mt-2">
+          Spese titolare/dipendente/acconti prese dalla cassa per lui, scelte dal menu a tendina o scritte nella descrizione/nota. Clicca su un nome per vedere le voci.
         </div>
       </Card>
 
