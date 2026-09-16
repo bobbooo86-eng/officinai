@@ -243,6 +243,7 @@ function ModalPagamento({ onConferma, onAnnulla }: {
   const [statoPag, setStatoPag] = useState<PagamentoStato>('pagato');
   const [importoPagato, setImportoPagato] = useState('');
   const [importoTotale, setImportoTotale] = useState('');
+  const [costoRicambi, setCostoRicambi] = useState('');
   const [note, setNote] = useState('');
 
   const conferma = () => {
@@ -250,6 +251,7 @@ function ModalPagamento({ onConferma, onAnnulla }: {
       stato: statoPag,
       importo_pagato: importoPagato ? parseFloat(importoPagato) : undefined,
       importo_totale: importoTotale ? parseFloat(importoTotale) : undefined,
+      costo_ricambi: costoRicambi ? parseFloat(costoRicambi) : undefined,
       data_consegna: new Date().toISOString(),
       note: note.trim() || undefined,
     });
@@ -320,6 +322,16 @@ function ModalPagamento({ onConferma, onAnnulla }: {
                 />
               </div>
             )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Costo ricambi (€, opzionale)</label>
+            <input
+              type="number"
+              value={costoRicambi}
+              onChange={(e) => setCostoRicambi(e.target.value)}
+              placeholder="es. 80"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
           {statoPag !== 'pagato' && (
             <div>
