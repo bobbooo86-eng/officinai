@@ -5,8 +5,8 @@ import { fmtEuro, dayKey } from '@/lib/format';
 import { STATO_CONFIG } from '@/lib/constants';
 import { useAuthStore } from '@/stores/authStore';
 import { dataIncasso, inPeriodo, valoreLavoro, PERIODI, type Periodo } from '@/features/cassa/IncassiOfficina';
-import { incassoMovimento, spesaMovimento, TIPI_CON_SPESE_LAVORAZIONE } from '@/features/cassa/movimentiTotali';
-import type { Appuntamento, Preventivo, Recensione, Movimento, Utente } from '@/types/database';
+import { incassoMovimento, spesaMovimento } from '@/features/cassa/movimentiTotali';
+import type { Appuntamento, Preventivo, Recensione, Movimento } from '@/types/database';
 
 // Nomi da cercare ovunque compaiano — nel campo "operaio" della consegna,
 // nella descrizione/nota di un movimento, o gia' attribuiti dal tipo
@@ -25,7 +25,6 @@ export function AnalyticsPage() {
   const [preventivi, setPreventivi] = useState<Preventivo[]>([]);
   const [recensioni, setRecensioni] = useState<Recensione[]>([]);
   const [movimenti, setMovimenti] = useState<Movimento[]>([]);
-  const [dipendenti, setDipendenti] = useState<Utente[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<'7d' | '30d' | '90d' | 'anno'>('30d');
   // Periodo del report per collaboratore: giorno/settimana/mese/anno, come
@@ -37,7 +36,7 @@ export function AnalyticsPage() {
   useEffect(() => {
     if (!officina) return;
     const fetch = async () => {
-      const [{ data: apps }, { data: prev }, { data: rec }, { data: mov }, { data: dip }] = await Promise.all([
+      const [{ data: apps }, { data: prev }, { data: rec }, { data: mov }] = await Promise.all([
         supabase
           .from('appuntamenti')
           .select('*')
@@ -58,16 +57,11 @@ export function AnalyticsPage() {
           .from('movimenti')
           .select('*')
           .eq('officina_id', officina.id),
-        supabase
-          .from('utenti')
-          .select('*')
-          .eq('officina_id', officina.id),
       ]);
       setAppuntamenti(apps || []);
       setPreventivi(prev || []);
       setRecensioni(rec || []);
       setMovimenti(mov || []);
-      setDipendenti(dip || []);
       setLoading(false);
     };
     fetch();
@@ -128,11 +122,12 @@ export function AnalyticsPage() {
     };
   }, [appuntamenti, preventivi, periodo]);
 
-  // Guadagno per collaboratore: cerca il nome ovunque compaia — nel campo
-  // "operaio" della consegna auto, nella descrizione/nota di un movimento,
-  // oppure attribuito direttamente dal tipo di movimento (Revisione
-  // Gianni, Centraline Daniele). Stesso criterio "valore lavoro - ricambi"
-  // di Incassi officina, cosi' i numeri non si contraddicono fra le pagine.
+  // Guadagno per collaboratore: solo lavorazioni vere e proprie svolte da
+  // quella persona (consegne auto dove e' "operaio", voci Revisione
+  // Gianni/Centraline Daniele) — non spese titolare/dipendente/acconti,
+  // che non sono un lavoro prodotto da lui/lei. Stesso criterio "valore
+  // lavoro - ricambi" di Incassi officina, cosi' i numeri non si
+  // contraddicono fra le pagine.
   const collaboratori = useMemo(() => {
     const riferimento = new Date();
     const consegnati = appuntamenti.filter(
@@ -151,11 +146,12 @@ export function AnalyticsPage() {
         const spesa = a.pagamento?.costo_ricambi || 0;
         incassi += incasso;
         spese += spesa;
+        const veicolo = [a.veicoli?.marca, a.veicoli?.modello].filter(Boolean).join(' ');
         dettagli.push({
           id: `app-${a.id}`,
           data: dataIncasso(a),
-          label: `${a.clienti?.nome || 'Cliente'} — consegna auto`,
-          sub: [a.veicoli?.marca, a.veicoli?.modello, a.veicoli?.targa].filter(Boolean).join(' '),
+          label: (veicolo || 'Veicolo') + (a.veicoli?.targa ? ` — ${a.veicoli.targa}` : ''),
+          sub: [a.problema, a.clienti?.nome].filter(Boolean).join(' · '),
           incasso,
           spesa,
         });
@@ -164,15 +160,7 @@ export function AnalyticsPage() {
       movimentiInPeriodo.forEach((m) => {
         const perGianni = nome === 'Gianni' && m.tipo === 'spesa_revisione_gianni';
         const perDaniele = nome === 'Daniele' && m.tipo === 'spesa_centraline_daniele';
-        // Un acconto o una spesa dipendente/titolare presa dalla cassa per
-        // questa persona, scelta dal menu a tendina: il nome non e' sempre
-        // scritto nella descrizione, ma il movimento e' collegato al suo
-        // utente tramite dipendente_id.
-        const dipendente = m.dipendente_id ? dipendenti.find((d) => d.id === m.dipendente_id) : null;
-        const perDipendente = !!dipendente && menziona(dipendente.nome, nome);
-        const perTestoLibero = !TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo) &&
-          (menziona(m.descrizione, nome) || menziona(m.note, nome));
-        if (!perGianni && !perDaniele && !perDipendente && !perTestoLibero) return;
+        if (!perGianni && !perDaniele) return;
         const incasso = incassoMovimento(m);
         const spesa = spesaMovimento(m);
         incassi += incasso;
@@ -180,8 +168,8 @@ export function AnalyticsPage() {
         dettagli.push({
           id: `mov-${m.id}`,
           data: dataMovimento(m),
-          label: m.descrizione || m.tipo.replace(/_/g, ' '),
-          sub: m.tipo.replace(/_/g, ' '),
+          label: m.descrizione || (perGianni ? 'Revisione Gianni' : 'Centraline Daniele'),
+          sub: perGianni ? 'Revisione Gianni' : 'Centraline Daniele',
           incasso,
           spesa,
         });
@@ -190,7 +178,7 @@ export function AnalyticsPage() {
       dettagli.sort((x, y) => y.data.getTime() - x.data.getTime());
       return { nome, incassi, spese, netto: incassi - spese, lavori: dettagli.length, dettagli };
     });
-  }, [appuntamenti, movimenti, dipendenti, periodoCollab]);
+  }, [appuntamenti, movimenti, periodoCollab]);
 
   const exportCSV = () => {
     const days = periodo === '7d' ? 7 : periodo === '30d' ? 30 : periodo === '90d' ? 90 : 365;
@@ -364,7 +352,7 @@ export function AnalyticsPage() {
           })}
         </div>
         <div className="text-[10px] text-gray-400 mt-2">
-          Cerca il nome nel campo "operaio" della consegna auto, nella descrizione/nota dei movimenti, nel dipendente/titolare selezionato e nei tipi Revisione Gianni/Centraline Daniele. Clicca su un nome per vedere i lavori.
+          Solo lavorazioni: campo "operaio" della consegna auto e movimenti Revisione Gianni/Centraline Daniele — non spese titolare/dipendente. Clicca su un nome per vedere i lavori.
         </div>
       </Card>
 
