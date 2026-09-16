@@ -201,6 +201,9 @@ export function AppOfficina() {
             setActiveTab('altro');
             setSubPage('guida');
           }}
+          onNavigateToCassa={() => {
+            setActiveTab('cassa');
+          }}
         />
       )}
       {activeTab === 'agenda' && (

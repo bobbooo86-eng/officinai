@@ -15,9 +15,10 @@ interface DashboardProps {
   onNavigateToAgenda?: (filtro?: string) => void;
   onNavigateToPreventivi?: () => void;
   onNavigateToGuida?: () => void;
+  onNavigateToCassa?: () => void;
 }
 
-export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigateToPreventivi, onNavigateToGuida }: DashboardProps) {
+export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigateToPreventivi, onNavigateToGuida, onNavigateToCassa }: DashboardProps) {
   const { officina } = useAuthStore();
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [alertMagazzino, setAlertMagazzino] = useState<Magazzino[]>([]);
@@ -253,23 +254,27 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
           ))}
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <Card className="!p-3 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 !border-emerald-200 dark:!border-emerald-700">
-            <div className="text-[10px] text-emerald-600 font-semibold mb-1">💶 Incassi officina</div>
-            <div className="text-lg font-black text-emerald-700 tabular-nums leading-tight">
-              {incassiPeriodo > 0
-                ? `€${incassiPeriodo.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`
-                : '—'}
-            </div>
-          </Card>
+          <button onClick={onNavigateToCassa} className="text-left cursor-pointer">
+            <Card hover className="!p-3 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 !border-emerald-200 dark:!border-emerald-700">
+              <div className="text-[10px] text-emerald-600 font-semibold mb-1">💶 Incassi officina</div>
+              <div className="text-lg font-black text-emerald-700 tabular-nums leading-tight">
+                {incassiPeriodo > 0
+                  ? `€${incassiPeriodo.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`
+                  : '—'}
+              </div>
+            </Card>
+          </button>
 
-          <Card className="!p-3 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 !border-red-200 dark:!border-red-700">
-            <div className="text-[10px] text-red-600 font-semibold mb-1">🧾 Spese officina</div>
-            <div className="text-lg font-black text-red-700 tabular-nums leading-tight">
-              {spesePeriodo > 0
-                ? `€${spesePeriodo.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`
-                : '—'}
-            </div>
-          </Card>
+          <button onClick={onNavigateToCassa} className="text-left cursor-pointer">
+            <Card hover className="!p-3 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 !border-red-200 dark:!border-red-700">
+              <div className="text-[10px] text-red-600 font-semibold mb-1">🧾 Spese officina</div>
+              <div className="text-lg font-black text-red-700 tabular-nums leading-tight">
+                {spesePeriodo > 0
+                  ? `€${spesePeriodo.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`
+                  : '—'}
+              </div>
+            </Card>
+          </button>
         </div>
       </div>
 
