@@ -85,7 +85,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
         leggiPromemoriaNascosti(officina.id),
         supabase
           .from('movimenti')
-          .select('tipo, importo, data')
+          .select('tipo, importo, spese_lavorazione, data')
           .eq('officina_id', officina.id),
       ]);
 
