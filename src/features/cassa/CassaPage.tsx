@@ -494,6 +494,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     [monthTutti]
   );
   const saldo = totalIncassi - totalSpese;
+  const totalDaIncassare = useMemo(
+    () => incassiAutoTotaliInRange.reduce((a, app) => a + restoDaIncassare(app), 0),
+    [incassiAutoTotaliInRange]
+  );
 
   // Raggruppa per giorno, movimenti manuali e incassi auto insieme.
   const byDay = useMemo(() => {
@@ -773,7 +777,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center">
             <div className="text-[10px] text-emerald-700 font-semibold">Incassi</div>
             <div className="text-sm font-bold text-emerald-900">{fmtEuro(totalIncassi)}</div>
@@ -789,6 +793,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
             <div className={`text-sm font-bold ${saldo >= 0 ? 'text-blue-900' : 'text-orange-900'}`}>
               {fmtEuro(saldo)}
             </div>
+          </div>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-center">
+            <div className="text-[10px] text-amber-700 font-semibold">Da incassare</div>
+            <div className="text-sm font-bold text-amber-900">{fmtEuro(totalDaIncassare)}</div>
           </div>
         </div>
       </Card>
