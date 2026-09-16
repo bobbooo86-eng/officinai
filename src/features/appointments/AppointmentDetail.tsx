@@ -42,6 +42,12 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
   const [editOraApp, setEditOraApp] = useState('');
   const [savingData, setSavingData] = useState(false);
   const [erroreData, setErroreData] = useState('');
+  // Modifica della descrizione del problema/lavoro.
+  const [editingProblema, setEditingProblema] = useState(false);
+  const [editProblema, setEditProblema] = useState('');
+  const [savingProblema, setSavingProblema] = useState(false);
+  const [erroreProblema, setErroreProblema] = useState('');
+  const [eliminando, setEliminando] = useState(false);
 
   // Realtime updates
   useEffect(() => {
@@ -103,6 +109,36 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
     setEditingData(false);
   };
 
+  const apriModificaProblema = () => {
+    setEditProblema(app.problema || '');
+    setErroreProblema('');
+    setEditingProblema(true);
+  };
+
+  const salvaProblema = async () => {
+    if (!editProblema.trim()) { setErroreProblema('Inserisci una descrizione'); return; }
+    setSavingProblema(true);
+    setErroreProblema('');
+    const nuovoProblema = editProblema.trim();
+    const { error } = await supabase.from('appuntamenti').update({ problema: nuovoProblema }).eq('id', app.id);
+    setSavingProblema(false);
+    if (error) { setErroreProblema('Non salvato: ' + error.message); return; }
+    setApp((prev) => ({ ...prev, problema: nuovoProblema }));
+    setEditingProblema(false);
+  };
+
+  // Elimina davvero la riga (non solo "Annullato"): preventivi/fatture/foto/
+  // messaggi/foglio lavoro/recensioni collegati sono ON DELETE CASCADE
+  // (migrazione 025), quindi la cancellazione e' pulita.
+  const eliminaAppuntamento = async () => {
+    if (!confirm('Eliminare definitivamente questo appuntamento? Preventivo, fattura, foto e chat collegati verranno eliminati insieme. Non e\' recuperabile.')) return;
+    setEliminando(true);
+    const { error } = await supabase.from('appuntamenti').delete().eq('id', app.id);
+    setEliminando(false);
+    if (error) { alert('Eliminazione non riuscita: ' + error.message); return; }
+    onBack();
+  };
+
   const tabs: { id: Tab; label: string; icon: string; disabled?: boolean }[] = [
     { id: 'accettazione', label: 'Accettaz.', icon: '📝', disabled: !autoInOfficina },
     { id: 'stato', label: 'Stato', icon: '📋' },
@@ -161,6 +197,14 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
         <Badge color={STATO_CONFIG[app.stato].color} bg={STATO_CONFIG[app.stato].bg}>
           {STATO_CONFIG[app.stato].icon} {STATO_CONFIG[app.stato].label}
         </Badge>
+        <button
+          onClick={eliminaAppuntamento}
+          disabled={eliminando}
+          className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 cursor-pointer disabled:opacity-50 shrink-0"
+          title="Elimina definitivamente l'appuntamento"
+        >
+          🗑️
+        </button>
       </div>
 
       {/* Data e ora appuntamento — modificabile subito, senza passare dalla controproposta al cliente */}
@@ -224,12 +268,54 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
 
       {/* Problem */}
       <Card className="!p-3">
-        <div className="text-xs text-gray-400 mb-0.5">Problema</div>
-        <div className="text-sm text-gray-700">{app.problema}</div>
-        {app.codici_obd && (
-          <div className="mt-1">
-            <span className="text-[10px] text-gray-400">OBD: </span>
-            <span className="text-xs font-mono text-red-600">{app.codici_obd}</span>
+        {!editingProblema ? (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-gray-400 mb-0.5">Problema</div>
+              <button
+                onClick={apriModificaProblema}
+                className="text-gray-400 hover:text-blue-600 cursor-pointer text-xs px-1 shrink-0"
+                title="Modifica descrizione"
+              >
+                ✏️
+              </button>
+            </div>
+            <div className="text-sm text-gray-700">{app.problema}</div>
+            {app.codici_obd && (
+              <div className="mt-1">
+                <span className="text-[10px] text-gray-400">OBD: </span>
+                <span className="text-xs font-mono text-red-600">{app.codici_obd}</span>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-start gap-2">
+              <textarea
+                value={editProblema}
+                onChange={(e) => setEditProblema(e.target.value)}
+                rows={3}
+                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <VoiceButton onResult={setEditProblema} />
+            </div>
+            {erroreProblema && <div className="text-xs text-red-600">{erroreProblema}</div>}
+            <div className="flex gap-2">
+              <button
+                onClick={salvaProblema}
+                disabled={savingProblema}
+                className="flex-1 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors"
+              >
+                {savingProblema ? 'Salvataggio...' : 'Salva'}
+              </button>
+              <button
+                onClick={() => setEditingProblema(false)}
+                disabled={savingProblema}
+                className="px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
+              >
+                Annulla
+              </button>
+            </div>
           </div>
         )}
       </Card>

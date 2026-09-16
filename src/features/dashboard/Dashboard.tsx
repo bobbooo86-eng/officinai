@@ -204,13 +204,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
     appuntamenti
       .filter((a) => a.stato === 'consegnato' && a.pagamento && inPeriodo(dataIncasso(a), periodo, riferimento))
       .reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
-  // Incassi totali "da sempre": stesso criterio, ma senza filtro periodo.
-  const incassiTotali =
-    appuntamenti
-      .filter((a) => a.stato === 'consegnato' && a.pagamento)
-      .reduce((s, a) => s + incassato(a), 0) +
-    movimenti.reduce((s, m) => s + incassoMovimento(m), 0);
-
   // Nasconde solo dalla Home: il credito resta sull'appuntamento, ancora
   // modificabile da Cassa > Incassi officina o dallo storico del veicolo.
   const nascondiCredito = async (a: Appuntamento, e: React.MouseEvent) => {
@@ -250,15 +243,6 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
           </p>
         </div>
       </div>
-
-      <button onClick={onNavigateToCassa} className="text-left cursor-pointer w-full animate-fade-in">
-        <Card hover className="!p-3 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 !border-blue-200 dark:!border-blue-700 flex items-center justify-between">
-          <div className="text-[10px] text-blue-600 font-semibold">💰 Incassi totali (da sempre)</div>
-          <div className="text-lg font-black text-blue-700 tabular-nums leading-tight">
-            €{incassiTotali.toLocaleString('it-IT', { maximumFractionDigits: 0 })}
-          </div>
-        </Card>
-      </button>
 
       <div className="animate-fade-in">
         <div className="grid grid-cols-4 gap-1.5 mb-2">
