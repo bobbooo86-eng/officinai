@@ -11,7 +11,7 @@ import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncass
 import { SEGNO, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento } from './movimentiTotali';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente, Appuntamento } from '@/types/database';
 
-type CassaTab = 'tutti' | 'incasso_extra' | 'spesa_officina' | 'spesa_titolare' | 'dipendenti';
+type CassaTab = 'tutti' | 'incasso_extra' | 'spesa_officina' | 'spesa_titolare' | 'dipendenti' | 'spesa_revisione_gianni' | 'spesa_centraline_daniele';
 
 interface TipoConfig {
   id: MovimentoTipo;
@@ -824,6 +824,8 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
           { id: 'spesa_officina', label: 'Officina', icon: '🧾' },
           { id: 'spesa_titolare', label: 'Titolare', icon: '👔' },
           { id: 'dipendenti', label: 'Dipendenti', icon: '👷' },
+          { id: 'spesa_revisione_gianni', label: 'Revisione Gianni', icon: '🔧' },
+          { id: 'spesa_centraline_daniele', label: 'Centraline Daniele', icon: '💻' },
         ] as { id: CassaTab; label: string; icon: string }[]).map((t) => (
           <button
             key={t.id}
