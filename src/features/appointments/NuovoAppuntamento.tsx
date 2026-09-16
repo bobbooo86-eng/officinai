@@ -256,6 +256,7 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
               <button onClick={() => setShowNewCliente(false)} className="text-xs text-blue-600 cursor-pointer">Cerca esistente</button>
             </div>
             <input type="text" value={newClienteNome} onChange={(e) => setNewClienteNome(e.target.value)} className={inputClass} placeholder="Nome e cognome *" autoFocus />
+            <input type="tel" value={newClienteTel} onChange={(e) => setNewClienteTel(e.target.value)} className={inputClass} placeholder="Telefono" />
             {!mostraAltriDettagliCliente ? (
               <button
                 type="button"
@@ -266,10 +267,7 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
               </button>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="tel" value={newClienteTel} onChange={(e) => setNewClienteTel(e.target.value)} className={inputClass} placeholder="Telefono" />
-                  <input type="email" value={newClienteEmail} onChange={(e) => setNewClienteEmail(e.target.value)} className={inputClass} placeholder="Email" />
-                </div>
+                <input type="email" value={newClienteEmail} onChange={(e) => setNewClienteEmail(e.target.value)} className={inputClass} placeholder="Email" />
                 <div className="grid grid-cols-2 gap-2">
                   <input type="text" value={newClienteCF} onChange={(e) => setNewClienteCF(e.target.value.toUpperCase())} className={inputClass} placeholder="Codice Fiscale" />
                   <input type="text" value={newClienteIndirizzo} onChange={(e) => setNewClienteIndirizzo(e.target.value)} className={inputClass} placeholder="Indirizzo" />
