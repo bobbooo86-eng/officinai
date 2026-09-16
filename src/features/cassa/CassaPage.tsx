@@ -7,7 +7,7 @@ import {
 } from '@/lib/cassaLocale';
 import { useAuthStore } from '@/stores/authStore';
 import { VoiceButton } from '@/components/VoiceInput';
-import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
+import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncassare, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
 import { SEGNO, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento } from './movimentiTotali';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente, Appuntamento } from '@/types/database';
 
@@ -845,7 +845,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                   </div>
                 </div>
                 <Card className="!p-2 divide-y divide-gray-100">
-                  {items.auto.map((app) => (
+                  {items.auto.map((app) => {
+                    const resto = restoDaIncassare(app);
+                    const ricambi = app.pagamento?.costo_ricambi || 0;
+                    return (
                     <div key={`auto-${app.id}`} className="flex items-center gap-3 py-2 px-1 group">
                       <div className="w-9 h-9 rounded-lg flex items-center justify-center text-base bg-sky-100">
                         🚗
@@ -859,12 +862,19 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                           {app.veicoli?.targa && ` · ${app.veicoli.targa}`}
                           {app.pagamento?.stato === 'acconto' && ' · acconto'}
                         </div>
+                        {ricambi > 0 && (
+                          <div className="text-[11px] text-red-500 truncate">− Costo ricambi: {fmtEuro(ricambi)}</div>
+                        )}
+                        {resto > 0 && (
+                          <div className="text-[11px] text-amber-600 truncate">Ancora da incassare: {fmtEuro(resto)}</div>
+                        )}
                       </div>
                       <div className="text-sm font-bold text-emerald-600">
                         +{fmtEuro(incassatoAuto(app))}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   {items.movimenti.map((m) => {
                     const cfg = findTipo(m.tipo);
                     const dip = m.dipendente_id ? dipendenti.find((d) => d.id === m.dipendente_id) : null;

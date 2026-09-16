@@ -53,6 +53,25 @@ export function incassato(a: Appuntamento): number {
   return 0;
 }
 
+/** Valore del lavoro fatturato al cliente, incassato o no: il guadagno
+ * netto (valore - costo ricambi) e' il margine del lavoro svolto, non
+ * cambia se il cliente ha gia' pagato o no — quello lo dice "Ancora da
+ * incassare", che resta calcolato separatamente. */
+function valoreLavoro(a: Appuntamento): number {
+  return a.pagamento?.importo_totale || 0;
+}
+
+/** Quanto resta ancora da farsi pagare per questo veicolo (acconto non
+ * saldato o consegna non pagata): 0 se e' gia' tutto incassato.
+ * Esportata perche' Movimenti (CassaPage) la mostra sulla stessa riga. */
+export function restoDaIncassare(a: Appuntamento): number {
+  const p = a.pagamento;
+  if (!p) return 0;
+  if (p.stato === 'acconto') return Math.max(0, (p.importo_totale || 0) - (p.importo_pagato || 0));
+  if (p.stato === 'non_pagato') return p.importo_totale || 0;
+  return 0;
+}
+
 export const PERIODI: { id: Periodo; label: string }[] = [
   { id: 'giorno', label: 'Oggi' },
   { id: 'settimana', label: 'Settimana' },
@@ -124,14 +143,8 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
 
   const totaleIncassato = inRange.reduce((s, a) => s + incassato(a), 0);
   const totaleRicambi = inRange.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
-  const margineNetto = totaleIncassato - totaleRicambi;
-  const totaleResto = inRange.reduce((s, a) => {
-    const p = a.pagamento;
-    if (!p) return s;
-    if (p.stato === 'acconto') return s + Math.max(0, (p.importo_totale || 0) - (p.importo_pagato || 0));
-    if (p.stato === 'non_pagato') return s + (p.importo_totale || 0);
-    return s;
-  }, 0);
+  const margineNetto = inRange.reduce((s, a) => s + valoreLavoro(a), 0) - totaleRicambi;
+  const totaleResto = inRange.reduce((s, a) => s + restoDaIncassare(a), 0);
 
   const apriModifica = (a: Appuntamento) => {
     setEditingId(a.id);
@@ -256,7 +269,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                     <div className="text-sm font-bold text-gray-900">{fmtEuro(incassato(a))}</div>
                     {p.stato === 'acconto' && p.importo_totale != null && (
                       <div className="text-[10px] text-amber-600">
-                        Resto: {fmtEuro(Math.max(0, (p.importo_totale || 0) - (p.importo_pagato || 0)))}
+                        Resto: {fmtEuro(restoDaIncassare(a))}
                       </div>
                     )}
                   </div>
@@ -266,7 +279,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                   <span className="text-[11px] text-gray-500">
                     Costo ricambi: <span className="font-semibold text-gray-700">{fmtEuro(p.costo_ricambi || 0)}</span>
                     {(p.costo_ricambi || 0) > 0 && (
-                      <span className="text-gray-400"> · netto {fmtEuro(incassato(a) - (p.costo_ricambi || 0))}</span>
+                      <span className="text-gray-400"> · netto {fmtEuro(valoreLavoro(a) - (p.costo_ricambi || 0))}</span>
                     )}
                     {p.operaio && <span className="text-gray-400"> · 🔧 {p.operaio}</span>}
                   </span>
