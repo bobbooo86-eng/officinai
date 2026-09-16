@@ -7,7 +7,7 @@ import {
 } from '@/lib/cassaLocale';
 import { useAuthStore } from '@/stores/authStore';
 import { VoiceButton } from '@/components/VoiceInput';
-import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncassare, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
+import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncassare, usePagamentoEditor, PagamentoEditFields, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
 import { SEGNO, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento } from './movimentiTotali';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente, Appuntamento } from '@/types/database';
 
@@ -91,6 +91,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   // Incassi officina (pagamenti alla consegna auto) mostrati anche qui,
   // dentro il tab "Incassi": prima si vedevano solo nella sezione separata.
   const [incassiAuto, setIncassiAuto] = useState<Appuntamento[]>([]);
+  // Modifica acconto/totale/ricambi/operaio direttamente da qui, stesso
+  // pannello di Incassi officina: prima si poteva solo da quella sezione.
+  const editorAuto = usePagamentoEditor();
 
   // Nuovo movimento
   const [showForm, setShowForm] = useState(false);
@@ -848,30 +851,43 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                   {items.auto.map((app) => {
                     const resto = restoDaIncassare(app);
                     const ricambi = app.pagamento?.costo_ricambi || 0;
+                    const inEdit = editorAuto.editingId === app.id;
                     return (
-                    <div key={`auto-${app.id}`} className="flex items-center gap-3 py-2 px-1 group">
-                      <div className="w-9 h-9 rounded-lg flex items-center justify-center text-base bg-sky-100">
-                        🚗
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-gray-900 truncate">
-                          {app.clienti?.nome || 'Cliente'} — consegna auto
+                    <div key={`auto-${app.id}`} className="py-2 px-1 group">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center text-base bg-sky-100">
+                          🚗
                         </div>
-                        <div className="text-[11px] text-gray-500 truncate">
-                          Incasso officina
-                          {app.veicoli?.targa && ` · ${app.veicoli.targa}`}
-                          {app.pagamento?.stato === 'acconto' && ' · acconto'}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-gray-900 truncate">
+                            {app.clienti?.nome || 'Cliente'} — consegna auto
+                          </div>
+                          <div className="text-[11px] text-gray-500 truncate">
+                            Incasso officina
+                            {app.veicoli?.targa && ` · ${app.veicoli.targa}`}
+                            {app.pagamento?.stato === 'acconto' && ' · acconto'}
+                          </div>
+                          {ricambi > 0 && (
+                            <div className="text-[11px] text-red-500 truncate">− Costo ricambi: {fmtEuro(ricambi)}</div>
+                          )}
+                          {resto > 0 && (
+                            <div className="text-[11px] text-amber-600 truncate">Ancora da incassare: {fmtEuro(resto)}</div>
+                          )}
                         </div>
-                        {ricambi > 0 && (
-                          <div className="text-[11px] text-red-500 truncate">− Costo ricambi: {fmtEuro(ricambi)}</div>
-                        )}
-                        {resto > 0 && (
-                          <div className="text-[11px] text-amber-600 truncate">Ancora da incassare: {fmtEuro(resto)}</div>
+                        <div className="text-sm font-bold text-emerald-600">
+                          +{fmtEuro(incassatoAuto(app))}
+                        </div>
+                        {!inEdit && (
+                          <button
+                            onClick={() => editorAuto.apri(app)}
+                            className="text-gray-400 hover:text-emerald-600 cursor-pointer text-xs px-1"
+                            title="Modifica acconto e costo ricambi"
+                          >
+                            ✏️
+                          </button>
                         )}
                       </div>
-                      <div className="text-sm font-bold text-emerald-600">
-                        +{fmtEuro(incassatoAuto(app))}
-                      </div>
+                      {inEdit && <PagamentoEditFields editor={editorAuto} appuntamento={app} />}
                     </div>
                     );
                   })}

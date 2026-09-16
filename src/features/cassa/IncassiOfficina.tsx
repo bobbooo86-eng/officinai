@@ -3,6 +3,133 @@ import { Card } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import type { Appuntamento } from '@/types/database';
 
+/** Stato e azioni per modificare acconto/totale/costo ricambi/operaio di un
+ * appuntamento consegnato. Estratto qui (invece che dentro IncassiOfficina)
+ * cosi' anche Movimenti (CassaPage), che mostra le stesse consegne nella
+ * lista "Tutti", puo' modificarle senza dover passare dalla sezione
+ * separata "Incassi officina". */
+export function usePagamentoEditor(onSalvato?: (id: string) => void) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editPagato, setEditPagato] = useState('');
+  const [editTotale, setEditTotale] = useState('');
+  const [editRicambi, setEditRicambi] = useState('');
+  const [editOperaio, setEditOperaio] = useState('');
+  const [salvando, setSalvando] = useState<string | null>(null);
+
+  const apri = (a: Appuntamento) => {
+    setEditingId(a.id);
+    setEditPagato(String(a.pagamento?.importo_pagato ?? 0));
+    setEditTotale(String(a.pagamento?.importo_totale ?? 0));
+    setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
+    setEditOperaio(a.pagamento?.operaio || '');
+  };
+
+  const annulla = () => setEditingId(null);
+
+  // Un acconto puo' crescere nel tempo (il cliente paga altro dopo la
+  // consegna): incassato finora, totale da pagare, costo ricambi e nome
+  // dell'operaio si modificano tutti insieme da qui. Se l'incassato
+  // raggiunge il totale, il pagamento passa da solo a "pagato".
+  const salva = async (a: Appuntamento) => {
+    if (!a.pagamento) return;
+    const nuovoPagato = parseFloat(editPagato) || 0;
+    const nuovoTotale = parseFloat(editTotale) || 0;
+    const nuovoRicambi = parseFloat(editRicambi) || 0;
+    const saldato = nuovoTotale > 0 && nuovoPagato >= nuovoTotale;
+    const nuovoPagamento = {
+      ...a.pagamento,
+      importo_pagato: nuovoPagato,
+      importo_totale: nuovoTotale,
+      costo_ricambi: nuovoRicambi,
+      operaio: editOperaio.trim() || undefined,
+      stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
+    };
+    setSalvando(a.id);
+    const { error } = await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
+    setSalvando(null);
+    if (error) { alert('Modifica non salvata: ' + error.message); return; }
+    setEditingId(null);
+    onSalvato?.(a.id);
+  };
+
+  return {
+    editingId, editPagato, setEditPagato, editTotale, setEditTotale,
+    editRicambi, setEditRicambi, editOperaio, setEditOperaio, salvando,
+    apri, annulla, salva,
+  };
+}
+export type PagamentoEditor = ReturnType<typeof usePagamentoEditor>;
+
+/** Campi del pannello di modifica (acconto/totale/ricambi/operaio), sempre
+ * gli stessi ovunque venga aperto: Incassi officina e Movimenti. */
+export function PagamentoEditFields({ editor, appuntamento }: { editor: PagamentoEditor; appuntamento: Appuntamento }) {
+  return (
+    <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400 block">Incassato finora €</label>
+          <input
+            type="number"
+            step="0.01"
+            min={0}
+            value={editor.editPagato}
+            onChange={(e) => editor.setEditPagato(e.target.value)}
+            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400 block">Totale da pagare €</label>
+          <input
+            type="number"
+            step="0.01"
+            min={0}
+            value={editor.editTotale}
+            onChange={(e) => editor.setEditTotale(e.target.value)}
+            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400 block">Costo ricambi €</label>
+          <input
+            type="number"
+            step="0.01"
+            min={0}
+            value={editor.editRicambi}
+            onChange={(e) => editor.setEditRicambi(e.target.value)}
+            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="text-[10px] text-gray-400 block">Operaio che ha fatto il lavoro</label>
+        <input
+          type="text"
+          value={editor.editOperaio}
+          onChange={(e) => editor.setEditOperaio(e.target.value)}
+          placeholder="Nome operaio"
+          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => editor.salva(appuntamento)}
+          disabled={editor.salvando === appuntamento.id}
+          className="flex-1 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
+        >
+          {editor.salvando === appuntamento.id ? 'Salvataggio...' : 'Salva'}
+        </button>
+        <button
+          onClick={editor.annulla}
+          disabled={editor.salvando === appuntamento.id}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
+        >
+          Annulla
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const fmtEuro = (n: number) =>
   new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
 
@@ -84,15 +211,6 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<Periodo>('mese');
   const [search, setSearch] = useState('');
-  // Un solo pannello di modifica alla volta (acconto + costo ricambi
-  // insieme), dietro una matita: prima si poteva scrivere direttamente
-  // negli input, sempre visibili, che invitava a toccarli per sbaglio.
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editPagato, setEditPagato] = useState('');
-  const [editTotale, setEditTotale] = useState('');
-  const [editRicambi, setEditRicambi] = useState('');
-  const [editOperaio, setEditOperaio] = useState('');
-  const [salvandoPagamento, setSalvandoPagamento] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!officinaId) return;
@@ -146,39 +264,9 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   const margineNetto = inRange.reduce((s, a) => s + valoreLavoro(a), 0) - totaleRicambi;
   const totaleResto = inRange.reduce((s, a) => s + restoDaIncassare(a), 0);
 
-  const apriModifica = (a: Appuntamento) => {
-    setEditingId(a.id);
-    setEditPagato(String(a.pagamento?.importo_pagato ?? 0));
-    setEditTotale(String(a.pagamento?.importo_totale ?? 0));
-    setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
-    setEditOperaio(a.pagamento?.operaio || '');
-  };
-
-  // Un acconto puo' crescere nel tempo (il cliente paga altro dopo la
-  // consegna): incassato finora, totale da pagare, costo ricambi e nome
-  // dell'operaio si modificano tutti insieme da qui. Se l'incassato
-  // raggiunge il totale, il pagamento passa da solo a "pagato".
-  const salvaModifica = async (a: Appuntamento) => {
-    if (!a.pagamento) return;
-    const nuovoPagato = parseFloat(editPagato) || 0;
-    const nuovoTotale = parseFloat(editTotale) || 0;
-    const nuovoRicambi = parseFloat(editRicambi) || 0;
-    const saldato = nuovoTotale > 0 && nuovoPagato >= nuovoTotale;
-    const nuovoPagamento = {
-      ...a.pagamento,
-      importo_pagato: nuovoPagato,
-      importo_totale: nuovoTotale,
-      costo_ricambi: nuovoRicambi,
-      operaio: editOperaio.trim() || undefined,
-      stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
-    };
-    setSalvandoPagamento(a.id);
-    const { error } = await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
-    setSalvandoPagamento(null);
-    if (error) { alert('Modifica non salvata: ' + error.message); return; }
-    setAppuntamenti((prev) => prev.map((x) => (x.id === a.id ? { ...x, pagamento: nuovoPagamento } : x)));
-    setEditingId(null);
-  };
+  // La modifica salva su appuntamenti.pagamento: la sottoscrizione realtime
+  // sopra ricarica da sola la lista, non serve aggiornare lo stato a mano.
+  const editor = usePagamentoEditor();
 
   if (!officinaId) return null;
 
@@ -247,7 +335,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
               : p.stato === 'acconto'
               ? { label: 'Acconto', color: '#92400e', bg: '#fef3c7' }
               : { label: 'Non pagato', color: '#991b1b', bg: '#fee2e2' };
-            const inEdit = editingId === a.id;
+            const inEdit = editor.editingId === a.id;
             return (
               <Card key={a.id} className="!p-3">
                 <div className="flex items-start justify-between gap-2">
@@ -285,7 +373,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                   </span>
                   {!inEdit && (
                     <button
-                      onClick={() => apriModifica(a)}
+                      onClick={() => editor.apri(a)}
                       className="text-gray-400 hover:text-emerald-600 cursor-pointer shrink-0 px-1"
                       title="Modifica acconto e costo ricambi"
                     >
@@ -294,71 +382,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                   )}
                 </div>
 
-                {inEdit && (
-                  <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1">
-                        <label className="text-[10px] text-gray-400 block">Incassato finora €</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min={0}
-                          value={editPagato}
-                          onChange={(e) => setEditPagato(e.target.value)}
-                          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="text-[10px] text-gray-400 block">Totale da pagare €</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min={0}
-                          value={editTotale}
-                          onChange={(e) => setEditTotale(e.target.value)}
-                          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="text-[10px] text-gray-400 block">Costo ricambi €</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min={0}
-                          value={editRicambi}
-                          onChange={(e) => setEditRicambi(e.target.value)}
-                          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-gray-400 block">Operaio che ha fatto il lavoro</label>
-                      <input
-                        type="text"
-                        value={editOperaio}
-                        onChange={(e) => setEditOperaio(e.target.value)}
-                        placeholder="Nome operaio"
-                        className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => salvaModifica(a)}
-                        disabled={salvandoPagamento === a.id}
-                        className="flex-1 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
-                      >
-                        {salvandoPagamento === a.id ? 'Salvataggio...' : 'Salva'}
-                      </button>
-                      <button
-                        onClick={() => setEditingId(null)}
-                        disabled={salvandoPagamento === a.id}
-                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
-                      >
-                        Annulla
-                      </button>
-                    </div>
-                  </div>
-                )}
+                {inEdit && <PagamentoEditFields editor={editor} appuntamento={a} />}
               </Card>
             );
           })}
