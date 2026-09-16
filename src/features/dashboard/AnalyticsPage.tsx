@@ -6,7 +6,7 @@ import { STATO_CONFIG } from '@/lib/constants';
 import { useAuthStore } from '@/stores/authStore';
 import { dataIncasso, inPeriodo, valoreLavoro, PERIODI, type Periodo } from '@/features/cassa/IncassiOfficina';
 import { incassoMovimento, spesaMovimento, TIPI_CON_SPESE_LAVORAZIONE } from '@/features/cassa/movimentiTotali';
-import type { Appuntamento, Preventivo, Recensione, Movimento } from '@/types/database';
+import type { Appuntamento, Preventivo, Recensione, Movimento, Utente } from '@/types/database';
 
 // Nomi da cercare ovunque compaiano — nel campo "operaio" della consegna,
 // nella descrizione/nota di un movimento, o gia' attribuiti dal tipo
@@ -25,16 +25,19 @@ export function AnalyticsPage() {
   const [preventivi, setPreventivi] = useState<Preventivo[]>([]);
   const [recensioni, setRecensioni] = useState<Recensione[]>([]);
   const [movimenti, setMovimenti] = useState<Movimento[]>([]);
+  const [dipendenti, setDipendenti] = useState<Utente[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<'7d' | '30d' | '90d' | 'anno'>('30d');
   // Periodo del report per collaboratore: giorno/settimana/mese/anno, come
   // in Cassa > Incassi officina, non i 7/30/90 giorni del resto della pagina.
   const [periodoCollab, setPeriodoCollab] = useState<Periodo>('mese');
+  // Collaboratore i cui lavori sono espansi (un solo elenco alla volta).
+  const [collabEspanso, setCollabEspanso] = useState<string | null>(null);
 
   useEffect(() => {
     if (!officina) return;
     const fetch = async () => {
-      const [{ data: apps }, { data: prev }, { data: rec }, { data: mov }] = await Promise.all([
+      const [{ data: apps }, { data: prev }, { data: rec }, { data: mov }, { data: dip }] = await Promise.all([
         supabase
           .from('appuntamenti')
           .select('*')
@@ -55,11 +58,16 @@ export function AnalyticsPage() {
           .from('movimenti')
           .select('*')
           .eq('officina_id', officina.id),
+        supabase
+          .from('utenti')
+          .select('*')
+          .eq('officina_id', officina.id),
       ]);
       setAppuntamenti(apps || []);
       setPreventivi(prev || []);
       setRecensioni(rec || []);
       setMovimenti(mov || []);
+      setDipendenti(dip || []);
       setLoading(false);
     };
     fetch();
@@ -135,29 +143,54 @@ export function AnalyticsPage() {
     return COLLABORATORI.map((nome) => {
       let incassi = 0;
       let spese = 0;
-      let lavori = 0;
+      const dettagli: { id: string; data: Date; label: string; sub: string; incasso: number; spesa: number }[] = [];
 
       consegnati.forEach((a) => {
         if (!menziona(a.pagamento?.operaio, nome)) return;
-        incassi += valoreLavoro(a);
-        spese += a.pagamento?.costo_ricambi || 0;
-        lavori += 1;
+        const incasso = valoreLavoro(a);
+        const spesa = a.pagamento?.costo_ricambi || 0;
+        incassi += incasso;
+        spese += spesa;
+        dettagli.push({
+          id: `app-${a.id}`,
+          data: dataIncasso(a),
+          label: `${a.clienti?.nome || 'Cliente'} — consegna auto`,
+          sub: [a.veicoli?.marca, a.veicoli?.modello, a.veicoli?.targa].filter(Boolean).join(' '),
+          incasso,
+          spesa,
+        });
       });
 
       movimentiInPeriodo.forEach((m) => {
         const perGianni = nome === 'Gianni' && m.tipo === 'spesa_revisione_gianni';
         const perDaniele = nome === 'Daniele' && m.tipo === 'spesa_centraline_daniele';
+        // Un acconto o una spesa dipendente/titolare presa dalla cassa per
+        // questa persona, scelta dal menu a tendina: il nome non e' sempre
+        // scritto nella descrizione, ma il movimento e' collegato al suo
+        // utente tramite dipendente_id.
+        const dipendente = m.dipendente_id ? dipendenti.find((d) => d.id === m.dipendente_id) : null;
+        const perDipendente = !!dipendente && menziona(dipendente.nome, nome);
         const perTestoLibero = !TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo) &&
           (menziona(m.descrizione, nome) || menziona(m.note, nome));
-        if (!perGianni && !perDaniele && !perTestoLibero) return;
-        incassi += incassoMovimento(m);
-        spese += spesaMovimento(m);
-        lavori += 1;
+        if (!perGianni && !perDaniele && !perDipendente && !perTestoLibero) return;
+        const incasso = incassoMovimento(m);
+        const spesa = spesaMovimento(m);
+        incassi += incasso;
+        spese += spesa;
+        dettagli.push({
+          id: `mov-${m.id}`,
+          data: dataMovimento(m),
+          label: m.descrizione || m.tipo.replace(/_/g, ' '),
+          sub: m.tipo.replace(/_/g, ' '),
+          incasso,
+          spesa,
+        });
       });
 
-      return { nome, incassi, spese, netto: incassi - spese, lavori };
+      dettagli.sort((x, y) => y.data.getTime() - x.data.getTime());
+      return { nome, incassi, spese, netto: incassi - spese, lavori: dettagli.length, dettagli };
     });
-  }, [appuntamenti, movimenti, periodoCollab]);
+  }, [appuntamenti, movimenti, dipendenti, periodoCollab]);
 
   const exportCSV = () => {
     const days = periodo === '7d' ? 7 : periodo === '30d' ? 30 : periodo === '90d' ? 90 : 365;
@@ -285,23 +318,53 @@ export function AnalyticsPage() {
           ))}
         </div>
         <div className="space-y-2">
-          {collaboratori.map((c) => (
-            <div key={c.nome} className="p-2.5 rounded-xl border border-gray-100 bg-gray-50/50">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-gray-800">{c.nome}</span>
-                <span className={`text-sm font-bold ${c.netto >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {fmtEuro(c.netto)}
-                </span>
+          {collaboratori.map((c) => {
+            const espanso = collabEspanso === c.nome;
+            return (
+              <div key={c.nome} className="rounded-xl border border-gray-100 bg-gray-50/50 overflow-hidden">
+                <button
+                  onClick={() => setCollabEspanso(espanso ? null : c.nome)}
+                  className="w-full text-left p-2.5 cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-800">
+                      {c.nome} <span className="text-gray-400 text-xs">{espanso ? '▲' : '▼'}</span>
+                    </span>
+                    <span className={`text-sm font-bold ${c.netto >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {fmtEuro(c.netto)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-gray-400 mt-0.5">
+                    <span>{c.lavori} lavor{c.lavori === 1 ? 'o' : 'i'}</span>
+                    <span>Incassi {fmtEuro(c.incassi)} · Spese {fmtEuro(c.spese)}</span>
+                  </div>
+                </button>
+                {espanso && (
+                  <div className="border-t border-gray-200 divide-y divide-gray-100 bg-white">
+                    {c.dettagli.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-gray-400">Nessun lavoro in questo periodo</div>
+                    ) : (
+                      c.dettagli.map((d) => (
+                        <div key={d.id} className="p-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-gray-800 truncate">{d.label}</span>
+                            <span className="text-xs font-bold text-emerald-600 shrink-0">+{fmtEuro(d.incasso)}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-[10px] text-gray-400 mt-0.5">
+                            <span className="truncate">{d.sub} · {d.data.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                            {d.spesa > 0 && <span className="text-red-500 shrink-0">− {fmtEuro(d.spesa)}</span>}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center justify-between text-[10px] text-gray-400 mt-0.5">
-                <span>{c.lavori} lavor{c.lavori === 1 ? 'o' : 'i'}</span>
-                <span>Incassi {fmtEuro(c.incassi)} · Spese {fmtEuro(c.spese)}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="text-[10px] text-gray-400 mt-2">
-          Cerca il nome nel campo "operaio" della consegna auto, nella descrizione/nota dei movimenti e nei tipi Revisione Gianni/Centraline Daniele.
+          Cerca il nome nel campo "operaio" della consegna auto, nella descrizione/nota dei movimenti, nel dipendente/titolare selezionato e nei tipi Revisione Gianni/Centraline Daniele. Clicca su un nome per vedere i lavori.
         </div>
       </Card>
 
