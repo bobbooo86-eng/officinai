@@ -188,6 +188,7 @@ export function AppointmentList({ onSelect, initialFiltro, searchQuery = '' }: {
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5">
                       {app.veicoli?.marca} {app.veicoli?.modello} — {app.veicoli?.targa}
+                      {app.clienti?.tel && ` · 📞 ${app.clienti.tel}`}
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5 truncate">
                       {app.problema}

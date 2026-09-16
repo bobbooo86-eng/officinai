@@ -124,10 +124,18 @@ export function AppointmentDetail({ appuntamento, onBack }: Props) {
           <h2 className="font-bold text-gray-900">
             {app.clienti?.nome}
           </h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <p className="text-xs text-gray-500">
               {app.veicoli?.marca} {app.veicoli?.modello} — {app.veicoli?.targa}
             </p>
+            {app.clienti?.tel && (
+              <a
+                href={`tel:${app.clienti.tel}`}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
+              >
+                📞 {app.clienti.tel}
+              </a>
+            )}
             {app.veicoli && (
               <button
                 onClick={() => setShowStorico(true)}
