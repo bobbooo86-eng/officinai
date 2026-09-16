@@ -3,6 +3,16 @@ import { Card } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import type { Appuntamento } from '@/types/database';
 
+// Formato "YYYY-MM-DD" in ora locale per l'input date: con toISOString()
+// diretto la data mostrata potrebbe slittare di un giorno vicino alla
+// mezzanotte per il fuso orario.
+function dataInputValue(iso: string): string {
+  const d = new Date(iso);
+  const m = (d.getMonth() + 1).toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
 /** Stato e azioni per modificare acconto/totale/costo ricambi/operaio di un
  * appuntamento consegnato. Estratto qui (invece che dentro IncassiOfficina)
  * cosi' anche Movimenti (CassaPage), che mostra le stesse consegne nella
@@ -14,6 +24,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
   const [editTotale, setEditTotale] = useState('');
   const [editRicambi, setEditRicambi] = useState('');
   const [editOperaio, setEditOperaio] = useState('');
+  const [editData, setEditData] = useState('');
   const [salvando, setSalvando] = useState<string | null>(null);
 
   const apri = (a: Appuntamento) => {
@@ -22,6 +33,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
     setEditTotale(String(a.pagamento?.importo_totale ?? 0));
     setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
     setEditOperaio(a.pagamento?.operaio || '');
+    setEditData(dataInputValue(a.pagamento?.data_consegna || a.data_ora));
   };
 
   const annulla = () => setEditingId(null);
@@ -36,12 +48,16 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
     const nuovoTotale = parseFloat(editTotale) || 0;
     const nuovoRicambi = parseFloat(editRicambi) || 0;
     const saldato = nuovoTotale > 0 && nuovoPagato >= nuovoTotale;
+    // Mezzogiorno locale (non mezzanotte) per evitare che il fuso orario
+    // faccia slittare la data al giorno prima quando viene riletta.
+    const nuovaDataConsegna = editData ? new Date(editData + 'T12:00:00').toISOString() : a.pagamento.data_consegna;
     const nuovoPagamento = {
       ...a.pagamento,
       importo_pagato: nuovoPagato,
       importo_totale: nuovoTotale,
       costo_ricambi: nuovoRicambi,
       operaio: editOperaio.trim() || undefined,
+      data_consegna: nuovaDataConsegna,
       stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
     };
     setSalvando(a.id);
@@ -54,7 +70,8 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
 
   return {
     editingId, editPagato, setEditPagato, editTotale, setEditTotale,
-    editRicambi, setEditRicambi, editOperaio, setEditOperaio, salvando,
+    editRicambi, setEditRicambi, editOperaio, setEditOperaio,
+    editData, setEditData, salvando,
     apri, annulla, salva,
   };
 }
@@ -100,15 +117,26 @@ export function PagamentoEditFields({ editor, appuntamento }: { editor: Pagament
           />
         </div>
       </div>
-      <div>
-        <label className="text-[10px] text-gray-400 block">Operaio che ha fatto il lavoro</label>
-        <input
-          type="text"
-          value={editor.editOperaio}
-          onChange={(e) => editor.setEditOperaio(e.target.value)}
-          placeholder="Nome operaio"
-          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400 block">Operaio che ha fatto il lavoro</label>
+          <input
+            type="text"
+            value={editor.editOperaio}
+            onChange={(e) => editor.setEditOperaio(e.target.value)}
+            placeholder="Nome operaio"
+            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400 block">Data consegna</label>
+          <input
+            type="date"
+            value={editor.editData}
+            onChange={(e) => editor.setEditData(e.target.value)}
+            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
       </div>
       <div className="flex gap-2">
         <button
