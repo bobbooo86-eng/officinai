@@ -20,6 +20,7 @@ const SOURCES = [
   'supabase/migrations/024_promemoria_nascosti.sql',
   'supabase/migrations/025_clienti_cascade_eliminazione_definitiva.sql',
   'supabase/migrations/026_movimenti_spese_lavorazione.sql',
+  'supabase/migrations/027_movimenti_tipo_check.sql',
 ];
 const TARGET = 'src/lib/dbRepairSql.ts';
 
