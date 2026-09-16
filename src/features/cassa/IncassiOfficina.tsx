@@ -212,7 +212,7 @@ export function incassato(a: Appuntamento): number {
  * netto (valore - costo ricambi) e' il margine del lavoro svolto, non
  * cambia se il cliente ha gia' pagato o no — quello lo dice "Ancora da
  * incassare", che resta calcolato separatamente. */
-function valoreLavoro(a: Appuntamento): number {
+export function valoreLavoro(a: Appuntamento): number {
   return a.pagamento?.importo_totale || 0;
 }
 
