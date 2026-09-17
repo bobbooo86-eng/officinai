@@ -55,6 +55,14 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
   const [editModello, setEditModello] = useState('');
   const [savingVeicolo, setSavingVeicolo] = useState(false);
   const [erroreVeicolo, setErroreVeicolo] = useState('');
+  // Modifica rapida di nome/telefono del cliente, senza uscire dalla
+  // scheda appuntamento (per email/CF/indirizzo/scadenze/foto c'e' il
+  // pulsante "Modifica dati del proprietario" che porta alla sua scheda).
+  const [editingClienteRapido, setEditingClienteRapido] = useState(false);
+  const [editNomeCliente, setEditNomeCliente] = useState('');
+  const [editTelCliente, setEditTelCliente] = useState('');
+  const [savingClienteRapido, setSavingClienteRapido] = useState(false);
+  const [erroreClienteRapido, setErroreClienteRapido] = useState('');
 
   // Realtime updates
   useEffect(() => {
@@ -170,6 +178,26 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
     setEditingVeicolo(false);
   };
 
+  const apriModificaClienteRapida = () => {
+    setEditNomeCliente(app.clienti?.nome || '');
+    setEditTelCliente(app.clienti?.tel || '');
+    setErroreClienteRapido('');
+    setEditingClienteRapido(true);
+  };
+
+  const salvaClienteRapido = async () => {
+    if (!app.cliente_id) return;
+    if (!editNomeCliente.trim()) { setErroreClienteRapido('Il nome è obbligatorio'); return; }
+    setSavingClienteRapido(true);
+    setErroreClienteRapido('');
+    const dati = { nome: editNomeCliente.trim(), tel: editTelCliente.trim() };
+    const { error } = await supabase.from('clienti').update(dati).eq('id', app.cliente_id);
+    setSavingClienteRapido(false);
+    if (error) { setErroreClienteRapido('Non salvato: ' + error.message); return; }
+    setApp((prev) => ({ ...prev, clienti: prev.clienti ? { ...prev.clienti, ...dati } : prev.clienti }));
+    setEditingClienteRapido(false);
+  };
+
   const tabs: { id: Tab; label: string; icon: string; disabled?: boolean }[] = [
     { id: 'accettazione', label: 'Accettaz.', icon: '📝', disabled: !autoInOfficina },
     { id: 'stato', label: 'Stato', icon: '📋' },
@@ -198,6 +226,15 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
             <p className="text-xs text-gray-500">
               {app.veicoli?.marca} {app.veicoli?.modello} — {app.veicoli?.targa}
             </p>
+            {app.veicolo_id && (
+              <button
+                onClick={apriModificaVeicolo}
+                className="text-gray-400 hover:text-blue-600 cursor-pointer text-xs shrink-0"
+                title="Modifica targa/marca/modello"
+              >
+                ✏️
+              </button>
+            )}
             {app.clienti?.tel && (
               <a
                 href={`tel:${app.clienti.tel}`}
@@ -219,11 +256,11 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
         <Badge color={STATO_CONFIG[app.stato].color} bg={STATO_CONFIG[app.stato].bg}>
           {STATO_CONFIG[app.stato].icon} {STATO_CONFIG[app.stato].label}
         </Badge>
-        {app.veicolo_id && (
+        {app.cliente_id && (
           <button
-            onClick={apriModificaVeicolo}
+            onClick={apriModificaClienteRapida}
             className="p-2 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 cursor-pointer shrink-0"
-            title="Modifica targa/marca/modello"
+            title="Modifica nome e telefono del cliente"
           >
             ✏️
           </button>
@@ -237,6 +274,43 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
           🗑️
         </button>
       </div>
+
+      {/* Modifica rapida nome/telefono del cliente */}
+      {editingClienteRapido && (
+        <Card className="!p-3 space-y-2">
+          <input
+            type="text"
+            value={editNomeCliente}
+            onChange={(e) => setEditNomeCliente(e.target.value)}
+            placeholder="Nome e cognome"
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="tel"
+            value={editTelCliente}
+            onChange={(e) => setEditTelCliente(e.target.value)}
+            placeholder="Telefono"
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {erroreClienteRapido && <div className="text-xs text-red-600">{erroreClienteRapido}</div>}
+          <div className="flex gap-2">
+            <button
+              onClick={salvaClienteRapido}
+              disabled={savingClienteRapido}
+              className="flex-1 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors"
+            >
+              {savingClienteRapido ? 'Salvataggio...' : 'Salva'}
+            </button>
+            <button
+              onClick={() => setEditingClienteRapido(false)}
+              disabled={savingClienteRapido}
+              className="px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
+            >
+              Annulla
+            </button>
+          </div>
+        </Card>
+      )}
 
       {/* Modifica targa/marca/modello del veicolo */}
       {editingVeicolo && (
