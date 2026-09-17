@@ -5,7 +5,7 @@ import { fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { generaDatiVeicolo, lookupTargaEsterna, DB_AUTO, type DatiVeicolo } from '@/lib/targaLookup';
 import type { Veicolo, Cliente, Appuntamento } from '@/types/database';
-import { PDFExport, buildPreventivoHtml, extractLogoColor } from './PDFExport';
+import { PDFExport, buildPreventivoHtml, buildPreventivoPdfBlob, extractLogoColor } from './PDFExport';
 import { ShareDocument } from '@/components/ShareDocument';
 import { VoiceButton } from '@/components/VoiceInput';
 
@@ -1827,30 +1827,34 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                   Generazione PDF condivisibile in corso…
                 </div>
               )}
-              {saved && !uploadingSavedPdf && savedPdfUrl && (
-                <>
-                  <div className="text-center text-[10px] text-gray-400 mt-1">
-                    Il messaggio includera' il link al preventivo in PDF
-                  </div>
-                  <a
-                    href={savedPdfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-center text-xs text-blue-600 hover:underline mt-1"
-                  >
-                    📎 Apri preventivo condivisibile (pagina web)
-                  </a>
-                </>
-              )}
-              {saved && !uploadingSavedPdf && !savedPdfUrl && savedPdfHtml && (
+              {saved && (
                 <div className="mt-2">
                   <button
                     type="button"
                     onClick={async () => {
                       setAllegandoPreventivo(true);
                       try {
-                        const nome = `Preventivo-${(cliente?.nome || manualClienteNome || 'cliente').replace(/[^\w-]+/g, '_')}.html`;
-                        const file = new File([savedPdfHtml], nome, { type: 'text/html' });
+                        const clientePerPdf = cliente || {
+                          id: '', officina_id: officina?.id || '',
+                          nome: manualClienteNome.trim() || 'Cliente', email: '', tel: '',
+                        };
+                        const veicoloPerPdf = veicolo || {
+                          id: '', cliente_id: '', marca: vMarca || 'N/D', modello: vModello || 'N/D',
+                          targa: vTarga && vTarga !== 'MANUALE' ? vTarga : '', anno: new Date().getFullYear(),
+                          km: 0, carburante: 'benzina',
+                        };
+                        const appuntamentoPerPdf: Appuntamento = {
+                          id: '', officina_id: officina?.id || '', cliente_id: clientePerPdf.id, veicolo_id: veicoloPerPdf.id,
+                          data_ora: new Date().toISOString(), stato: 'prenotato', priorita: 'normale',
+                          problema: 'Preventivo', clienti: clientePerPdf, veicoli: veicoloPerPdf,
+                        };
+                        const blob = await buildPreventivoPdfBlob(
+                          appuntamentoPerPdf,
+                          { id: savedPreventivoId || '', appuntamento_id: '', righe, subtotale, sconto: scontoEuro, iva, totale, stato: 'bozza', fermo_macchina: fermoMacchina.trim() || undefined },
+                          officina
+                        );
+                        const nome = `Preventivo-${(cliente?.nome || manualClienteNome || 'cliente').replace(/[^\w-]+/g, '_')}.pdf`;
+                        const file = new File([blob], nome, { type: 'application/pdf' });
                         const nav = navigator as Navigator & {
                           canShare?: (d: { files?: File[] }) => boolean;
                           share?: (d: { files?: File[]; title?: string }) => Promise<void>;
@@ -1867,19 +1871,19 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                         }
                       } catch (e) {
                         if (!(e instanceof DOMException && e.name === 'AbortError')) {
-                          alert('Condivisione non riuscita');
+                          alert('Generazione PDF non riuscita');
                         }
                       } finally {
                         setAllegandoPreventivo(false);
                       }
                     }}
                     disabled={allegandoPreventivo}
-                    className="w-full p-2.5 rounded-xl border-2 border-gray-300 text-gray-700 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 transition-colors cursor-pointer"
+                    className="w-full p-2.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer"
                   >
-                    {allegandoPreventivo ? '...' : '📎 Allega documento (nessun link disponibile)'}
+                    {allegandoPreventivo ? '...' : '📎 Invia PDF (WhatsApp, Email...)'}
                   </button>
                   <div className="text-center text-[10px] text-gray-400 mt-1">
-                    Il messaggio sopra non contiene un link: allega il documento da qui prima di inviarlo.
+                    Apre la condivisione del telefono con il PDF vero allegato. Su desktop lo scarica: allegalo tu al messaggio sopra.
                   </div>
                 </div>
               )}
@@ -2646,10 +2650,9 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
               officinaId={officina?.id}
               clienteId={detailAppuntamento.cliente_id}
               pdfUrl={pdfUrl}
-              fileName={`Preventivo-${(p.cliente_nome || 'cliente').replace(/[^\w-]+/g, '_')}.html`}
-              getDocumentHtml={async () => {
-                const accent = await extractLogoColor(officina?.logo_url);
-                return buildPreventivoHtml(
+              fileName={`Preventivo-${(p.cliente_nome || 'cliente').replace(/[^\w-]+/g, '_')}.pdf`}
+              getPdfBlob={() =>
+                buildPreventivoPdfBlob(
                   detailAppuntamento,
                   {
                     id: p.id,
@@ -2662,10 +2665,9 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
                     stato: p.stato as 'bozza' | 'inviato' | 'accettato' | 'rifiutato',
                     created_at: p.created_at,
                   },
-                  officina,
-                  accent
-                );
-              }}
+                  officina
+                )
+              }
               emailSubject={`Preventivo ${detailAppuntamento.veicoli ? detailAppuntamento.veicoli.marca + ' ' + detailAppuntamento.veicoli.modello : ''}${detailAppuntamento.veicoli?.targa ? ' (' + detailAppuntamento.veicoli.targa + ')' : ''} — ${officina?.nome || 'OfficinAI'}`}
               emailData={{
                 clienteNome: detailAppuntamento.clienti?.nome || 'Cliente',
@@ -2682,32 +2684,17 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
               }${detailAppuntamento.veicoli?.targa ? ` (${detailAppuntamento.veicoli.targa})` : ''}.\nTotale: ${fmtEuro(p.totale)}\n\nResto a disposizione per qualsiasi chiarimento.\n— ${officina?.nome || 'OfficinAI'}`}
             />
             </div>
-            {uploadingPdf && (
-              <div className="text-[11px] text-gray-400 text-center">Generazione link preventivo…</div>
-            )}
-            {!uploadingPdf && !pdfUrl && (
-              <div className="text-[11px] text-amber-600 text-center">
-                Il messaggio non contiene un link: usa «Allega documento» per inviare il preventivo come file.
-                Per avere invece un link automatico, crea il bucket <code className="font-mono bg-amber-50 px-1 rounded">preventivi</code> (pubblico) su Supabase Storage.
-              </div>
-            )}
-            {pdfUrl && (
-              <a
-                href={pdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-center text-xs text-blue-600 hover:underline"
-              >
-                📎 Apri preventivo condivisibile (pagina web)
-              </a>
-            )}
           </div>
         )}
 
         {/* Conferma appuntamento: il cliente ha accettato, si fissano data/ora vere */}
         {!editMode && showConferma && (
           <div className="border-2 border-emerald-200 bg-emerald-50/40 rounded-xl p-3 space-y-2.5">
-            <div className="text-sm font-bold text-emerald-900">🗓️ Genera appuntamento</div>
+            <div className="text-sm font-bold text-emerald-900">✅ Conferma preventivo e appuntamento</div>
+            <div className="text-xs text-emerald-800">
+              <strong>{detailAppuntamento?.clienti?.nome || 'Cliente'}</strong>
+              {detailAppuntamento?.veicoli?.targa ? ` — ${detailAppuntamento.veicoli.targa}` : ''}
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[11px] font-semibold text-gray-600 mb-1">Data</label>
@@ -2769,7 +2756,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
                   onClick={apriConferma}
                   className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 cursor-pointer transition-colors"
                 >
-                  🗓️ Genera appuntamento
+                  ✅ Preventivo accettato
                 </button>
               ) : (
                 <button

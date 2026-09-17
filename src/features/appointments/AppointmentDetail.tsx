@@ -8,7 +8,7 @@ import { ChatPanel } from '@/features/chat/ChatPanel';
 import { PhotoGallery } from '@/features/photos/PhotoGallery';
 import { WhatsAppPanel } from '@/features/notifications/WhatsAppPanel';
 import { AIDiagnostics } from '@/features/ai/AIDiagnostics';
-import { PDFExport } from '@/features/estimates/PDFExport';
+import { PDFExport, buildPreventivoPdfBlob } from '@/features/estimates/PDFExport';
 import { sendStatusUpdate, sendAppointmentConfirmation, sendProposalChange } from '@/lib/email';
 import { format, parseISO } from 'date-fns';
 import { it as itLocale } from 'date-fns/locale';
@@ -1138,6 +1138,7 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
   const [righe, setRighe] = useState<PreventivoRiga[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [inviandoPdf, setInviandoPdf] = useState(false);
 
   useEffect(() => {
     const fetch = async () => {
@@ -1225,6 +1226,42 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
       `Gentile ${cliente?.nome || 'Cliente'},\n\nLe inviamo il preventivo per il suo veicolo ${descrizioneVeicolo}.\n\n${dettaglioRighe}\n\nTotale: ${fmtEuro(totale)}\n\nCordiali saluti,\n${officina?.nome || 'Officina'}${officina?.tel ? `\nTel: ${officina.tel}` : ''}`
     );
     window.open(`mailto:${cliente?.email || ''}?subject=${oggetto}&body=${corpo}`, '_blank');
+  };
+
+  // Genera il PDF vero e lo passa alla condivisione nativa del telefono
+  // (WhatsApp, Gmail, Mail...): l'utente scieglie l'app e il file arriva
+  // allegato davvero, non solo un link o un testo.
+  const inviaPdf = async () => {
+    setInviandoPdf(true);
+    try {
+      await salva('inviato');
+      const blob = await buildPreventivoPdfBlob(
+        appuntamento,
+        { id: preventivo?.id || '', appuntamento_id: appuntamentoId, righe, subtotale, sconto: 0, iva, totale, stato: 'inviato' }
+      );
+      const nome = `Preventivo-${(cliente?.nome || 'cliente').replace(/[^\w-]+/g, '_')}.pdf`;
+      const file = new File([blob], nome, { type: 'application/pdf' });
+      const nav = navigator as Navigator & {
+        canShare?: (d: { files?: File[] }) => boolean;
+        share?: (d: { files?: File[]; title?: string }) => Promise<void>;
+      };
+      if (nav.share && nav.canShare?.({ files: [file] })) {
+        await nav.share({ files: [file], title: 'Preventivo' });
+      } else {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nome;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        alert('Generazione PDF non riuscita');
+      }
+    } finally {
+      setInviandoPdf(false);
+    }
   };
 
   if (loading) return <div className="text-center py-4 text-sm text-gray-400">Caricamento...</div>;
@@ -1317,6 +1354,18 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
           Salva bozza
         </Button>
       </div>
+      <Button
+        onClick={inviaPdf}
+        disabled={righe.length === 0}
+        loading={inviandoPdf || saving}
+        className="!bg-emerald-600 hover:!bg-emerald-700"
+        fullWidth
+      >
+        📎 Invia PDF (WhatsApp, Email...)
+      </Button>
+      <div className="text-[10px] text-gray-400 text-center -mt-1">
+        Apre la condivisione del telefono con il PDF vero allegato. Su desktop lo scarica.
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <Button
           onClick={inviaWhatsApp}
@@ -1325,7 +1374,7 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
           className="!bg-green-600 hover:!bg-green-700"
           fullWidth
         >
-          📱 Invia WhatsApp
+          📱 WhatsApp (testo)
         </Button>
         <Button
           onClick={inviaEmail}
@@ -1334,7 +1383,7 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
           className="!bg-indigo-600 hover:!bg-indigo-700"
           fullWidth
         >
-          ✉️ Invia Email
+          ✉️ Email (testo)
         </Button>
       </div>
       {!cliente?.tel && !cliente?.email && (

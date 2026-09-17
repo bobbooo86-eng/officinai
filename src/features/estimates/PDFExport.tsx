@@ -242,6 +242,114 @@ export function buildPreventivoHtml(
 
 export { extractLogoColor };
 
+/**
+ * Genera un vero file PDF (binario, non la pagina HTML usata per "Esporta
+ * PDF"/stampa): serve a poterlo allegare davvero a WhatsApp o email tramite
+ * la condivisione nativa del telefono, invece di mandare solo un link.
+ * Layout piu' semplice della versione HTML (niente logo/colori dal brand),
+ * ma e' un PDF vero che qualsiasi app puo' aprire e allegare.
+ */
+export async function buildPreventivoPdfBlob(
+  appuntamento: Appuntamento,
+  preventivo: Preventivo,
+  officina?: Officina | null,
+  opts?: { docType?: 'preventivo' | 'fattura'; numero?: string }
+): Promise<Blob> {
+  // Importati qui (non in cima al file) cosi' jsPDF (che si porta dietro
+  // html2canvas/dompurify, ~380KB) entra solo nel chunk lazy di chi genera
+  // davvero un PDF, invece di gonfiare il bundle principale caricato da
+  // ogni pagina dell'app.
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+  const isFattura = opts?.docType === 'fattura';
+  const titoloDoc = isFattura ? 'FATTURA' : 'PREVENTIVO';
+  const marginX = 14;
+  const rightX = 196;
+  const doc = new jsPDF();
+
+  doc.setFontSize(16);
+  doc.setTextColor(30, 64, 175);
+  doc.text(officina?.nome || 'OfficinAI', marginX, 18);
+
+  doc.setFontSize(9);
+  doc.setTextColor(90);
+  let y = 24;
+  if (officina?.indirizzo) { doc.text(officina.indirizzo, marginX, y); y += 5; }
+  const contatti = [officina?.tel, officina?.email].filter(Boolean).join('  ·  ');
+  if (contatti) { doc.text(contatti, marginX, y); y += 5; }
+  if (officina?.p_iva) { doc.text(`P.IVA: ${officina.p_iva}`, marginX, y); y += 5; }
+
+  doc.setFontSize(14);
+  doc.setTextColor(30, 64, 175);
+  doc.text(opts?.numero ? `${titoloDoc} ${opts.numero}` : titoloDoc, rightX, 18, { align: 'right' });
+  doc.setFontSize(9);
+  doc.setTextColor(90);
+  doc.text(`Data: ${new Date().toLocaleDateString('it-IT')}`, rightX, 24, { align: 'right' });
+  doc.text(`Stato: ${preventivo.stato.toUpperCase()}`, rightX, 29, { align: 'right' });
+
+  y = Math.max(y, 34) + 4;
+  doc.setDrawColor(30, 64, 175);
+  doc.setLineWidth(0.8);
+  doc.line(marginX, y, rightX, y);
+  y += 8;
+
+  doc.setFontSize(11);
+  doc.setTextColor(20);
+  doc.text(`Cliente: ${appuntamento.clienti?.nome || '-'}`, marginX, y);
+  y += 6;
+  const veicoloStr = [appuntamento.veicoli?.marca, appuntamento.veicoli?.modello].filter(Boolean).join(' ')
+    + (appuntamento.veicoli?.targa ? ` — ${appuntamento.veicoli.targa}` : '');
+  doc.text(`Veicolo: ${veicoloStr || '-'}`, marginX, y);
+  y += 6;
+  if (!isFattura && appuntamento.problema) {
+    doc.text(`Problema segnalato: ${appuntamento.problema}`, marginX, y, { maxWidth: rightX - marginX });
+    y += 6;
+  }
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Tipo', 'Descrizione', 'Qtà', 'Prezzo', 'Totale']],
+    body: (preventivo.righe || []).map((r) => [
+      r.tipo === 'manodopera' ? 'Manodopera' : 'Ricambio',
+      r.desc,
+      String(r.qta),
+      fmtEuro(r.prezzo),
+      fmtEuro(r.qta * r.prezzo),
+    ]),
+    headStyles: { fillColor: [30, 64, 175] },
+    styles: { fontSize: 9 },
+    margin: { left: marginX, right: marginX },
+  });
+
+  let ty = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  doc.setFontSize(10);
+  doc.setTextColor(20);
+  doc.text(`Subtotale: ${fmtEuro(preventivo.subtotale)}`, rightX, ty, { align: 'right' }); ty += 6;
+  if (preventivo.sconto > 0) {
+    doc.text(`Sconto: -${fmtEuro(preventivo.sconto)}`, rightX, ty, { align: 'right' }); ty += 6;
+  }
+  doc.text(`IVA 22%: ${fmtEuro(preventivo.iva)}`, rightX, ty, { align: 'right' }); ty += 7;
+  doc.setFontSize(13);
+  doc.setTextColor(30, 64, 175);
+  doc.text(`TOTALE: ${fmtEuro(preventivo.totale)}`, rightX, ty, { align: 'right' });
+
+  if (preventivo.fermo_macchina) {
+    ty += 10;
+    doc.setFontSize(9);
+    doc.setTextColor(20);
+    doc.text(`Fermo macchina: ${preventivo.fermo_macchina}`, marginX, ty, { maxWidth: rightX - marginX });
+  }
+
+  doc.setFontSize(8);
+  doc.setTextColor(150);
+  doc.text('Generato con OfficinAI', 105, 290, { align: 'center' });
+
+  return doc.output('blob');
+}
+
 export function PDFExport({ appuntamento, preventivo }: PDFExportProps) {
   const { officina } = useAuthStore();
   const [generating, setGenerating] = useState(false);

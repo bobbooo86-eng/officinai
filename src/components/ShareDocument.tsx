@@ -4,6 +4,14 @@ import { supabase } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { useAuthStore } from '@/stores/authStore';
 
+// wa.me richiede il numero completo con prefisso internazionale (39 per
+// l'Italia), senza "+" davanti: un numero italiano digitato senza prefisso
+// (es. "3402571805") apriva una chat non valida e il messaggio non partiva.
+function toWhatsAppNumber(tel: string): string {
+  const digits = tel.replace(/\D/g, '');
+  return digits.startsWith('39') ? digits : `39${digits}`;
+}
+
 interface ShareDocumentProps {
   /** Tipo documento per il template email */
   tipo: 'preventivo' | 'fattura' | 'foglio_lavoro' | 'conto';
@@ -33,6 +41,12 @@ interface ShareDocumentProps {
   getDocumentHtml?: () => string | Promise<string>;
   /** Nome del file proposto per l'allegato/download. */
   fileName?: string;
+  /**
+   * Genera il PDF vero (binario) del documento: se presente, e' questo che
+   * viene allegato davvero a WhatsApp/email tramite la condivisione nativa
+   * del telefono, invece di mandare solo un link a una pagina web.
+   */
+  getPdfBlob?: () => Blob | Promise<Blob>;
   /** Oggetto email (se non specificato, usa "Il tuo {titolo}") */
   emailSubject?: string;
   /** Callback dopo invio */
@@ -43,7 +57,7 @@ export function ShareDocument({
   tipo, titolo, emailData, whatsappText,
   clienteEmail, clienteTel, clienteNome,
   officinaId, clienteId, pdfUrl, emailSubject, onSent,
-  getDocumentHtml, fileName,
+  getDocumentHtml, fileName, getPdfBlob,
 }: ShareDocumentProps) {
   const { officina } = useAuthStore();
   const [open, setOpen] = useState(false);
@@ -52,6 +66,47 @@ export function ShareDocument({
   const [emailTo, setEmailTo] = useState(clienteEmail || '');
   const [condividendo, setCondividendo] = useState(false);
   const [telTo, setTelTo] = useState(clienteTel || '');
+
+  /**
+   * Genera il PDF e lo passa alla condivisione nativa del telefono: l'utente
+   * scegie l'app (WhatsApp, Gmail, Mail...) e il file vero arriva allegato,
+   * non solo un link. Su desktop (dove il telefono non offre questa
+   * condivisione) il PDF viene scaricato, cosi' si puo' allegare a mano.
+   */
+  const inviaPdfDiretto = async () => {
+    if (!getPdfBlob) return;
+    setCondividendo(true);
+    setResult(null);
+    try {
+      const blob = await getPdfBlob();
+      const nome = fileName || `${titolo}.pdf`;
+      const file = new File([blob], nome, { type: 'application/pdf' });
+
+      const nav = navigator as Navigator & {
+        canShare?: (d: { files?: File[] }) => boolean;
+        share?: (d: { files?: File[]; title?: string; text?: string }) => Promise<void>;
+      };
+      if (nav.share && nav.canShare?.({ files: [file] })) {
+        await nav.share({ files: [file], title: titolo, text: whatsappText });
+        setResult({ ok: true, msg: 'PDF condiviso' });
+        onSent?.();
+      } else {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nome;
+        a.click();
+        URL.revokeObjectURL(url);
+        setResult({ ok: true, msg: 'PDF scaricato: allegalo tu al messaggio, oppure usa Email/WhatsApp qui sotto (senza allegato).' });
+      }
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        setResult({ ok: false, msg: 'Generazione PDF non riuscita' });
+      }
+    } finally {
+      setCondividendo(false);
+    }
+  };
 
   // Aggiungi il link PDF (se presente) ai messaggi
   const finalWhatsappText = pdfUrl
@@ -168,8 +223,7 @@ export function ShareDocument({
 
       if (data?.fallback) {
         // Twilio not configured, open WhatsApp Web
-        const normalizedTel = telTo.replace(/[^0-9+]/g, '');
-        window.open(`https://wa.me/${normalizedTel}?text=${encodeURIComponent(finalWhatsappText)}`, '_blank');
+        window.open(`https://wa.me/${toWhatsAppNumber(telTo)}?text=${encodeURIComponent(finalWhatsappText)}`, '_blank');
         setResult({ ok: true, msg: 'Aperto WhatsApp Web' });
       } else if (data?.success) {
         setResult({ ok: true, msg: 'WhatsApp inviato!' });
@@ -178,8 +232,7 @@ export function ShareDocument({
       }
     } catch {
       // Fallback: open WhatsApp Web directly
-      const normalizedTel = telTo.replace(/[^0-9+]/g, '');
-      window.open(`https://wa.me/${normalizedTel}?text=${encodeURIComponent(finalWhatsappText)}`, '_blank');
+      window.open(`https://wa.me/${toWhatsAppNumber(telTo)}?text=${encodeURIComponent(finalWhatsappText)}`, '_blank');
       setResult({ ok: true, msg: 'Aperto WhatsApp Web' });
     }
 
@@ -222,8 +275,21 @@ export function ShareDocument({
         </div>
       )}
 
-      {/* Allegato: serve quando non c'e' un link pubblico al documento */}
-      {!pdfUrl && getDocumentHtml && (
+      {/* Invio diretto del PDF vero, allegato tramite la condivisione nativa
+          del telefono (WhatsApp, Gmail, Mail...): l'opzione principale. */}
+      {getPdfBlob && (
+        <div className="mb-3">
+          <Button fullWidth onClick={inviaPdfDiretto} loading={condividendo} className="!bg-emerald-600 hover:!bg-emerald-700">
+            📎 Invia PDF (WhatsApp, Email...)
+          </Button>
+          <div className="text-[11px] text-gray-500 mt-1">
+            Apre la condivisione del telefono con il PDF vero allegato. Su desktop lo scarica: allegalo tu al messaggio.
+          </div>
+        </div>
+      )}
+
+      {/* Allegato HTML: solo se non c'e' ancora un generatore di PDF vero. */}
+      {!getPdfBlob && !pdfUrl && getDocumentHtml && (
         <div className="mb-3">
           <Button variant="secondary" fullWidth onClick={condividiFile} loading={condividendo}>
             📎 Allega documento
