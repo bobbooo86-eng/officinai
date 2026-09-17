@@ -202,7 +202,7 @@ export function AppOfficina() {
   }
 
   return (
-    <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={handleTabChange} onSearchSelect={handleSearchSelect} showSearch={activeTab === 'home'} fab={!showNewApp ? { onClick: handleFab } : undefined} hideFloatingButtons={activeTab === 'preventivi'}>
+    <Layout tabs={tabsWithBadge} activeTab={activeTab} onTabChange={handleTabChange} onSearchSelect={handleSearchSelect} showSearch={activeTab === 'home'} fab={(!showNewApp && activeTab === 'home') ? { onClick: handleFab } : undefined} hideFloatingButtons={activeTab === 'preventivi'}>
       {activeTab === 'home' && (
         <Dashboard
           onSelectAppuntamento={handleSelectApp}

@@ -183,15 +183,6 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
                 Storico veicolo
               </button>
             )}
-            {app.cliente_id && onNavigateToCliente && (
-              <button
-                onClick={() => onNavigateToCliente(app.cliente_id!)}
-                className="text-[10px] text-teal-700 bg-teal-50 hover:bg-teal-100 px-2 py-0.5 rounded-lg transition-colors cursor-pointer font-medium whitespace-nowrap"
-                title="Completa dati cliente, scadenze e foto veicolo"
-              >
-                🪪 Genera cliente
-              </button>
-            )}
           </div>
         </div>
         <Badge color={STATO_CONFIG[app.stato].color} bg={STATO_CONFIG[app.stato].bg}>
@@ -206,6 +197,23 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
           🗑️
         </button>
       </div>
+
+      {/* Dati del proprietario dell'auto: nome/telefono/email/CF/indirizzo,
+          non modificabili qui direttamente (sono sul cliente, non
+          sull'appuntamento) — porta alla sua scheda completa. */}
+      {app.cliente_id && onNavigateToCliente && (
+        <button
+          onClick={() => onNavigateToCliente(app.cliente_id!)}
+          className="w-full flex items-center gap-3 p-3 rounded-xl border-2 border-teal-200 bg-teal-50 hover:bg-teal-100 transition-colors cursor-pointer text-left"
+        >
+          <span className="text-xl">🪪</span>
+          <div className="flex-1">
+            <div className="text-sm font-bold text-teal-800">Modifica dati del proprietario</div>
+            <div className="text-[11px] text-teal-600">Nome, telefono, email, codice fiscale, scadenze e foto veicolo</div>
+          </div>
+          <span className="text-teal-400">→</span>
+        </button>
+      )}
 
       {/* Data e ora appuntamento — modificabile subito, senza passare dalla controproposta al cliente */}
       <Card className="!p-3">
