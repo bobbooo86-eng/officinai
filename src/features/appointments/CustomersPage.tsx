@@ -26,7 +26,7 @@ function statoScadenza(dataStr?: string): { label: string; color: string; bg: st
   return { label: dataFmt, color: '#374151', bg: '#f3f4f6' };
 }
 
-export function CustomersPage({ initialClienteId, resetSignal, apriNuovoCliente }: { initialClienteId?: string; resetSignal?: number; apriNuovoCliente?: number } = {}) {
+export function CustomersPage({ initialClienteId, resetSignal, apriNuovoCliente, onApriNuovoClienteHandled }: { initialClienteId?: string; resetSignal?: number; apriNuovoCliente?: number; onApriNuovoClienteHandled?: () => void } = {}) {
   const { officina } = useAuthStore();
   const [clienti, setClienti] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,10 +48,16 @@ export function CustomersPage({ initialClienteId, resetSignal, apriNuovoCliente 
 
   // Aperto dal FAB "Nuovo cliente" (da qualsiasi schermata): un contatore
   // che cambia a ogni click, non un booleano, cosi' funziona anche se si
-  // clicca di nuovo mentre si e' gia' su questa pagina.
+  // clicca di nuovo mentre si e' gia' su questa pagina. Il genitore deve
+  // riportarlo a zero dopo averlo consumato (onApriNuovoClienteHandled):
+  // altrimenti resterebbe "acceso" per sempre e rispunterebbe da solo a
+  // ogni rimontaggio successivo di questa pagina, anche navigando qui
+  // per aprire un cliente specifico (es. "Genera cliente" da un
+  // appuntamento) — mostrando il modulo vuoto invece della sua scheda.
   useEffect(() => {
-    if (!apriNuovoCliente) return;
+    if (!apriNuovoCliente || initialClienteId) return;
     setView('add');
+    onApriNuovoClienteHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apriNuovoCliente]);
 
