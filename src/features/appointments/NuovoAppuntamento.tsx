@@ -15,11 +15,11 @@ function toLocalInputValue(d: Date): string {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
-// Una sola schermata: nome, telefono, targa, problema, data e ora. Crea
-// subito cliente + veicolo (minimi) + appuntamento in un solo tocco — non
-// e' un passaggio separato di "registrazione cliente", si completa la
-// scheda dopo, quando l'auto arriva davvero (pulsante "Genera cliente"
-// sull'appuntamento).
+// Una sola schermata: nome, marca/modello, targa, km, telefono, problema,
+// data e ora. Crea subito cliente + veicolo (minimi) + appuntamento in un
+// solo tocco — non e' un passaggio separato di "registrazione cliente",
+// si completa la scheda dopo (email, CF, indirizzo, scadenze, foto),
+// quando l'auto arriva davvero (pulsante "Genera cliente" sull'appuntamento).
 export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppuntamentoProps) {
   const { officina } = useAuthStore();
   const [loading, setLoading] = useState(false);
@@ -27,7 +27,10 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
 
   const [nome, setNome] = useState('');
   const [telefono, setTelefono] = useState('');
+  const [marca, setMarca] = useState('');
+  const [modello, setModello] = useState('');
   const [targa, setTarga] = useState('');
+  const [km, setKm] = useState('');
   const [problema, setProblema] = useState('');
   const [dataOra, setDataOra] = useState(() => {
     // L'input datetime-local lavora in ora locale: toISOString() darebbe UTC
@@ -77,11 +80,11 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
         .from('veicoli')
         .insert({
           cliente_id: newCl.id,
-          marca: 'N/D',
-          modello: 'N/D',
+          marca: marca.trim() || 'N/D',
+          modello: modello.trim() || 'N/D',
           targa: targa.trim().toUpperCase() || 'N/D',
           anno: new Date().getFullYear(),
-          km: 0,
+          km: parseInt(km) || 0,
           carburante: 'benzina',
         })
         .select()
@@ -124,7 +127,7 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
         </button>
         <div>
           <h2 className="text-lg font-bold text-gray-900 dark:text-white">Nuovo Appuntamento</h2>
-          <p className="text-xs text-gray-500">Nome, telefono, targa e problema: il resto lo completi dopo</p>
+          <p className="text-xs text-gray-500">Solo i dati essenziali: il resto lo completi dopo con "Genera cliente"</p>
         </div>
       </div>
 
@@ -134,14 +137,30 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
           <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} className={inputClass} placeholder="Es: Mario Rossi" autoFocus />
         </div>
 
-        <div>
-          <label className={labelClass}>Telefono</label>
-          <input type="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} className={inputClass} placeholder="Es: 333 1234567" />
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className={labelClass}>Marca</label>
+            <input type="text" value={marca} onChange={(e) => setMarca(e.target.value)} className={inputClass} placeholder="Es: Fiat" />
+          </div>
+          <div>
+            <label className={labelClass}>Modello</label>
+            <input type="text" value={modello} onChange={(e) => setModello(e.target.value)} className={inputClass} placeholder="Es: Panda" />
+          </div>
         </div>
 
-        <div>
-          <label className={labelClass}>Targa</label>
-          <input type="text" value={targa} onChange={(e) => setTarga(e.target.value.toUpperCase())} className={inputClass} placeholder="Es: AB123CD" maxLength={10} />
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <label className={labelClass}>Targa</label>
+            <input type="text" value={targa} onChange={(e) => setTarga(e.target.value.toUpperCase())} className={inputClass} placeholder="AB123CD" maxLength={10} />
+          </div>
+          <div>
+            <label className={labelClass}>Km</label>
+            <input type="number" value={km} onChange={(e) => setKm(e.target.value)} className={inputClass} placeholder="0" />
+          </div>
+          <div>
+            <label className={labelClass}>Telefono</label>
+            <input type="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} className={inputClass} placeholder="333..." />
+          </div>
         </div>
 
         <div>
