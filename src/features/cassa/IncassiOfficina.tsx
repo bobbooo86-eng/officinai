@@ -122,15 +122,6 @@ export function PagamentoEditFields({ editor, appuntamento }: { editor: Pagament
           />
         </div>
       </div>
-      <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={editor.editRicambiSubito}
-          onChange={(e) => editor.setEditRicambiSubito(e.target.checked)}
-          className="rounded"
-        />
-        Pagati subito (es. sfascio) — conta come spesa
-      </label>
       <div className="flex items-center gap-2">
         <div className="flex-1">
           <label className="text-[10px] text-gray-400 block">Operaio che ha fatto il lavoro</label>
@@ -269,6 +260,16 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
     setLoading(false);
   }, [officinaId]);
 
+  // Spunta rapida sulla riga stessa, senza apire la matita: il costo
+  // ricambi e' spesso solo informativo (pagato a blocchi al ricambista),
+  // conta come spesa solo quando spuntato.
+  const toggleRicambiSubito = async (a: Appuntamento) => {
+    if (!a.pagamento) return;
+    const nuovoPagamento = { ...a.pagamento, ricambi_pagati_subito: !a.pagamento.ricambi_pagati_subito };
+    setAppuntamenti((prev) => prev.map((x) => (x.id === a.id ? { ...x, pagamento: nuovoPagamento } : x)));
+    await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
+  };
+
   useEffect(() => {
     load();
     if (!officinaId) return;
@@ -406,17 +407,28 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                 </div>
 
                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
-                  <span className="text-[11px] text-gray-500">
-                    Costo ricambi: <span className="font-semibold text-gray-700">{fmtEuro(p.costo_ricambi || 0)}</span>
+                  <div className="text-[11px] text-gray-500">
+                    <div>
+                      Costo ricambi: <span className="font-semibold text-gray-700">{fmtEuro(p.costo_ricambi || 0)}</span>
+                      {p.operaio && <span className="text-gray-400"> · 🔧 {p.operaio}</span>}
+                    </div>
                     {(p.costo_ricambi || 0) > 0 && (
-                      p.ricambi_pagati_subito ? (
-                        <span className="text-gray-400"> · netto {fmtEuro(valoreLavoro(a) - spesaRicambi(p))}</span>
-                      ) : (
-                        <span className="text-gray-400"> (non conteggiato)</span>
-                      )
+                      <label
+                        onClick={(e) => e.stopPropagation()}
+                        className={`flex items-center gap-1.5 mt-0.5 cursor-pointer ${p.ricambi_pagati_subito ? 'text-red-500' : 'text-gray-400'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!p.ricambi_pagati_subito}
+                          onChange={() => toggleRicambiSubito(a)}
+                          className="rounded shrink-0"
+                        />
+                        {p.ricambi_pagati_subito
+                          ? `conta come spesa · netto ${fmtEuro(valoreLavoro(a) - spesaRicambi(p))}`
+                          : 'non conta come spesa'}
+                      </label>
                     )}
-                    {p.operaio && <span className="text-gray-400"> · 🔧 {p.operaio}</span>}
-                  </span>
+                  </div>
                   {!inEdit && (
                     <button
                       onClick={() => editor.apri(a)}
