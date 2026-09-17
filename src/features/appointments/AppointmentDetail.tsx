@@ -48,21 +48,18 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
   const [savingProblema, setSavingProblema] = useState(false);
   const [erroreProblema, setErroreProblema] = useState('');
   const [eliminando, setEliminando] = useState(false);
-  // Modifica di targa/marca/modello del veicolo (accanto al cestino).
-  const [editingVeicolo, setEditingVeicolo] = useState(false);
+  // Un'unica matita accanto al cestino: modifica insieme nome/telefono
+  // del cliente e targa/marca/modello del veicolo (per email/CF/
+  // indirizzo/scadenze/foto c'e' il pulsante "Modifica dati del
+  // proprietario" che porta alla sua scheda completa).
+  const [editingIntestazione, setEditingIntestazione] = useState(false);
+  const [editNomeCliente, setEditNomeCliente] = useState('');
+  const [editTelCliente, setEditTelCliente] = useState('');
   const [editTarga, setEditTarga] = useState('');
   const [editMarca, setEditMarca] = useState('');
   const [editModello, setEditModello] = useState('');
-  const [savingVeicolo, setSavingVeicolo] = useState(false);
-  const [erroreVeicolo, setErroreVeicolo] = useState('');
-  // Modifica rapida di nome/telefono del cliente, senza uscire dalla
-  // scheda appuntamento (per email/CF/indirizzo/scadenze/foto c'e' il
-  // pulsante "Modifica dati del proprietario" che porta alla sua scheda).
-  const [editingClienteRapido, setEditingClienteRapido] = useState(false);
-  const [editNomeCliente, setEditNomeCliente] = useState('');
-  const [editTelCliente, setEditTelCliente] = useState('');
-  const [savingClienteRapido, setSavingClienteRapido] = useState(false);
-  const [erroreClienteRapido, setErroreClienteRapido] = useState('');
+  const [savingIntestazione, setSavingIntestazione] = useState(false);
+  const [erroreIntestazione, setErroreIntestazione] = useState('');
 
   // Realtime updates
   useEffect(() => {
@@ -154,48 +151,41 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
     onBack();
   };
 
-  const apriModificaVeicolo = () => {
+  const apriModificaIntestazione = () => {
+    setEditNomeCliente(app.clienti?.nome || '');
+    setEditTelCliente(app.clienti?.tel || '');
     setEditTarga(app.veicoli?.targa || '');
     setEditMarca(app.veicoli?.marca || '');
     setEditModello(app.veicoli?.modello || '');
-    setErroreVeicolo('');
-    setEditingVeicolo(true);
+    setErroreIntestazione('');
+    setEditingIntestazione(true);
   };
 
-  const salvaVeicolo = async () => {
-    if (!app.veicolo_id) return;
-    setSavingVeicolo(true);
-    setErroreVeicolo('');
-    const dati = {
-      targa: editTarga.trim().toUpperCase(),
-      marca: editMarca.trim() || 'N/D',
-      modello: editModello.trim() || 'N/D',
-    };
-    const { error } = await supabase.from('veicoli').update(dati).eq('id', app.veicolo_id);
-    setSavingVeicolo(false);
-    if (error) { setErroreVeicolo('Non salvato: ' + error.message); return; }
-    setApp((prev) => ({ ...prev, veicoli: prev.veicoli ? { ...prev.veicoli, ...dati } : prev.veicoli }));
-    setEditingVeicolo(false);
-  };
+  const salvaIntestazione = async () => {
+    if (!editNomeCliente.trim()) { setErroreIntestazione('Il nome è obbligatorio'); return; }
+    setSavingIntestazione(true);
+    setErroreIntestazione('');
 
-  const apriModificaClienteRapida = () => {
-    setEditNomeCliente(app.clienti?.nome || '');
-    setEditTelCliente(app.clienti?.tel || '');
-    setErroreClienteRapido('');
-    setEditingClienteRapido(true);
-  };
+    if (app.cliente_id) {
+      const datiCliente = { nome: editNomeCliente.trim(), tel: editTelCliente.trim() };
+      const { error } = await supabase.from('clienti').update(datiCliente).eq('id', app.cliente_id);
+      if (error) { setSavingIntestazione(false); setErroreIntestazione('Non salvato: ' + error.message); return; }
+      setApp((prev) => ({ ...prev, clienti: prev.clienti ? { ...prev.clienti, ...datiCliente } : prev.clienti }));
+    }
 
-  const salvaClienteRapido = async () => {
-    if (!app.cliente_id) return;
-    if (!editNomeCliente.trim()) { setErroreClienteRapido('Il nome è obbligatorio'); return; }
-    setSavingClienteRapido(true);
-    setErroreClienteRapido('');
-    const dati = { nome: editNomeCliente.trim(), tel: editTelCliente.trim() };
-    const { error } = await supabase.from('clienti').update(dati).eq('id', app.cliente_id);
-    setSavingClienteRapido(false);
-    if (error) { setErroreClienteRapido('Non salvato: ' + error.message); return; }
-    setApp((prev) => ({ ...prev, clienti: prev.clienti ? { ...prev.clienti, ...dati } : prev.clienti }));
-    setEditingClienteRapido(false);
+    if (app.veicolo_id) {
+      const datiVeicolo = {
+        targa: editTarga.trim().toUpperCase(),
+        marca: editMarca.trim() || 'N/D',
+        modello: editModello.trim() || 'N/D',
+      };
+      const { error } = await supabase.from('veicoli').update(datiVeicolo).eq('id', app.veicolo_id);
+      if (error) { setSavingIntestazione(false); setErroreIntestazione('Non salvato: ' + error.message); return; }
+      setApp((prev) => ({ ...prev, veicoli: prev.veicoli ? { ...prev.veicoli, ...datiVeicolo } : prev.veicoli }));
+    }
+
+    setSavingIntestazione(false);
+    setEditingIntestazione(false);
   };
 
   const tabs: { id: Tab; label: string; icon: string; disabled?: boolean }[] = [
@@ -226,15 +216,6 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
             <p className="text-xs text-gray-500">
               {app.veicoli?.marca} {app.veicoli?.modello} — {app.veicoli?.targa}
             </p>
-            {app.veicolo_id && (
-              <button
-                onClick={apriModificaVeicolo}
-                className="text-gray-400 hover:text-blue-600 cursor-pointer text-xs shrink-0"
-                title="Modifica targa/marca/modello"
-              >
-                ✏️
-              </button>
-            )}
             {app.clienti?.tel && (
               <a
                 href={`tel:${app.clienti.tel}`}
@@ -256,11 +237,11 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
         <Badge color={STATO_CONFIG[app.stato].color} bg={STATO_CONFIG[app.stato].bg}>
           {STATO_CONFIG[app.stato].icon} {STATO_CONFIG[app.stato].label}
         </Badge>
-        {app.cliente_id && (
+        {(app.cliente_id || app.veicolo_id) && (
           <button
-            onClick={apriModificaClienteRapida}
+            onClick={apriModificaIntestazione}
             className="p-2 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 cursor-pointer shrink-0"
-            title="Modifica nome e telefono del cliente"
+            title="Modifica nome, telefono, targa, marca e modello"
           >
             ✏️
           </button>
@@ -275,8 +256,8 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
         </button>
       </div>
 
-      {/* Modifica rapida nome/telefono del cliente */}
-      {editingClienteRapido && (
+      {/* Modifica nome/telefono cliente e targa/marca/modello veicolo insieme */}
+      {editingIntestazione && (
         <Card className="!p-3 space-y-2">
           <input
             type="text"
@@ -292,29 +273,6 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
             placeholder="Telefono"
             className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          {erroreClienteRapido && <div className="text-xs text-red-600">{erroreClienteRapido}</div>}
-          <div className="flex gap-2">
-            <button
-              onClick={salvaClienteRapido}
-              disabled={savingClienteRapido}
-              className="flex-1 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors"
-            >
-              {savingClienteRapido ? 'Salvataggio...' : 'Salva'}
-            </button>
-            <button
-              onClick={() => setEditingClienteRapido(false)}
-              disabled={savingClienteRapido}
-              className="px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
-            >
-              Annulla
-            </button>
-          </div>
-        </Card>
-      )}
-
-      {/* Modifica targa/marca/modello del veicolo */}
-      {editingVeicolo && (
-        <Card className="!p-3 space-y-2">
           <input
             type="text"
             value={editTarga}
@@ -338,18 +296,18 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
               className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          {erroreVeicolo && <div className="text-xs text-red-600">{erroreVeicolo}</div>}
+          {erroreIntestazione && <div className="text-xs text-red-600">{erroreIntestazione}</div>}
           <div className="flex gap-2">
             <button
-              onClick={salvaVeicolo}
-              disabled={savingVeicolo}
+              onClick={salvaIntestazione}
+              disabled={savingIntestazione}
               className="flex-1 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors"
             >
-              {savingVeicolo ? 'Salvataggio...' : 'Salva'}
+              {savingIntestazione ? 'Salvataggio...' : 'Salva'}
             </button>
             <button
-              onClick={() => setEditingVeicolo(false)}
-              disabled={savingVeicolo}
+              onClick={() => setEditingIntestazione(false)}
+              disabled={savingIntestazione}
               className="px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
             >
               Annulla
