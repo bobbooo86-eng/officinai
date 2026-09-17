@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { VoiceButton } from '@/components/VoiceInput';
-import type { Cliente, Veicolo } from '@/types/database';
 
 interface NuovoAppuntamentoProps {
   onBack: () => void;
@@ -16,47 +15,20 @@ function toLocalInputValue(d: Date): string {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
+// Una sola schermata: nome, telefono, targa, problema, data e ora. Crea
+// subito cliente + veicolo (minimi) + appuntamento in un solo tocco — non
+// e' un passaggio separato di "registrazione cliente", si completa la
+// scheda dopo, quando l'auto arriva davvero (pulsante "Genera cliente"
+// sull'appuntamento).
 export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppuntamentoProps) {
   const { officina } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Cliente search/create
-  const [clienteSearch, setClienteSearch] = useState('');
-  const [clientiResults, setClientiResults] = useState<Cliente[]>([]);
-  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
-  const [showNewCliente, setShowNewCliente] = useState(false);
-  const [newClienteNome, setNewClienteNome] = useState('');
-  const [newClienteTel, setNewClienteTel] = useState('');
-  const [newClienteEmail, setNewClienteEmail] = useState('');
-  const [newClienteCF, setNewClienteCF] = useState('');
-  const [newClienteIndirizzo, setNewClienteIndirizzo] = useState('');
-  const [newClienteNote, setNewClienteNote] = useState('');
-  // Per prendere un appuntamento veloce (nome, targa, marca/modello) senza
-  // dover compilare la scheda cliente completa: si finisce di compilarla
-  // quando arriva davvero l'auto in officina.
-  const [mostraAltriDettagliCliente, setMostraAltriDettagliCliente] = useState(false);
-
-  // Veicolo search/create
-  const [veicoli, setVeicoli] = useState<Veicolo[]>([]);
-  const [loadingVeicoli, setLoadingVeicoli] = useState(false);
-  const [selectedVeicolo, setSelectedVeicolo] = useState<Veicolo | null>(null);
-  const [showNewVeicolo, setShowNewVeicolo] = useState(false);
-  const [newTarga, setNewTarga] = useState('');
-  const [newMarca, setNewMarca] = useState('');
-  const [newModello, setNewModello] = useState('');
-  const [newAnno, setNewAnno] = useState(new Date().getFullYear().toString());
-  const [newKm, setNewKm] = useState('');
-  const [newCarburante, setNewCarburante] = useState('benzina');
-  const [newScadRevisione, setNewScadRevisione] = useState('');
-  const [newScadTagliando, setNewScadTagliando] = useState('');
-  const [newScadAssicurazione, setNewScadAssicurazione] = useState('');
-  const [newScadBollo, setNewScadBollo] = useState('');
-  const [newFotoLibretto, setNewFotoLibretto] = useState<File | null>(null);
-  const [mostraAltriDettagliVeicolo, setMostraAltriDettagliVeicolo] = useState(false);
-  const carburanti = ['benzina', 'diesel', 'gpl', 'metano', 'ibrido', 'elettrico'];
-
-  // Appuntamento fields
+  const [nome, setNome] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [targa, setTarga] = useState('');
+  const [problema, setProblema] = useState('');
   const [dataOra, setDataOra] = useState(() => {
     // L'input datetime-local lavora in ora locale: toISOString() darebbe UTC
     // e in Italia proporrebbe un orario 1-2 ore indietro (a notte fonda
@@ -73,58 +45,6 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
     }
     return toLocalInputValue(base);
   });
-  const [problema, setProblema] = useState('');
-  const [priorita, setPriorita] = useState('normale');
-
-  // Search clienti
-  useEffect(() => {
-    if (!officina?.id || clienteSearch.length < 2) { setClientiResults([]); return; }
-    const timer = setTimeout(async () => {
-      const { data } = await supabase
-        .from('clienti')
-        .select('*')
-        .eq('officina_id', officina.id)
-        .or(`nome.ilike.%${clienteSearch}%,tel.ilike.%${clienteSearch}%,email.ilike.%${clienteSearch}%`)
-        .limit(8);
-      setClientiResults(data || []);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [clienteSearch, officina?.id]);
-
-  // Fetch veicoli for selected cliente
-  useEffect(() => {
-    // Reset sempre lo stato veicolo quando cambia il cliente selezionato,
-    // per evitare che resti agganciato un veicolo del cliente precedente
-    setSelectedVeicolo(null);
-    setShowNewVeicolo(false);
-    setNewTarga('');
-    setNewMarca('');
-    setNewModello('');
-    // Svuota subito la lista: durante il caricamento del nuovo cliente
-    // restavano visibili e cliccabili i veicoli del cliente precedente.
-    setVeicoli([]);
-
-    if (!selectedCliente) { setLoadingVeicoli(false); return; }
-
-    setLoadingVeicoli(true);
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from('veicoli')
-        .select('*')
-        .eq('cliente_id', selectedCliente.id);
-      if (cancelled) return;
-      setVeicoli(data || []);
-      if (data?.length === 1) {
-        setSelectedVeicolo(data[0]);
-      } else if (!data || data.length === 0) {
-        // Cliente senza veicoli: attiva il form nuovo veicolo cosi l'utente puo proseguire
-        setShowNewVeicolo(true);
-      }
-      setLoadingVeicoli(false);
-    })();
-    return () => { cancelled = true; };
-  }, [selectedCliente]);
 
   // Un ref invece di solo "loading": lo stato aggiornato da setLoading non e'
   // ancora visibile al render successivo, quindi un doppio tocco molto
@@ -134,92 +54,55 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
 
   const handleSubmit = async () => {
     if (!officina?.id || submittingRef.current) return;
+    if (!nome.trim()) { setError('Inserisci nome e cognome'); return; }
+    if (!problema.trim()) { setError('Inserisci una descrizione del problema'); return; }
     submittingRef.current = true;
     setError('');
     setLoading(true);
 
     try {
-      let clienteId = selectedCliente?.id;
-      let veicoloId = selectedVeicolo?.id;
+      const { data: newCl, error: clErr } = await supabase
+        .from('clienti')
+        .insert({
+          officina_id: officina.id,
+          nome: nome.trim(),
+          tel: telefono.trim(),
+          email: '',
+        })
+        .select()
+        .single();
+      if (clErr) throw new Error('Errore creazione cliente: ' + clErr.message);
 
-      // Create new cliente if needed
-      if (!clienteId && showNewCliente && newClienteNome.trim()) {
-        const { data: newCl, error: clErr } = await supabase
-          .from('clienti')
-          .insert({
-            officina_id: officina.id,
-            nome: newClienteNome.trim(),
-            tel: newClienteTel.trim(),
-            email: newClienteEmail.trim(),
-            codice_fiscale: newClienteCF.trim() || null,
-            indirizzo: newClienteIndirizzo.trim() || null,
-            note: newClienteNote.trim() || null,
-          })
-          .select()
-          .single();
-        if (clErr) throw new Error('Errore creazione cliente: ' + clErr.message);
-        clienteId = newCl.id;
-      }
+      const { data: newVe, error: veErr } = await supabase
+        .from('veicoli')
+        .insert({
+          cliente_id: newCl.id,
+          marca: 'N/D',
+          modello: 'N/D',
+          targa: targa.trim().toUpperCase() || 'N/D',
+          anno: new Date().getFullYear(),
+          km: 0,
+          carburante: 'benzina',
+        })
+        .select()
+        .single();
+      if (veErr) throw new Error('Errore creazione veicolo: ' + veErr.message);
 
-      if (!clienteId) throw new Error('Seleziona o crea un cliente');
-
-      // Create new veicolo if needed
-      if (!veicoloId && showNewVeicolo && newTarga.trim()) {
-        const scadenze = (newScadRevisione || newScadTagliando || newScadAssicurazione || newScadBollo) ? {
-          revisione: newScadRevisione || undefined,
-          tagliando: newScadTagliando || undefined,
-          assicurazione: newScadAssicurazione || undefined,
-          bollo: newScadBollo || undefined,
-        } : null;
-        const { data: newVe, error: veErr } = await supabase
-          .from('veicoli')
-          .insert({
-            cliente_id: clienteId,
-            marca: newMarca.trim() || 'N/D',
-            modello: newModello.trim() || 'N/D',
-            targa: newTarga.trim().toUpperCase(),
-            anno: parseInt(newAnno) || new Date().getFullYear(),
-            km: parseInt(newKm) || 0,
-            carburante: newCarburante,
-            scadenze,
-          })
-          .select()
-          .single();
-        if (veErr) throw new Error('Errore creazione veicolo: ' + veErr.message);
-        veicoloId = newVe.id;
-
-        if (newFotoLibretto && veicoloId) {
-          const ext = newFotoLibretto.name.split('.').pop();
-          const fileName = `libretto/${veicoloId}/${Date.now()}.${ext}`;
-          const { error: upErr } = await supabase.storage
-            .from('foto-lavorazione')
-            .upload(fileName, newFotoLibretto, { cacheControl: '3600', upsert: true });
-          if (!upErr) {
-            const { data: urlData } = supabase.storage.from('foto-lavorazione').getPublicUrl(fileName);
-            await supabase.from('veicoli').update({ foto_libretto_url: urlData.publicUrl }).eq('id', veicoloId);
-          }
-        }
-      }
-
-      if (!veicoloId) throw new Error('Seleziona o crea un veicolo');
-      if (!problema.trim()) throw new Error('Inserisci una descrizione del lavoro');
-
-      // Create appointment
       const { data: app, error: appErr } = await supabase
         .from('appuntamenti')
         .insert({
           officina_id: officina.id,
-          cliente_id: clienteId,
-          veicolo_id: veicoloId,
+          cliente_id: newCl.id,
+          veicolo_id: newVe.id,
           data_ora: new Date(dataOra).toISOString(),
           stato: 'prenotato',
-          priorita,
+          priorita: 'normale',
           problema: problema.trim(),
         })
         .select()
         .single();
-
       if (appErr) throw new Error('Errore creazione appuntamento: ' + appErr.message);
+
       onCreated(app);
     } catch (err: any) {
       setError(err.message || 'Errore');
@@ -241,235 +124,45 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
         </button>
         <div>
           <h2 className="text-lg font-bold text-gray-900 dark:text-white">Nuovo Appuntamento</h2>
-          <p className="text-xs text-gray-500">Inserisci manualmente un appuntamento</p>
+          <p className="text-xs text-gray-500">Nome, telefono, targa e problema: il resto lo completi dopo</p>
         </div>
       </div>
 
-      {/* 1. Cliente */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
-        <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">👤 Cliente</h3>
+        <div>
+          <label className={labelClass}>Nome e cognome *</label>
+          <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} className={inputClass} placeholder="Es: Mario Rossi" autoFocus />
+        </div>
 
-        {selectedCliente ? (
-          <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl">
-            <div>
-              <div className="font-bold text-sm text-blue-800 dark:text-blue-300">{selectedCliente.nome}</div>
-              <div className="text-xs text-blue-600 dark:text-blue-400">{selectedCliente.tel} · {selectedCliente.email}</div>
-            </div>
-            <button onClick={() => { setSelectedCliente(null); setSelectedVeicolo(null); setClienteSearch(''); }} className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer">Cambia</button>
-          </div>
-        ) : showNewCliente ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-500">Nuovo cliente</span>
-              <button onClick={() => setShowNewCliente(false)} className="text-xs text-blue-600 cursor-pointer">Cerca esistente</button>
-            </div>
-            <input type="text" value={newClienteNome} onChange={(e) => setNewClienteNome(e.target.value)} className={inputClass} placeholder="Nome e cognome *" autoFocus />
-            <input type="tel" value={newClienteTel} onChange={(e) => setNewClienteTel(e.target.value)} className={inputClass} placeholder="Telefono" />
-            {!mostraAltriDettagliCliente ? (
-              <button
-                type="button"
-                onClick={() => setMostraAltriDettagliCliente(true)}
-                className="w-full py-2 text-xs text-blue-600 font-semibold hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors cursor-pointer"
-              >
-                + Altri dettagli cliente (opzionale — puoi compilarli dopo, quando arriva l'auto)
-              </button>
-            ) : (
-              <>
-                <input type="email" value={newClienteEmail} onChange={(e) => setNewClienteEmail(e.target.value)} className={inputClass} placeholder="Email" />
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="text" value={newClienteCF} onChange={(e) => setNewClienteCF(e.target.value.toUpperCase())} className={inputClass} placeholder="Codice Fiscale" />
-                  <input type="text" value={newClienteIndirizzo} onChange={(e) => setNewClienteIndirizzo(e.target.value)} className={inputClass} placeholder="Indirizzo" />
-                </div>
-                <div className="flex items-start gap-2">
-                  <textarea value={newClienteNote} onChange={(e) => setNewClienteNote(e.target.value)} rows={2} className={inputClass + ' resize-none flex-1'} placeholder="Note cliente" />
-                  <VoiceButton onResult={setNewClienteNote} />
-                </div>
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <input
-              type="text"
-              value={clienteSearch}
-              onChange={(e) => setClienteSearch(e.target.value)}
-              className={inputClass}
-              placeholder="Cerca cliente per nome, telefono o email..."
-              autoFocus
+        <div>
+          <label className={labelClass}>Telefono</label>
+          <input type="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} className={inputClass} placeholder="Es: 333 1234567" />
+        </div>
+
+        <div>
+          <label className={labelClass}>Targa</label>
+          <input type="text" value={targa} onChange={(e) => setTarga(e.target.value.toUpperCase())} className={inputClass} placeholder="Es: AB123CD" maxLength={10} />
+        </div>
+
+        <div>
+          <label className={labelClass}>Descrizione del problema *</label>
+          <div className="flex items-start gap-2">
+            <textarea
+              value={problema}
+              onChange={(e) => setProblema(e.target.value)}
+              rows={3}
+              className={inputClass + ' resize-none flex-1'}
+              placeholder="Es: Tagliando completo, cambio olio e filtri..."
             />
-            {clientiResults.length > 0 && (
-              <div className="border border-gray-200 dark:border-gray-600 rounded-xl overflow-hidden max-h-40 overflow-y-auto">
-                {clientiResults.map((cl) => (
-                  <button
-                    key={cl.id}
-                    onClick={() => { setSelectedCliente(cl); setClienteSearch(''); }}
-                    className="w-full flex items-center gap-3 p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors text-left border-b border-gray-100 dark:border-gray-700 last:border-b-0 cursor-pointer"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-sm shrink-0">👤</div>
-                    <div>
-                      <div className="text-sm font-semibold text-gray-900 dark:text-white">{cl.nome}</div>
-                      <div className="text-xs text-gray-400">{cl.tel}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-            <button onClick={() => { setShowNewCliente(true); setShowNewVeicolo(true); }} className="w-full py-2 text-sm text-blue-600 font-semibold hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors cursor-pointer">
-              + Crea nuovo cliente
-            </button>
+            <VoiceButton onResult={setProblema} />
           </div>
-        )}
+        </div>
+
+        <div>
+          <label className={labelClass}>Data e ora *</label>
+          <input type="datetime-local" value={dataOra} onChange={(e) => setDataOra(e.target.value)} className={inputClass} />
+        </div>
       </div>
-
-      {/* 2. Veicolo */}
-      {(selectedCliente || showNewCliente) && (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">🚗 Veicolo</h3>
-
-          {selectedVeicolo ? (
-            <div className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl">
-              <div>
-                <div className="font-bold text-sm text-emerald-800 dark:text-emerald-300">{selectedVeicolo.marca} {selectedVeicolo.modello}</div>
-                <div className="text-xs text-emerald-600 dark:text-emerald-400 font-mono">{selectedVeicolo.targa}</div>
-              </div>
-              <button onClick={() => setSelectedVeicolo(null)} className="text-xs text-emerald-600 hover:text-emerald-800 cursor-pointer">Cambia</button>
-            </div>
-          ) : loadingVeicoli ? (
-            // Senza questo stato il form "nuovo veicolo" comparirebbe subito
-            // mentre il pulsante Salva e' ancora nascosto, ripresentando in
-            // apparenza il vecchio bug del tasto mancante.
-            <div className="py-3 text-center text-xs text-gray-400">Caricamento veicoli…</div>
-          ) : showNewVeicolo || veicoli.length === 0 ? (
-            <div className="space-y-2">
-              {veicoli.length > 0 && (
-                <div className="flex justify-end">
-                  <button onClick={() => setShowNewVeicolo(false)} className="text-xs text-blue-600 cursor-pointer">Seleziona esistente</button>
-                </div>
-              )}
-              <input type="text" value={newTarga} onChange={(e) => setNewTarga(e.target.value.toUpperCase())} className={inputClass} placeholder="Targa *" maxLength={10} />
-              <div className="grid grid-cols-2 gap-2">
-                <input type="text" value={newMarca} onChange={(e) => setNewMarca(e.target.value)} className={inputClass} placeholder="Marca (es. Fiat)" />
-                <input type="text" value={newModello} onChange={(e) => setNewModello(e.target.value)} className={inputClass} placeholder="Modello (es. Panda)" />
-              </div>
-              {!mostraAltriDettagliVeicolo ? (
-                <button
-                  type="button"
-                  onClick={() => setMostraAltriDettagliVeicolo(true)}
-                  className="w-full py-2 text-xs text-emerald-600 font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors cursor-pointer"
-                >
-                  + Altri dettagli veicolo (opzionale — puoi compilarli dopo, quando arriva l'auto)
-                </button>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input type="number" value={newAnno} onChange={(e) => setNewAnno(e.target.value)} className={inputClass} placeholder="Anno" />
-                    <input type="number" value={newKm} onChange={(e) => setNewKm(e.target.value)} className={inputClass} placeholder="Km" />
-                  </div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {carburanti.map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => setNewCarburante(c)}
-                        className={`py-2 rounded-lg text-xs font-medium capitalize transition-colors cursor-pointer ${
-                          newCarburante === c ? 'bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
-                        }`}
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">Scadenze (opzionale)</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="date" value={newScadRevisione} onChange={(e) => setNewScadRevisione(e.target.value)} className={inputClass} placeholder="Revisione" />
-                      <input type="date" value={newScadTagliando} onChange={(e) => setNewScadTagliando(e.target.value)} className={inputClass} placeholder="Tagliando" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                      <input type="date" value={newScadAssicurazione} onChange={(e) => setNewScadAssicurazione(e.target.value)} className={inputClass} placeholder="Assicurazione" />
-                      <input type="date" value={newScadBollo} onChange={(e) => setNewScadBollo(e.target.value)} className={inputClass} placeholder="Bollo" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">Foto libretto di circolazione</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setNewFotoLibretto(e.target.files?.[0] || null)}
-                      className="w-full text-xs text-gray-600 dark:text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:text-xs file:font-semibold hover:file:bg-emerald-100 cursor-pointer"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {veicoli.map((v) => (
-                <button
-                  key={v.id}
-                  onClick={() => setSelectedVeicolo(v)}
-                  className="w-full flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-600 rounded-xl hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all text-left cursor-pointer"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-sm shrink-0">🚗</div>
-                  <div>
-                    <div className="text-sm font-semibold text-gray-900 dark:text-white">{v.marca} {v.modello}</div>
-                    <div className="text-xs text-gray-400 font-mono">{v.targa}</div>
-                  </div>
-                </button>
-              ))}
-              <button onClick={() => setShowNewVeicolo(true)} className="w-full py-2 text-sm text-emerald-600 font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors cursor-pointer">
-                + Aggiungi nuovo veicolo
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 3. Dettagli appuntamento */}
-      {(selectedCliente || showNewCliente) && (selectedVeicolo || showNewVeicolo || (!loadingVeicoli && veicoli.length === 0)) && (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">📅 Dettagli</h3>
-
-          <div>
-            <label className={labelClass}>Data e ora *</label>
-            <input type="datetime-local" value={dataOra} onChange={(e) => setDataOra(e.target.value)} className={inputClass} />
-          </div>
-
-          <div>
-            <label className={labelClass}>Descrizione lavoro *</label>
-            <div className="flex items-start gap-2">
-              <textarea
-                value={problema}
-                onChange={(e) => setProblema(e.target.value)}
-                rows={3}
-                className={inputClass + ' resize-none flex-1'}
-                placeholder="Es: Tagliando completo, cambio olio e filtri..."
-              />
-              <VoiceButton onResult={setProblema} />
-            </div>
-          </div>
-
-          <div>
-            <label className={labelClass}>Priorità</label>
-            <div className="flex gap-2">
-              {[
-                { val: 'bassa', label: '🟢 Bassa', color: 'border-green-300 bg-green-50 text-green-700' },
-                { val: 'normale', label: '🟡 Normale', color: 'border-yellow-300 bg-yellow-50 text-yellow-700' },
-                { val: 'alta', label: '🔴 Alta', color: 'border-red-300 bg-red-50 text-red-700' },
-              ].map((p) => (
-                <button
-                  key={p.val}
-                  onClick={() => setPriorita(p.val)}
-                  className={`flex-1 py-2 text-xs font-bold rounded-xl border-2 transition-all cursor-pointer ${
-                    priorita === p.val ? p.color : 'border-gray-200 bg-white text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Error */}
       {error && (
@@ -478,16 +171,13 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
         </div>
       )}
 
-      {/* Submit */}
-      {(selectedCliente || showNewCliente) && (selectedVeicolo || showNewVeicolo || (!loadingVeicoli && veicoli.length === 0)) && (
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
-        >
-          {loading ? 'Creazione in corso...' : 'Crea Appuntamento'}
-        </button>
-      )}
+      <button
+        onClick={handleSubmit}
+        disabled={loading}
+        className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+      >
+        {loading ? 'Creazione in corso...' : 'Crea Appuntamento'}
+      </button>
     </div>
   );
 }
