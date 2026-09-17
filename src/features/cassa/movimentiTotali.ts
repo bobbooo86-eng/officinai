@@ -1,4 +1,4 @@
-import type { Movimento, MovimentoTipo } from '@/types/database';
+import type { Movimento, MovimentoTipo, PagamentoInfo } from '@/types/database';
 
 // Segno di ciascun tipo di movimento (usato sia da CassaPage per i totali
 // riga/periodo, sia dalla Home per "Spese officina"): tenerlo qui, in un
@@ -32,3 +32,11 @@ export const spesaMovimento = (m: Movimento): number =>
   TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo)
     ? Number(m.spese_lavorazione) || 0
     : SEGNO[m.tipo] === -1 ? Number(m.importo) : 0;
+
+// Il costo ricambi su un appuntamento e' spesso solo informativo: i
+// ricambisti vengono pagati a blocchi (es. 800€ tutti insieme), non pezzo
+// per pezzo, e quella spesa si registra a parte come movimento
+// "spesa_officina". Conta come spesa qui solo se segnato "pagati subito"
+// (es. pezzi usati allo sfascio, pagati sul momento).
+export const spesaRicambi = (p?: PagamentoInfo | null): number =>
+  p?.ricambi_pagati_subito ? Number(p.costo_ricambi) || 0 : 0;

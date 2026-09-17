@@ -5,7 +5,7 @@ import { fmtEuro, dayKey } from '@/lib/format';
 import { STATO_CONFIG } from '@/lib/constants';
 import { useAuthStore } from '@/stores/authStore';
 import { dataIncasso, inPeriodo, valoreLavoro, PERIODI, type Periodo } from '@/features/cassa/IncassiOfficina';
-import { incassoMovimento, spesaMovimento } from '@/features/cassa/movimentiTotali';
+import { incassoMovimento, spesaMovimento, spesaRicambi } from '@/features/cassa/movimentiTotali';
 import type { Appuntamento, Preventivo, Recensione, Movimento, Utente } from '@/types/database';
 
 // Nomi da cercare ovunque compaiano — nel campo "operaio" della consegna,
@@ -151,7 +151,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
       consegnati.forEach((a) => {
         if (!menziona(a.pagamento?.operaio, nome)) return;
         const incasso = valoreLavoro(a);
-        const spesa = a.pagamento?.costo_ricambi || 0;
+        const spesa = spesaRicambi(a.pagamento);
         incassi += incasso;
         spese += spesa;
         const veicolo = [a.veicoli?.marca, a.veicoli?.modello].filter(Boolean).join(' ');

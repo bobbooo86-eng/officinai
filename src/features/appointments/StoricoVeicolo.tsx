@@ -34,6 +34,7 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
   const [editPagato, setEditPagato] = useState('');
   const [editTotale, setEditTotale] = useState('');
   const [editRicambi, setEditRicambi] = useState('');
+  const [editRicambiSubito, setEditRicambiSubito] = useState(false);
   const [salvandoPagamento, setSalvandoPagamento] = useState<string | null>(null);
 
   const apriModificaPagamento = (a: Appuntamento, e: React.MouseEvent) => {
@@ -42,6 +43,7 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
     setEditPagato(String(a.pagamento?.importo_pagato ?? 0));
     setEditTotale(String(a.pagamento?.importo_totale ?? 0));
     setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
+    setEditRicambiSubito(!!a.pagamento?.ricambi_pagati_subito);
   };
 
   // Stessa logica di Incassi officina: incassato finora, totale da pagare
@@ -59,6 +61,7 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
       importo_pagato: nuovoPagato,
       importo_totale: nuovoTotale,
       costo_ricambi: nuovoRicambi,
+      ricambi_pagati_subito: editRicambiSubito,
       stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
     };
     setSalvandoPagamento(a.id);
@@ -260,6 +263,9 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
                         </div>
                         <div className="text-[11px] text-gray-500 mt-0.5">
                           Costo ricambi: <span className="font-semibold text-gray-700">{fmtEuro(app.pagamento.costo_ricambi || 0)}</span>
+                          {!app.pagamento.ricambi_pagati_subito && (app.pagamento.costo_ricambi || 0) > 0 && (
+                            <span className="text-gray-400"> (non conteggiato come spesa)</span>
+                          )}
                         </div>
 
                         {editingPagamentoId === app.id && (
@@ -299,6 +305,15 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
                                 />
                               </div>
                             </div>
+                            <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={editRicambiSubito}
+                                onChange={(e) => setEditRicambiSubito(e.target.checked)}
+                                className="rounded"
+                              />
+                              Pagati subito (es. sfascio) — conta come spesa
+                            </label>
                             <div className="flex gap-2">
                               <button
                                 onClick={(e) => salvaModificaPagamento(app, e)}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
+import { spesaRicambi } from './movimentiTotali';
 import type { Appuntamento } from '@/types/database';
 
 // Formato "YYYY-MM-DD" in ora locale per l'input date: con toISOString()
@@ -23,6 +24,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
   const [editPagato, setEditPagato] = useState('');
   const [editTotale, setEditTotale] = useState('');
   const [editRicambi, setEditRicambi] = useState('');
+  const [editRicambiSubito, setEditRicambiSubito] = useState(false);
   const [editOperaio, setEditOperaio] = useState('');
   const [editData, setEditData] = useState('');
   const [salvando, setSalvando] = useState<string | null>(null);
@@ -32,6 +34,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
     setEditPagato(String(a.pagamento?.importo_pagato ?? 0));
     setEditTotale(String(a.pagamento?.importo_totale ?? 0));
     setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
+    setEditRicambiSubito(!!a.pagamento?.ricambi_pagati_subito);
     setEditOperaio(a.pagamento?.operaio || '');
     setEditData(dataInputValue(a.pagamento?.data_consegna || a.data_ora));
   };
@@ -56,6 +59,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
       importo_pagato: nuovoPagato,
       importo_totale: nuovoTotale,
       costo_ricambi: nuovoRicambi,
+      ricambi_pagati_subito: editRicambiSubito,
       operaio: editOperaio.trim() || undefined,
       data_consegna: nuovaDataConsegna,
       stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
@@ -70,7 +74,8 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
 
   return {
     editingId, editPagato, setEditPagato, editTotale, setEditTotale,
-    editRicambi, setEditRicambi, editOperaio, setEditOperaio,
+    editRicambi, setEditRicambi, editRicambiSubito, setEditRicambiSubito,
+    editOperaio, setEditOperaio,
     editData, setEditData, salvando,
     apri, annulla, salva,
   };
@@ -117,6 +122,15 @@ export function PagamentoEditFields({ editor, appuntamento }: { editor: Pagament
           />
         </div>
       </div>
+      <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={editor.editRicambiSubito}
+          onChange={(e) => editor.setEditRicambiSubito(e.target.checked)}
+          className="rounded"
+        />
+        Pagati subito (es. sfascio) — conta come spesa
+      </label>
       <div className="flex items-center gap-2">
         <div className="flex-1">
           <label className="text-[10px] text-gray-400 block">Operaio che ha fatto il lavoro</label>
@@ -288,7 +302,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   }, [appuntamenti, inRange, search]);
 
   const totaleIncassato = inRange.reduce((s, a) => s + incassato(a), 0);
-  const totaleRicambi = inRange.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
+  const totaleRicambi = inRange.reduce((s, a) => s + spesaRicambi(a.pagamento), 0);
   const margineNetto = inRange.reduce((s, a) => s + valoreLavoro(a), 0) - totaleRicambi;
   const totaleResto = inRange.reduce((s, a) => s + restoDaIncassare(a), 0);
 
@@ -331,7 +345,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
           <span className="text-xl font-black text-emerald-700">{fmtEuro(totaleIncassato)}</span>
         </div>
         <div className="flex justify-between items-baseline">
-          <span className="text-xs text-gray-600">Costo ricambi</span>
+          <span className="text-xs text-gray-600">Costo ricambi pagati subito</span>
           <span className="text-sm font-semibold text-red-600">− {fmtEuro(totaleRicambi)}</span>
         </div>
         <div className="flex justify-between items-baseline pt-2 border-t border-emerald-200">
@@ -395,7 +409,11 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                   <span className="text-[11px] text-gray-500">
                     Costo ricambi: <span className="font-semibold text-gray-700">{fmtEuro(p.costo_ricambi || 0)}</span>
                     {(p.costo_ricambi || 0) > 0 && (
-                      <span className="text-gray-400"> · netto {fmtEuro(valoreLavoro(a) - (p.costo_ricambi || 0))}</span>
+                      p.ricambi_pagati_subito ? (
+                        <span className="text-gray-400"> · netto {fmtEuro(valoreLavoro(a) - spesaRicambi(p))}</span>
+                      ) : (
+                        <span className="text-gray-400"> (non conteggiato)</span>
+                      )
                     )}
                     {p.operaio && <span className="text-gray-400"> · 🔧 {p.operaio}</span>}
                   </span>

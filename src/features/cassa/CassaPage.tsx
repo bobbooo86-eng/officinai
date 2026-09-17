@@ -8,7 +8,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { VoiceButton } from '@/components/VoiceInput';
 import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncassare, usePagamentoEditor, PagamentoEditFields, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
-import { SEGNO, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento } from './movimentiTotali';
+import { SEGNO, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento, spesaRicambi } from './movimentiTotali';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente, Appuntamento } from '@/types/database';
 
 type CassaTab = 'tutti' | 'incasso_extra' | 'spesa_officina' | 'spesa_titolare' | 'dipendenti' | 'spesa_revisione_gianni' | 'spesa_centraline_daniele';
@@ -503,7 +503,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   const totalSpese = useMemo(
     () =>
       monthTutti.reduce((a, m) => a + spesaMovimento(m), 0) +
-      incassiAutoTotaliInRange.reduce((a, app) => a + (app.pagamento?.costo_ricambi || 0), 0),
+      incassiAutoTotaliInRange.reduce((a, app) => a + spesaRicambi(app.pagamento), 0),
     [monthTutti, incassiAutoTotaliInRange]
   );
   const saldo = totalIncassi - totalSpese;
@@ -862,7 +862,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
               items.auto.reduce((a, app) => a + incassatoAuto(app), 0);
             const daySpese =
               items.movimenti.reduce((a, m) => a + spesaMovimento(m), 0) +
-              items.auto.reduce((a, app) => a + (app.pagamento?.costo_ricambi || 0), 0);
+              items.auto.reduce((a, app) => a + spesaRicambi(app.pagamento), 0);
             const daySaldo = dayIncassi - daySpese;
             const dt = new Date(giorno + 'T00:00');
             const label = dt.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -895,7 +895,11 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                             {app.pagamento?.stato === 'acconto' && ' · acconto'}
                           </div>
                           {ricambi > 0 && (
-                            <div className="text-[11px] text-red-500 truncate">− Costo ricambi: {fmtEuro(ricambi)}</div>
+                            app.pagamento?.ricambi_pagati_subito ? (
+                              <div className="text-[11px] text-red-500 truncate">− Costo ricambi: {fmtEuro(ricambi)}</div>
+                            ) : (
+                              <div className="text-[11px] text-gray-400 truncate">Costo ricambi: {fmtEuro(ricambi)} (non conteggiato come spesa)</div>
+                            )
                           )}
                           {resto > 0 && (
                             <div className="text-[11px] text-amber-600 truncate">Ancora da incassare: {fmtEuro(resto)}</div>

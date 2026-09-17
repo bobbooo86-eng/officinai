@@ -567,6 +567,7 @@ function ModalPagamento({ onConferma, onAnnulla }: {
   const [importoPagato, setImportoPagato] = useState('');
   const [importoTotale, setImportoTotale] = useState('');
   const [costoRicambi, setCostoRicambi] = useState('');
+  const [ricambiSubito, setRicambiSubito] = useState(false);
   const [note, setNote] = useState('');
 
   const conferma = () => {
@@ -575,6 +576,7 @@ function ModalPagamento({ onConferma, onAnnulla }: {
       importo_pagato: importoPagato ? parseFloat(importoPagato) : undefined,
       importo_totale: importoTotale ? parseFloat(importoTotale) : undefined,
       costo_ricambi: costoRicambi ? parseFloat(costoRicambi) : undefined,
+      ricambi_pagati_subito: ricambiSubito,
       data_consegna: new Date().toISOString(),
       note: note.trim() || undefined,
     });
@@ -655,6 +657,15 @@ function ModalPagamento({ onConferma, onAnnulla }: {
               placeholder="es. 80"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <label className="flex items-center gap-2 mt-1.5 text-xs text-gray-500 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={ricambiSubito}
+                onChange={(e) => setRicambiSubito(e.target.checked)}
+                className="rounded"
+              />
+              Pagati subito (es. sfascio) — conta come spesa
+            </label>
           </div>
           {statoPag !== 'pagato' && (
             <div>

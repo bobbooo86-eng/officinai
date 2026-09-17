@@ -101,6 +101,7 @@ export interface PagamentoInfo {
   importo_pagato?: number;   // per acconto: quanto ha gia pagato
   importo_totale?: number;   // importo totale da pagare
   costo_ricambi?: number;    // costo dei ricambi usati, per calcolare il guadagno netto
+  ricambi_pagati_subito?: boolean; // true solo se pagati sul momento (es. sfascio): conta come spesa. Se pagati poi al ricambista (es. a blocchi), NON conta qui: quella spesa si registra a parte in Movimenti
   data_consegna?: string;    // quando e' stata confermata la consegna: appuntamenti non ha altrimenti una data di consegna, solo data_ora (la data prenotata)
   note?: string;
   operaio?: string;          // nome di chi ha eseguito il lavoro sull'auto
