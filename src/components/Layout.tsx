@@ -12,9 +12,9 @@ interface LayoutProps {
   onSearchSelect?: (type: string, id: string) => void;
   showSearch?: boolean;
   fab?: { onClick: () => void };
-  // Il tasto "+" e quello di stampa, entrambi in basso a destra, a volte
-  // finiscono sopra i prezzi delle righe di un preventivo mentre si scorre:
-  // le pagine con quel problema li nascondono passando true qui.
+  // Il tasto "+" in basso a destra a volte finisce sopra i prezzi delle
+  // righe di un preventivo mentre si scorre: le pagine con quel problema
+  // lo nascondono passando true qui.
   hideFloatingButtons?: boolean;
 }
 
@@ -67,6 +67,7 @@ export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect,
           </div>
 
           <div className="flex items-center gap-2">
+            <PrintButton />
             <NotificationBell />
             <div className="relative">
               <button
@@ -108,9 +109,6 @@ export function Layout({ children, tabs, activeTab, onTabChange, onSearchSelect,
       <main id="main-content" role="main" className="flex-1 overflow-auto pb-20 dark:bg-gray-900">
         {children}
       </main>
-
-      {/* Print button — floating on every page, tranne dove copre altro */}
-      {!hideFloatingButtons && <PrintButton />}
 
       {/* FAB — Nuovo appuntamento */}
       {fab && !hideFloatingButtons && (

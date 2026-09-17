@@ -378,16 +378,6 @@ export function CalendarView({ onSelect, initialDate, searchQuery = '', onNuovoA
         </button>
       </div>
 
-      {/* Bottone "+ Nuovo appuntamento" sempre visibile */}
-      {onNuovoAppuntamento && (
-        <button
-          onClick={() => onNuovoAppuntamento(selectedDate)}
-          className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-sm active:scale-[0.98] cursor-pointer transition-all"
-        >
-          + Nuovo appuntamento{viewMode === 'giorno' ? ` per ${selectedDate.getDate()} ${monthNamesShort[selectedDate.getMonth()]}` : ''}
-        </button>
-      )}
-
       {/* Strip settimana (solo in vista giorno/settimana) */}
       {(viewMode === 'giorno' || viewMode === 'settimana') && (
         <div className="flex gap-1">
