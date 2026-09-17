@@ -1133,6 +1133,7 @@ function TabStato({ app }: { app: Appuntamento }) {
 
 // ==================== TAB PREVENTIVO ====================
 function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: string; appuntamento: Appuntamento }) {
+  const { officina } = useAuthStore();
   const [preventivo, setPreventivo] = useState<Preventivo | null>(null);
   const [righe, setRighe] = useState<PreventivoRiga[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1195,6 +1196,35 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
       if (data) setPreventivo(data);
     }
     setSaving(false);
+  };
+
+  // "Invia al cliente" prima segnava solo lo stato come "Inviato" nel
+  // database, senza mandare davvero nulla: il preventivo compariva
+  // "Inviato" in elenco ma il cliente non riceveva niente. Ora apre
+  // davvero WhatsApp o l'email con il preventivo pronto da spedire, e
+  // solo dopo segna lo stato.
+  const cliente = appuntamento.clienti;
+  const veicolo = appuntamento.veicoli;
+  const descrizioneVeicolo = [veicolo?.marca, veicolo?.modello].filter(Boolean).join(' ') + (veicolo?.targa ? ` (${veicolo.targa})` : '');
+  const dettaglioRighe = righe.map((r) => `- ${r.desc}: ${fmtEuro(r.qta * r.prezzo)}`).join('\n');
+
+  const inviaWhatsApp = async () => {
+    await salva('inviato');
+    const tel = cliente?.tel?.replace(/\D/g, '') || '';
+    const prefix = tel.startsWith('39') ? tel : `39${tel}`;
+    const testo = encodeURIComponent(
+      `Gentile ${cliente?.nome || 'Cliente'}, da ${officina?.nome || 'Officina'} le inviamo il preventivo per il suo veicolo ${descrizioneVeicolo}.\n\n${dettaglioRighe}\n\nTotale: ${fmtEuro(totale)}\n\n${officina?.nome || 'Officina'}${officina?.tel ? ` — Tel: ${officina.tel}` : ''}`
+    );
+    window.open(`https://wa.me/${prefix}?text=${testo}`, '_blank');
+  };
+
+  const inviaEmail = async () => {
+    await salva('inviato');
+    const oggetto = encodeURIComponent(`Preventivo ${descrizioneVeicolo} — ${officina?.nome || 'Officina'}`);
+    const corpo = encodeURIComponent(
+      `Gentile ${cliente?.nome || 'Cliente'},\n\nLe inviamo il preventivo per il suo veicolo ${descrizioneVeicolo}.\n\n${dettaglioRighe}\n\nTotale: ${fmtEuro(totale)}\n\nCordiali saluti,\n${officina?.nome || 'Officina'}${officina?.tel ? `\nTel: ${officina.tel}` : ''}`
+    );
+    window.open(`mailto:${cliente?.email || ''}?subject=${oggetto}&body=${corpo}`, '_blank');
   };
 
   if (loading) return <div className="text-center py-4 text-sm text-gray-400">Caricamento...</div>;
@@ -1286,10 +1316,32 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
         <Button variant="secondary" onClick={() => salva('bozza')} loading={saving} fullWidth>
           Salva bozza
         </Button>
-        <Button onClick={() => salva('inviato')} loading={saving} fullWidth>
-          Invia al cliente
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          onClick={inviaWhatsApp}
+          disabled={!cliente?.tel || righe.length === 0}
+          loading={saving}
+          className="!bg-green-600 hover:!bg-green-700"
+          fullWidth
+        >
+          📱 Invia WhatsApp
+        </Button>
+        <Button
+          onClick={inviaEmail}
+          disabled={!cliente?.email || righe.length === 0}
+          loading={saving}
+          className="!bg-indigo-600 hover:!bg-indigo-700"
+          fullWidth
+        >
+          ✉️ Invia Email
         </Button>
       </div>
+      {!cliente?.tel && !cliente?.email && (
+        <div className="text-[11px] text-amber-600 text-center">
+          Nessun telefono o email per questo cliente: completa i suoi dati per poter inviare il preventivo.
+        </div>
+      )}
 
       {/* PDF Export */}
       {preventivo && righe.length > 0 && (
