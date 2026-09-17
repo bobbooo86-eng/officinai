@@ -19,7 +19,7 @@ function menziona(testo: string | null | undefined, nome: string): boolean {
 
 const dataMovimento = (m: Movimento) => new Date(m.data + 'T00:00:00');
 
-export function AnalyticsPage() {
+export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (clienteId: string) => void } = {}) {
   const { officina } = useAuthStore();
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [preventivi, setPreventivi] = useState<Preventivo[]>([]);
@@ -146,7 +146,7 @@ export function AnalyticsPage() {
     return COLLABORATORI.map((nome) => {
       let incassi = 0;
       let spese = 0;
-      const dettagli: { id: string; data: Date; label: string; sub: string; incasso: number; spesa: number }[] = [];
+      const dettagli: { id: string; data: Date; label: string; sub: string; targa?: string; clienteId?: string; incasso: number; spesa: number }[] = [];
 
       consegnati.forEach((a) => {
         if (!menziona(a.pagamento?.operaio, nome)) return;
@@ -158,8 +158,10 @@ export function AnalyticsPage() {
         dettagli.push({
           id: `app-${a.id}`,
           data: dataIncasso(a),
-          label: (veicolo || 'Veicolo') + (a.veicoli?.targa ? ` — ${a.veicoli.targa}` : ''),
+          label: veicolo || 'Veicolo',
           sub: [a.problema, a.clienti?.nome].filter(Boolean).join(' · '),
+          targa: a.veicoli?.targa || undefined,
+          clienteId: a.cliente_id || undefined,
           incasso,
           spesa,
         });
@@ -379,18 +381,40 @@ export function AnalyticsPage() {
                     {c.dettagli.length === 0 ? (
                       <div className="p-3 text-center text-xs text-gray-400">Nessun lavoro in questo periodo</div>
                     ) : (
-                      c.dettagli.map((d) => (
-                        <div key={d.id} className="p-2.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-semibold text-gray-800 truncate">{d.label}</span>
-                            <span className="text-xs font-bold text-emerald-600 shrink-0">+{fmtEuro(d.incasso)}</span>
+                      c.dettagli.map((d) => {
+                        const cliccabile = !!d.clienteId && !!onNavigateToCliente;
+                        const contenuto = (
+                          <>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-semibold text-gray-800 truncate">
+                                {d.label}{d.targa && <span className="ml-1.5 font-mono text-[10px] text-gray-500">{d.targa}</span>}
+                              </span>
+                              <span className="text-xs font-bold text-emerald-600 shrink-0">+{fmtEuro(d.incasso)}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 text-[10px] text-gray-400 mt-0.5">
+                              <span className="truncate">{d.sub} · {d.data.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                              {d.spesa > 0 && <span className="text-red-500 shrink-0">− {fmtEuro(d.spesa)}</span>}
+                            </div>
+                            {cliccabile && (
+                              <div className="text-[9px] text-blue-500 mt-0.5">Tocca per vedere la scheda cliente →</div>
+                            )}
+                          </>
+                        );
+                        return cliccabile ? (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => onNavigateToCliente!(d.clienteId!)}
+                            className="p-2.5 w-full text-left block cursor-pointer hover:bg-gray-50"
+                          >
+                            {contenuto}
+                          </button>
+                        ) : (
+                          <div key={d.id} className="p-2.5">
+                            {contenuto}
                           </div>
-                          <div className="flex items-center justify-between gap-2 text-[10px] text-gray-400 mt-0.5">
-                            <span className="truncate">{d.sub} · {d.data.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                            {d.spesa > 0 && <span className="text-red-500 shrink-0">− {fmtEuro(d.spesa)}</span>}
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 )}

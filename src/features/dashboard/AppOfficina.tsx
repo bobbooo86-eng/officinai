@@ -306,7 +306,11 @@ export function AppOfficina() {
         />
       )}
       {activeTab === 'magazzino' && <Suspense fallback={<PageSkeleton />}><InventoryPage resetSignal={resetSignal} /></Suspense>}
-      {activeTab === 'analytics' && <Suspense fallback={<PageSkeleton />}><AnalyticsPage /></Suspense>}
+      {activeTab === 'analytics' && (
+        <Suspense fallback={<PageSkeleton />}>
+          <AnalyticsPage onNavigateToCliente={(clienteId) => { setSelectedClienteId(clienteId); setActiveTab('clienti'); }} />
+        </Suspense>
+      )}
       {activeTab === 'fatture' && <Suspense fallback={<PageSkeleton />}><InvoicePage resetSignal={resetSignal} /></Suspense>}
       {activeTab === 'obd' && <Suspense fallback={<PageSkeleton />}><OBDScansPage /></Suspense>}
       {activeTab === 'cassa' && (
