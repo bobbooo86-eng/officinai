@@ -3,6 +3,7 @@ import { Button, Card, Badge, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG, STATI_ORDINE, GRAVITA_CONFIG } from '@/lib/constants';
 import { fmtEuro, fmtDataOra } from '@/lib/format';
+import { toWhatsAppNumber } from '@/lib/whatsapp';
 import { useAuthStore } from '@/stores/authStore';
 import { ChatPanel } from '@/features/chat/ChatPanel';
 import { PhotoGallery } from '@/features/photos/PhotoGallery';
@@ -759,8 +760,7 @@ function TabStato({ app }: { app: Appuntamento }) {
   const openWhatsApp = (testo: string) => {
     const tel = app.clienti?.tel;
     if (!tel) return;
-    const numero = tel.replace(/[^0-9+]/g, '');
-    const url = `https://wa.me/${numero}?text=${encodeURIComponent(testo)}`;
+    const url = `https://wa.me/${toWhatsAppNumber(tel)}?text=${encodeURIComponent(testo)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
@@ -1211,12 +1211,10 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
 
   const inviaWhatsApp = async () => {
     await salva('inviato');
-    const tel = cliente?.tel?.replace(/\D/g, '') || '';
-    const prefix = tel.startsWith('39') ? tel : `39${tel}`;
     const testo = encodeURIComponent(
       `Gentile ${cliente?.nome || 'Cliente'}, da ${officina?.nome || 'Officina'} le inviamo il preventivo per il suo veicolo ${descrizioneVeicolo}.\n\n${dettaglioRighe}\n\nTotale: ${fmtEuro(totale)}\n\n${officina?.nome || 'Officina'}${officina?.tel ? ` — Tel: ${officina.tel}` : ''}`
     );
-    window.open(`https://wa.me/${prefix}?text=${testo}`, '_blank');
+    window.open(`https://wa.me/${toWhatsAppNumber(cliente?.tel || '')}?text=${testo}`, '_blank');
   };
 
   const inviaEmail = async () => {

@@ -2,15 +2,8 @@ import { useState } from 'react';
 import { Button, Card } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { toWhatsAppNumber } from '@/lib/whatsapp';
 import { useAuthStore } from '@/stores/authStore';
-
-// wa.me richiede il numero completo con prefisso internazionale (39 per
-// l'Italia), senza "+" davanti: un numero italiano digitato senza prefisso
-// (es. "3402571805") apriva una chat non valida e il messaggio non partiva.
-function toWhatsAppNumber(tel: string): string {
-  const digits = tel.replace(/\D/g, '');
-  return digits.startsWith('39') ? digits : `39${digits}`;
-}
 
 interface ShareDocumentProps {
   /** Tipo documento per il template email */

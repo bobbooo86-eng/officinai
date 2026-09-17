@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, Badge } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
+import { toWhatsAppNumber } from '@/lib/whatsapp';
 import { useAuthStore } from '@/stores/authStore';
 import { leggiPromemoriaNascosti, nascondiPromemoria } from '@/lib/promemoriaNascosti';
 import type { Veicolo, Cliente } from '@/types/database';
@@ -97,8 +98,7 @@ export function VehicleAlerts() {
     const dataFmt = new Date(alert.scadenza).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
     const scaduta = alert.giorniRimanenti <= 0;
     const testo = `Buongiorno ${alert.cliente?.nome || ''}, le ricordiamo che ${alert.tipo.toLowerCase()} del suo ${alert.veicolo.marca} ${alert.veicolo.modello}${alert.veicolo.targa ? ` (${alert.veicolo.targa})` : ''} ${scaduta ? `è scaduta il ${dataFmt}` : `scade il ${dataFmt}`}. La contattiamo per fissare un appuntamento.\n— ${officina?.nome || 'OfficinAI'}`;
-    const telPulito = tel.replace(/[^0-9+]/g, '');
-    window.open(`https://wa.me/${telPulito}?text=${encodeURIComponent(testo)}`, '_blank');
+    window.open(`https://wa.me/${toWhatsAppNumber(tel)}?text=${encodeURIComponent(testo)}`, '_blank');
   };
 
   if (loading) return null;

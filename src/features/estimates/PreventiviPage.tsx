@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, Badge, Button, Loader } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
+import { toWhatsAppNumber } from '@/lib/whatsapp';
 import { fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { generaDatiVeicolo, lookupTargaEsterna, DB_AUTO, type DatiVeicolo } from '@/lib/targaLookup';
@@ -1785,9 +1786,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                         ? `${messaggioBreve}\n\n📄 Preventivo completo in PDF:\n${savedPdfUrl}\n\nResto a disposizione per qualsiasi chiarimento.\n${officina?.nome || 'Officina'}${officina?.tel ? ` — Tel: ${officina.tel}` : ''}`
                         : `${messaggioBreve}\n\nIl preventivo dettagliato verra' inviato a breve in PDF.\n${officina?.nome || 'Officina'}${officina?.tel ? ` — Tel: ${officina.tel}` : ''}`
                     );
-                    const tel = cliente?.tel?.replace(/\D/g, '') || '';
-                    const prefix = tel.startsWith('39') ? tel : `39${tel}`;
-                    window.open(`https://wa.me/${prefix}?text=${testo}`, '_blank');
+                    window.open(`https://wa.me/${toWhatsAppNumber(cliente?.tel || '')}?text=${testo}`, '_blank');
                   }}
                   disabled={!saved || uploadingSavedPdf}
                   className="p-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors cursor-pointer"

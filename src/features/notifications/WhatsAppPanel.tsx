@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button, Card, Badge } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
+import { toWhatsAppNumber } from '@/lib/whatsapp';
 import { useAuthStore } from '@/stores/authStore';
 import type { Appuntamento } from '@/types/database';
 
@@ -84,12 +85,12 @@ export function WhatsAppPanel({ appuntamento }: WhatsAppPanelProps) {
 
       if (data?.fallback || error) {
         // Twilio not configured or error — open WhatsApp Web
-        const waUrl = `https://wa.me/${clienteTel.replace(/[^0-9+]/g, '')}?text=${encodeURIComponent(testo)}`;
+        const waUrl = `https://wa.me/${toWhatsAppNumber(clienteTel)}?text=${encodeURIComponent(testo)}`;
         window.open(waUrl, '_blank');
       }
     } catch {
       // Fallback: WhatsApp Web
-      const waUrl = `https://wa.me/${clienteTel.replace(/[^0-9+]/g, '')}?text=${encodeURIComponent(testo)}`;
+      const waUrl = `https://wa.me/${toWhatsAppNumber(clienteTel)}?text=${encodeURIComponent(testo)}`;
       window.open(waUrl, '_blank');
     }
 
@@ -180,6 +181,14 @@ export function WhatsAppPanel({ appuntamento }: WhatsAppPanelProps) {
           className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-500"
           rows={3}
         />
+      )}
+
+      {/* Questo messaggio e' solo testo: per allegare il PDF vero del
+          preventivo bisogna usare il pulsante dedicato nel tab Preventivo. */}
+      {selectedTemplate === 'preventivo_pronto' && (
+        <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+          Questo è solo un avviso di testo. Per inviare il PDF vero del preventivo, vai nel tab «Preventivo» e usa «📎 Invia PDF».
+        </div>
       )}
 
       {/* Preview */}
