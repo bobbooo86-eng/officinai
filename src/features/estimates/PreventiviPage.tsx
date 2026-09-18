@@ -1155,7 +1155,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
         <h3>Dettaglio lavorazioni</h3>
         <table>
           <thead>
-            <tr><th>Tipo</th><th>Descrizione</th><th class="text-right">Qta</th><th class="text-right">Prezzo</th><th class="text-right">Totale</th></tr>
+            <tr><th>Tipo</th><th>Descrizione</th><th class="text-right">Qta</th><th class="text-right">Prezzo (IVA escl.)</th><th class="text-right">Totale</th></tr>
           </thead>
           <tbody>
             ${righe.map(r => `
@@ -1175,7 +1175,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
         <table>
           <tr><td>Manodopera:</td><td class="text-right">${fmtEuro(totaleManodopera)}</td></tr>
           <tr><td>Ricambi:</td><td class="text-right">${fmtEuro(totaleRicambi)}</td></tr>
-          <tr><td>Subtotale:</td><td class="text-right">${fmtEuro(subtotale)}</td></tr>
+          <tr><td>Subtotale (IVA escl.):</td><td class="text-right">${fmtEuro(subtotale)}</td></tr>
           ${sconto > 0 ? `<tr><td>Sconto (${sconto}%):</td><td class="text-right">-${fmtEuro(scontoEuro)}</td></tr>` : ''}
           <tr><td>IVA (22%):</td><td class="text-right">${fmtEuro(iva)}</td></tr>
           <tr class="total-row"><td>TOTALE:</td><td class="text-right">${fmtEuro(totale)}</td></tr>
@@ -1187,6 +1187,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
 
       <div class="footer">
         Preventivo valido 30 giorni dalla data di emissione. I prezzi dei ricambi possono variare in base alla disponibilita.<br>
+        I prezzi indicati in tabella sono IVA esclusa: l'IVA (22%) viene applicata sul subtotale per calcolare il totale finale.<br>
         Generato con OfficinAI · ${officina?.nome || ''}
       </div>
     </body></html>`;
@@ -1656,7 +1657,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
           {/* Righe preventivo */}
           {righe.length > 0 && (
             <Card className="!p-4 border-emerald-200 bg-emerald-50/50">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-1">
                 <h3 className="text-sm font-bold text-gray-800">Preventivo ({righe.length} voci)</h3>
                 <button
                   onClick={() => setRighe([])}
@@ -1665,6 +1666,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                   Svuota tutto
                 </button>
               </div>
+              <p className="text-[10px] text-gray-400 mb-2">I prezzi qui sotto sono IVA esclusa: l'IVA (22%) viene applicata sul totale.</p>
 
               <div className="space-y-1.5">
                 {righe.map((r, i) => (
@@ -1774,7 +1776,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                   <span>{fmtEuro(totaleRicambi)}</span>
                 </div>
                 <div className="flex justify-between text-xs text-gray-600">
-                  <span>Subtotale</span>
+                  <span>Subtotale (IVA escl.)</span>
                   <span>{fmtEuro(subtotale)}</span>
                 </div>
                 {sconto > 0 && (
@@ -2525,11 +2527,14 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
 
         {/* Voci preventivo */}
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Voci preventivo</span>
-            {editMode && (
-              <span className="text-[10px] text-blue-600 font-semibold">Modifica in corso</span>
-            )}
+          <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Voci preventivo</span>
+              {editMode && (
+                <span className="text-[10px] text-blue-600 font-semibold">Modifica in corso</span>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-0.5">Prezzi IVA esclusa</p>
           </div>
           {!editMode ? (
             p.righe.length === 0 ? (
@@ -2613,7 +2618,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
         {/* Totali */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
           <div className="flex justify-between text-sm text-gray-600">
-            <span>Subtotale</span>
+            <span>Subtotale (IVA escl.)</span>
             <span>{fmtEuro(subtotaleView)}</span>
           </div>
           {(editMode ? editSconto > 0 : p.sconto > 0) && (

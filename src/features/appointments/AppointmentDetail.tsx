@@ -1320,7 +1320,7 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
             />
             <Input
               type="number"
-              placeholder="Prezzo €"
+              placeholder="Prezzo € (IVA escl.)"
               value={riga.prezzo}
               onChange={(e) => updateRiga(i, 'prezzo', Number(e.target.value))}
             />
@@ -1346,7 +1346,7 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
         <Card className="!p-3 bg-gray-50">
           <div className="space-y-1 text-sm">
             <div className="flex justify-between text-gray-600">
-              <span>Subtotale</span><span>{fmtEuro(subtotale)}</span>
+              <span>Subtotale (IVA escl.)</span><span>{fmtEuro(subtotale)}</span>
             </div>
             <div className="flex justify-between text-gray-600">
               <span>IVA 22%</span><span>{fmtEuro(iva)}</span>
