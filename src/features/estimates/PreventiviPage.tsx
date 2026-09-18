@@ -6,7 +6,7 @@ import { fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { generaDatiVeicolo, lookupTargaEsterna, DB_AUTO, type DatiVeicolo } from '@/lib/targaLookup';
 import type { Veicolo, Cliente, Appuntamento } from '@/types/database';
-import { PDFExport, buildPreventivoHtml, buildPreventivoPdfBlob, extractLogoColor } from './PDFExport';
+import { PDFExport, buildPreventivoHtml, buildPreventivoPdfBlob, extractLogoColor, htmlToPdfBlob } from './PDFExport';
 import { ShareDocument } from '@/components/ShareDocument';
 import { VoiceButton } from '@/components/VoiceInput';
 
@@ -1075,12 +1075,16 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     onBack();
   };
 
-  const handleStampa = async () => {
+  // Costruisce l'HTML del preventivo da tariffario (con segmento/tariffa
+  // oraria, non presente nella versione generica di PDFExport): condiviso
+  // da "Stampa" e da "Invia PDF", cosi' i due mostrano sempre la stessa
+  // identica grafica invece di uno più ricco e uno ridisegnato a parte.
+  const buildHtmlStampa = async (): Promise<string> => {
     const accent = await extractLogoColor(officina?.logo_url);
     const logoBlock = officina?.logo_url
       ? `<img src="${officina.logo_url}" alt="Logo" style="width:44px;height:44px;border-radius:10px;object-fit:cover;margin-right:12px;" />`
       : '';
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Preventivo</title>
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Preventivo</title>
     <style>
       * { margin:0; padding:0; box-sizing:border-box; }
       body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a; padding: 30px; }
@@ -1172,7 +1176,10 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
         Generato con OfficinAI · ${officina?.nome || ''}
       </div>
     </body></html>`;
+  };
 
+  const handleStampa = async () => {
+    const html = await buildHtmlStampa();
     const w = window.open('', '_blank');
     if (w) {
       w.document.write(html);
@@ -1833,25 +1840,11 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                     onClick={async () => {
                       setAllegandoPreventivo(true);
                       try {
-                        const clientePerPdf = cliente || {
-                          id: '', officina_id: officina?.id || '',
-                          nome: manualClienteNome.trim() || 'Cliente', email: '', tel: '',
-                        };
-                        const veicoloPerPdf = veicolo || {
-                          id: '', cliente_id: '', marca: vMarca || 'N/D', modello: vModello || 'N/D',
-                          targa: vTarga && vTarga !== 'MANUALE' ? vTarga : '', anno: new Date().getFullYear(),
-                          km: 0, carburante: 'benzina',
-                        };
-                        const appuntamentoPerPdf: Appuntamento = {
-                          id: '', officina_id: officina?.id || '', cliente_id: clientePerPdf.id, veicolo_id: veicoloPerPdf.id,
-                          data_ora: new Date().toISOString(), stato: 'prenotato', priorita: 'normale',
-                          problema: 'Preventivo', clienti: clientePerPdf, veicoli: veicoloPerPdf,
-                        };
-                        const blob = await buildPreventivoPdfBlob(
-                          appuntamentoPerPdf,
-                          { id: savedPreventivoId || '', appuntamento_id: '', righe, subtotale, sconto: scontoEuro, iva, totale, stato: 'bozza', fermo_macchina: fermoMacchina.trim() || undefined },
-                          officina
-                        );
+                        // Stessa grafica di "Stampa" (logo, colori, segmento/tariffa):
+                        // fotografata in un vero PDF invece di essere ridisegnata a
+                        // parte, cosi' l'allegato non sembra un documento diverso.
+                        const html = await buildHtmlStampa();
+                        const blob = await htmlToPdfBlob(html);
                         const nome = `Preventivo-${(cliente?.nome || manualClienteNome || 'cliente').replace(/[^\w-]+/g, '_')}.pdf`;
                         const file = new File([blob], nome, { type: 'application/pdf' });
                         const nav = navigator as Navigator & {

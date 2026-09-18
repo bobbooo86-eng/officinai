@@ -242,45 +242,81 @@ export function buildPreventivoHtml(
 
 export { extractLogoColor };
 
-/** Convert un colore hex (#rrggbb) nella tripletta RGB richiesta da jsPDF. */
-function hexToRgb(hex: string): [number, number, number] {
-  const clean = hex.replace('#', '');
-  if (clean.length !== 6) return [30, 64, 175];
-  return [parseInt(clean.slice(0, 2), 16), parseInt(clean.slice(2, 4), 16), parseInt(clean.slice(4, 6), 16)];
-}
-
 /**
- * Carica il logo dell'officina come data URL PNG (passando per un canvas,
- * cosi' funziona qualunque sia il formato originale) piu' il suo rapporto
- * larghezza/altezza, per poterlo disegnare nel PDF senza deformarlo.
- * Ritorna null se il logo non c'e' o non si riesce a leggere (es. CORS).
+ * Fotografa una pagina HTML completa (con <html>/<head>/<body>, esattamente
+ * come quella usata per "Esporta PDF"/"Stampa") in un vero file PDF binario:
+ * cosi' l'allegato mandato su WhatsApp/email ha SEMPRE la stessa identica
+ * grafica di quello che si vede a schermo o si stampa, invece di un secondo
+ * layout ridisegnato a mano con le primitive base di jsPDF (che risultava
+ * visibilmente diverso — logo, colori e impaginazione non coincidevano).
  */
-async function loadLogoDataUrl(logoUrl: string): Promise<{ dataUrl: string; ratio: number } | null> {
+export async function htmlToPdfBlob(html: string): Promise<Blob> {
+  // Importati qui (non in cima al file) cosi' jsPDF e html2canvas entrano
+  // solo nel chunk lazy di chi genera davvero un PDF, invece di gonfiare
+  // il bundle principale caricato da ogni pagina dell'app.
+  const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+    import('jspdf'),
+    import('html2canvas'),
+  ]);
+
+  // Renderizzato in un iframe nascosto (non nella pagina vera) cosi' l'HTML
+  // completo, con il proprio <style>, si dispone esattamente come nella
+  // finestra di stampa, senza interferire con lo stile dell'app.
+  const larghezza = 800;
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.left = '-9999px';
+  iframe.style.top = '0';
+  iframe.style.width = `${larghezza}px`;
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+
   try {
-    return await new Promise<{ dataUrl: string; ratio: number } | null>((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        try {
-          const w = img.naturalWidth || img.width;
-          const h = img.naturalHeight || img.height;
-          if (!w || !h) { resolve(null); return; }
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) { resolve(null); return; }
-          ctx.drawImage(img, 0, 0);
-          resolve({ dataUrl: canvas.toDataURL('image/png'), ratio: w / h });
-        } catch {
-          resolve(null);
-        }
-      };
-      img.onerror = () => resolve(null);
-      img.src = logoUrl;
+    const idoc = iframe.contentDocument;
+    if (!idoc) throw new Error('Rendering PDF non disponibile');
+    idoc.open();
+    idoc.write(html);
+    idoc.close();
+
+    const altezza = idoc.body.scrollHeight;
+    iframe.style.height = `${altezza}px`;
+
+    const canvas = await html2canvas(idoc.body, {
+      width: larghezza,
+      height: altezza,
+      windowWidth: larghezza,
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
     });
-  } catch {
-    return null;
+
+    const pdf = new jsPDF('p', 'pt', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    // JPEG, non PNG: jsPDF incorpora un JPEG cosi' com'e' (gia' compresso),
+    // mentre un PNG viene ridecodificato e salvato come bitmap grezzo —
+    // un preventivo di una pagina pesava anche 8MB, troppo per un allegato
+    // WhatsApp. Qualita' alta: e' testo su sfondo bianco, non una foto.
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+
+    // Se il documento e' piu' alto di una pagina A4, lo spezza su piu'
+    // pagine: ogni pagina disegna la stessa immagine spostata piu' in alto,
+    // e il resto resta semplicemente fuori dal foglio (il PDF lo ritaglia
+    // da solo ai margini della pagina).
+    let renderedHeight = 0;
+    let pagina = 0;
+    while (renderedHeight < imgHeight) {
+      if (pagina > 0) pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, -renderedHeight, imgWidth, imgHeight);
+      renderedHeight += pageHeight;
+      pagina += 1;
+    }
+
+    return pdf.output('blob');
+  } finally {
+    document.body.removeChild(iframe);
   }
 }
 
@@ -288,7 +324,8 @@ async function loadLogoDataUrl(logoUrl: string): Promise<{ dataUrl: string; rati
  * Genera un vero file PDF (binario, non la pagina HTML usata per "Esporta
  * PDF"/stampa): serve a poterlo allegare davvero a WhatsApp o email tramite
  * la condivisione nativa del telefono, invece di mandare solo un link.
- * Usa il logo e il colore del brand dell'officina, come la versione HTML.
+ * Fotografa lo stesso HTML di "Esporta PDF" (stesso logo e colori), cosi'
+ * i due non si vedono piu' diversi.
  */
 export async function buildPreventivoPdfBlob(
   appuntamento: Appuntamento,
@@ -296,109 +333,9 @@ export async function buildPreventivoPdfBlob(
   officina?: Officina | null,
   opts?: { docType?: 'preventivo' | 'fattura'; numero?: string }
 ): Promise<Blob> {
-  // Importati qui (non in cima al file) cosi' jsPDF (che si porta dietro
-  // html2canvas/dompurify, ~380KB) entra solo nel chunk lazy di chi genera
-  // davvero un PDF, invece di gonfiare il bundle principale caricato da
-  // ogni pagina dell'app.
-  const [[{ default: jsPDF }, { default: autoTable }], accentHex, logo] = await Promise.all([
-    Promise.all([import('jspdf'), import('jspdf-autotable')]),
-    extractLogoColor(officina?.logo_url),
-    officina?.logo_url ? loadLogoDataUrl(officina.logo_url) : Promise.resolve(null),
-  ]);
-  const rgb = hexToRgb(accentHex);
-  const isFattura = opts?.docType === 'fattura';
-  const titoloDoc = isFattura ? 'FATTURA' : 'PREVENTIVO';
-  const marginX = 14;
-  const rightX = 196;
-  const doc = new jsPDF();
-
-  let headerX = marginX;
-  if (logo) {
-    const logoH = 16;
-    const logoW = Math.min(28, logoH * logo.ratio);
-    try { doc.addImage(logo.dataUrl, 'PNG', marginX, 10, logoW, logoH); } catch { /* logo illeggibile: si procede senza */ }
-    headerX = marginX + logoW + 4;
-  }
-
-  doc.setFontSize(16);
-  doc.setTextColor(rgb[0], rgb[1], rgb[2]);
-  doc.text(officina?.nome || 'OfficinAI', headerX, 18);
-
-  doc.setFontSize(9);
-  doc.setTextColor(90);
-  let y = 24;
-  if (officina?.indirizzo) { doc.text(officina.indirizzo, headerX, y); y += 5; }
-  const contatti = [officina?.tel, officina?.email].filter(Boolean).join('  ·  ');
-  if (contatti) { doc.text(contatti, headerX, y); y += 5; }
-  if (officina?.p_iva) { doc.text(`P.IVA: ${officina.p_iva}`, headerX, y); y += 5; }
-
-  doc.setFontSize(14);
-  doc.setTextColor(rgb[0], rgb[1], rgb[2]);
-  doc.text(opts?.numero ? `${titoloDoc} ${opts.numero}` : titoloDoc, rightX, 18, { align: 'right' });
-  doc.setFontSize(9);
-  doc.setTextColor(90);
-  doc.text(`Data: ${new Date().toLocaleDateString('it-IT')}`, rightX, 24, { align: 'right' });
-  doc.text(`Stato: ${preventivo.stato.toUpperCase()}`, rightX, 29, { align: 'right' });
-
-  y = Math.max(y, 34) + 4;
-  doc.setDrawColor(rgb[0], rgb[1], rgb[2]);
-  doc.setLineWidth(0.8);
-  doc.line(marginX, y, rightX, y);
-  y += 8;
-
-  doc.setFontSize(11);
-  doc.setTextColor(20);
-  doc.text(`Cliente: ${appuntamento.clienti?.nome || '-'}`, marginX, y);
-  y += 6;
-  const veicoloStr = [appuntamento.veicoli?.marca, appuntamento.veicoli?.modello].filter(Boolean).join(' ')
-    + (appuntamento.veicoli?.targa ? ` — ${appuntamento.veicoli.targa}` : '');
-  doc.text(`Veicolo: ${veicoloStr || '-'}`, marginX, y);
-  y += 6;
-  if (!isFattura && appuntamento.problema) {
-    doc.text(`Problema segnalato: ${appuntamento.problema}`, marginX, y, { maxWidth: rightX - marginX });
-    y += 6;
-  }
-  y += 4;
-
-  autoTable(doc, {
-    startY: y,
-    head: [['Tipo', 'Descrizione', 'Qtà', 'Prezzo', 'Totale']],
-    body: (preventivo.righe || []).map((r) => [
-      r.tipo === 'manodopera' ? 'Manodopera' : 'Ricambio',
-      r.desc,
-      String(r.qta),
-      fmtEuro(r.prezzo),
-      fmtEuro(r.qta * r.prezzo),
-    ]),
-    headStyles: { fillColor: rgb },
-    styles: { fontSize: 9 },
-    margin: { left: marginX, right: marginX },
-  });
-
-  let ty = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
-  doc.setFontSize(10);
-  doc.setTextColor(20);
-  doc.text(`Subtotale: ${fmtEuro(preventivo.subtotale)}`, rightX, ty, { align: 'right' }); ty += 6;
-  if (preventivo.sconto > 0) {
-    doc.text(`Sconto: -${fmtEuro(preventivo.sconto)}`, rightX, ty, { align: 'right' }); ty += 6;
-  }
-  doc.text(`IVA 22%: ${fmtEuro(preventivo.iva)}`, rightX, ty, { align: 'right' }); ty += 7;
-  doc.setFontSize(13);
-  doc.setTextColor(rgb[0], rgb[1], rgb[2]);
-  doc.text(`TOTALE: ${fmtEuro(preventivo.totale)}`, rightX, ty, { align: 'right' });
-
-  if (preventivo.fermo_macchina) {
-    ty += 10;
-    doc.setFontSize(9);
-    doc.setTextColor(20);
-    doc.text(`Fermo macchina: ${preventivo.fermo_macchina}`, marginX, ty, { maxWidth: rightX - marginX });
-  }
-
-  doc.setFontSize(8);
-  doc.setTextColor(150);
-  doc.text('Generato con OfficinAI', 105, 290, { align: 'center' });
-
-  return doc.output('blob');
+  const accent = await extractLogoColor(officina?.logo_url);
+  const html = buildPreventivoHtml(appuntamento, preventivo, officina, accent, opts);
+  return htmlToPdfBlob(html);
 }
 
 export function PDFExport({ appuntamento, preventivo }: PDFExportProps) {
