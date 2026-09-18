@@ -421,6 +421,12 @@ function DettaglioFattura({
   const [erroreAggiorna, setErroreAggiorna] = useState('');
   const [generating, setGenerating] = useState(false);
   const [note, setNote] = useState(fattura.note || '');
+  const [editMode, setEditMode] = useState(false);
+  const [editRighe, setEditRighe] = useState<FatturaRiga[]>([]);
+  const [editClienteNome, setEditClienteNome] = useState('');
+  const [editClienteCf, setEditClienteCf] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const cambiaStato = async (nuovoStato: FatturaStato) => {
     setUpdating(true);
@@ -460,8 +466,77 @@ function DettaglioFattura({
     onUpdate(data as Fattura);
   };
 
+  const startEdit = () => {
+    setEditRighe(fattura.righe.map((r) => ({ ...r })));
+    setEditClienteNome(fattura.cliente_nome);
+    setEditClienteCf(fattura.cliente_cf || '');
+    setEditMode(true);
+  };
+
+  const cancelEdit = () => {
+    setEditMode(false);
+    setEditRighe([]);
+  };
+
+  const addEditRiga = (tipo: 'manodopera' | 'ricambio') => {
+    setEditRighe((prev) => [...prev, { tipo, desc: '', qta: 1, prezzo: 0 }]);
+  };
+
+  const updateEditRiga = (i: number, field: 'desc' | 'qta' | 'prezzo', value: string | number) => {
+    setEditRighe((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
+  };
+
+  const removeEditRiga = (i: number) => {
+    setEditRighe((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const saveEdit = async () => {
+    setSavingEdit(true);
+    const nuovoSubtotale = editRighe.reduce((s, r) => s + r.qta * r.prezzo, 0);
+    const nuovaIva = nuovoSubtotale * 0.22;
+    const nuovoTotale = nuovoSubtotale + nuovaIva;
+    const { data, error } = await supabase
+      .from('fatture')
+      .update({
+        righe: editRighe,
+        subtotale: nuovoSubtotale,
+        iva: nuovaIva,
+        totale: nuovoTotale,
+        cliente_nome: editClienteNome.trim() || fattura.cliente_nome,
+        cliente_cf: editClienteCf.trim(),
+      })
+      .eq('id', fattura.id)
+      .select()
+      .single();
+
+    setSavingEdit(false);
+    if (error || !data) {
+      setErroreAggiorna('Modifiche non salvate: ' + (error?.message || 'nessuna riga modificata'));
+      return;
+    }
+    setErroreAggiorna('');
+    setEditMode(false);
+    onUpdate(data as Fattura);
+  };
+
+  const eliminaFattura = async () => {
+    if (!confirm(`Eliminare la fattura ${fattura.numero}? L'operazione non si può annullare.`)) return;
+    setDeleting(true);
+    const { error } = await supabase.from('fatture').delete().eq('id', fattura.id);
+    setDeleting(false);
+    if (error) {
+      setErroreAggiorna('Eliminazione non riuscita: ' + error.message);
+      return;
+    }
+    onBack();
+  };
+
   const cfg = FATTURA_STATO_CONFIG[fattura.stato];
   const righe = (fattura.righe || []) as FatturaRiga[];
+
+  const totaleSubtotale = editMode ? editRighe.reduce((s, r) => s + r.qta * r.prezzo, 0) : fattura.subtotale;
+  const totaleIva = editMode ? totaleSubtotale * 0.22 : fattura.iva;
+  const totaleFinale = editMode ? totaleSubtotale + totaleIva : fattura.totale;
 
   // ---- PDF Generation ----
   // Riusa esattamente la grafica del preventivo (stesso font, colori,
@@ -533,6 +608,14 @@ function DettaglioFattura({
           <h2 className="font-bold text-gray-900">{fattura.numero}</h2>
           <p className="text-xs text-gray-500">{fmtData(fattura.data_emissione)}</p>
         </div>
+        {!editMode && (
+          <button
+            onClick={startEdit}
+            className="text-xs font-semibold text-blue-600 hover:text-blue-800 px-2 py-1 rounded-lg hover:bg-blue-50 cursor-pointer"
+          >
+            ✏️ Modifica
+          </button>
+        )}
         <Badge color={cfg.color} bg={cfg.bg}>
           {cfg.icon} {cfg.label}
         </Badge>
@@ -547,15 +630,81 @@ function DettaglioFattura({
       </Card>
 
       {/* Client info */}
-      <Card className="!p-3">
+      <Card className="!p-3 space-y-2">
         <div className="text-xs text-gray-400 mb-0.5">Cliente</div>
-        <p className="text-sm font-semibold text-gray-900">{fattura.cliente_nome}</p>
-        {fattura.cliente_cf && (
-          <p className="text-xs text-gray-500">CF/P.IVA: {fattura.cliente_cf}</p>
+        {editMode ? (
+          <>
+            <Input
+              placeholder="Nome cliente"
+              value={editClienteNome}
+              onChange={(e) => setEditClienteNome(e.target.value)}
+            />
+            <Input
+              placeholder="Codice fiscale / P.IVA (opzionale)"
+              value={editClienteCf}
+              onChange={(e) => setEditClienteCf(e.target.value)}
+            />
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-semibold text-gray-900">{fattura.cliente_nome}</p>
+            {fattura.cliente_cf && (
+              <p className="text-xs text-gray-500">CF/P.IVA: {fattura.cliente_cf}</p>
+            )}
+          </>
         )}
       </Card>
 
       {/* Line items */}
+      {editMode ? (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-gray-900">Voci ({editRighe.length})</h3>
+          {editRighe.map((riga, i) => (
+            <Card key={i} className="!p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <Badge
+                  color={riga.tipo === 'manodopera' ? '#1e40af' : '#92400e'}
+                  bg={riga.tipo === 'manodopera' ? '#dbeafe' : '#fef3c7'}
+                >
+                  {riga.tipo === 'manodopera' ? 'Manodopera' : 'Ricambio'}
+                </Badge>
+                <button onClick={() => removeEditRiga(i)} className="text-red-400 hover:text-red-600 text-sm cursor-pointer">✕</button>
+              </div>
+              <Input
+                placeholder="Descrizione"
+                value={riga.desc}
+                onChange={(e) => updateEditRiga(i, 'desc', e.target.value)}
+              />
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="Qtà"
+                  value={riga.qta}
+                  onChange={(e) => updateEditRiga(i, 'qta', Number(e.target.value))}
+                  className="!w-20"
+                />
+                <Input
+                  type="number"
+                  placeholder="Prezzo €"
+                  value={riga.prezzo}
+                  onChange={(e) => updateEditRiga(i, 'prezzo', Number(e.target.value))}
+                />
+                <div className="flex items-center text-sm font-semibold text-gray-700 min-w-[70px] justify-end">
+                  {fmtEuro(riga.qta * riga.prezzo)}
+                </div>
+              </div>
+            </Card>
+          ))}
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={() => addEditRiga('manodopera')} fullWidth>
+              + Manodopera
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => addEditRiga('ricambio')} fullWidth>
+              + Ricambio
+            </Button>
+          </div>
+        </div>
+      ) : (
       <div>
         <h3 className="text-sm font-semibold text-gray-900 mb-2">Voci ({righe.length})</h3>
         {righe.map((riga, i) => (
@@ -582,23 +731,36 @@ function DettaglioFattura({
           </Card>
         ))}
       </div>
+      )}
 
       {/* Totals */}
       <Card className="!p-3 bg-gray-50">
         <div className="space-y-1 text-sm">
           <div className="flex justify-between text-gray-600">
-            <span>Subtotale</span><span>{fmtEuro(fattura.subtotale)}</span>
+            <span>Subtotale</span><span>{fmtEuro(totaleSubtotale)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
-            <span>IVA 22%</span><span>{fmtEuro(fattura.iva)}</span>
+            <span>IVA 22%</span><span>{fmtEuro(totaleIva)}</span>
           </div>
           <div className="flex justify-between text-lg font-bold text-gray-900 pt-1 border-t">
-            <span>Totale</span><span>{fmtEuro(fattura.totale)}</span>
+            <span>Totale</span><span>{fmtEuro(totaleFinale)}</span>
           </div>
         </div>
       </Card>
 
+      {editMode && (
+        <div className="flex gap-2">
+          <Button onClick={saveEdit} loading={savingEdit} fullWidth>
+            💾 Salva modifiche
+          </Button>
+          <Button variant="secondary" onClick={cancelEdit} disabled={savingEdit} fullWidth>
+            Annulla
+          </Button>
+        </div>
+      )}
+
       {/* Status workflow */}
+      {!editMode && (
       <div>
         <p className="text-xs text-gray-500 mb-1">Stato fattura:</p>
         <div className="space-y-2">
@@ -643,6 +805,7 @@ function DettaglioFattura({
           })}
         </div>
       </div>
+      )}
 
       {/* Notes */}
       <Card className="!p-3 space-y-2">
@@ -659,22 +822,34 @@ function DettaglioFattura({
         )}
       </Card>
 
-      {/* PDF + Condividi */}
-      <Button variant="secondary" size="sm" onClick={generaPDF} loading={generating} fullWidth>
-        📄 Genera PDF
-      </Button>
+      {!editMode && (
+        <>
+          {/* PDF + Condividi */}
+          <Button variant="secondary" size="sm" onClick={generaPDF} loading={generating} fullWidth>
+            📄 Genera PDF
+          </Button>
 
-      <ShareDocument
-        tipo="fattura"
-        titolo="fattura"
-        clienteNome={fattura.cliente_nome}
-        emailData={{
-          clienteNome: fattura.cliente_nome,
-          numero: fattura.numero,
-          totale: fattura.totale,
-        }}
-        whatsappText={`Buongiorno ${fattura.cliente_nome}, le inviamo la fattura n. ${fattura.numero} per un totale di €${fattura.totale.toFixed(2)} (IVA incl.). Può consultarla dalla app OfficinAI. — ${officina?.nome || 'OfficinAI'}`}
-      />
+          <ShareDocument
+            tipo="fattura"
+            titolo="fattura"
+            clienteNome={fattura.cliente_nome}
+            emailData={{
+              clienteNome: fattura.cliente_nome,
+              numero: fattura.numero,
+              totale: fattura.totale,
+            }}
+            whatsappText={`Buongiorno ${fattura.cliente_nome}, le inviamo la fattura n. ${fattura.numero} per un totale di €${fattura.totale.toFixed(2)} (IVA incl.). Può consultarla dalla app OfficinAI. — ${officina?.nome || 'OfficinAI'}`}
+          />
+
+          <button
+            onClick={eliminaFattura}
+            disabled={deleting}
+            className="w-full p-3 rounded-xl border-2 border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 disabled:opacity-50 transition-colors cursor-pointer"
+          >
+            {deleting ? 'Eliminazione...' : '🗑️ Elimina fattura'}
+          </button>
+        </>
+      )}
     </div>
   );
 }
