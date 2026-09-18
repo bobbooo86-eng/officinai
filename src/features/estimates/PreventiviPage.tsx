@@ -862,11 +862,12 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     setRighe(prev => [...prev, { tipo: 'ricambio', desc: '', qta: 1, prezzo: 0 }]);
   };
 
+  // Il preventivo non calcola l'IVA: e' solo un importo indicativo,
+  // l'IVA si applica in fattura quando il lavoro viene davvero fatturato.
   const subtotale = righe.reduce((sum, r) => sum + r.qta * r.prezzo, 0);
   const scontoEuro = subtotale * sconto / 100;
-  const imponibile = subtotale - scontoEuro;
-  const iva = imponibile * 0.22;
-  const totale = imponibile + iva;
+  const iva = 0;
+  const totale = subtotale - scontoEuro;
 
   const totaleManodopera = righe.filter(r => r.tipo === 'manodopera').reduce((s, r) => s + r.qta * r.prezzo, 0);
   const totaleRicambi = righe.filter(r => r.tipo === 'ricambio').reduce((s, r) => s + r.qta * r.prezzo, 0);
@@ -1175,9 +1176,8 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
         <table>
           <tr><td>Manodopera:</td><td class="text-right">${fmtEuro(totaleManodopera)}</td></tr>
           <tr><td>Ricambi:</td><td class="text-right">${fmtEuro(totaleRicambi)}</td></tr>
-          <tr><td>Subtotale (IVA escl.):</td><td class="text-right">${fmtEuro(subtotale)}</td></tr>
+          <tr><td>Subtotale:</td><td class="text-right">${fmtEuro(subtotale)}</td></tr>
           ${sconto > 0 ? `<tr><td>Sconto (${sconto}%):</td><td class="text-right">-${fmtEuro(scontoEuro)}</td></tr>` : ''}
-          <tr><td>IVA (22%):</td><td class="text-right">${fmtEuro(iva)}</td></tr>
           <tr class="total-row"><td>TOTALE:</td><td class="text-right">${fmtEuro(totale)}</td></tr>
         </table>
       </div>
@@ -1187,7 +1187,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
 
       <div class="footer">
         Preventivo valido 30 giorni dalla data di emissione. I prezzi dei ricambi possono variare in base alla disponibilita.<br>
-        I prezzi indicati in tabella sono IVA esclusa: l'IVA (22%) viene applicata sul subtotale per calcolare il totale finale.<br>
+        Importo IVA esclusa: l'IVA verrà applicata in fattura.<br>
         Generato con OfficinAI · ${officina?.nome || ''}
       </div>
     </body></html>`;
@@ -1666,7 +1666,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                   Svuota tutto
                 </button>
               </div>
-              <p className="text-[10px] text-gray-400 mb-2">I prezzi qui sotto sono IVA esclusa: l'IVA (22%) viene applicata sul totale.</p>
+              <p className="text-[10px] text-gray-400 mb-2">Prezzi IVA esclusa: l'IVA verrà applicata in fattura.</p>
 
               <div className="space-y-1.5">
                 {righe.map((r, i) => (
@@ -1776,7 +1776,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                   <span>{fmtEuro(totaleRicambi)}</span>
                 </div>
                 <div className="flex justify-between text-xs text-gray-600">
-                  <span>Subtotale (IVA escl.)</span>
+                  <span>Subtotale</span>
                   <span>{fmtEuro(subtotale)}</span>
                 </div>
                 {sconto > 0 && (
@@ -1785,14 +1785,11 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                     <span>-{fmtEuro(scontoEuro)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>IVA (22%)</span>
-                  <span>{fmtEuro(iva)}</span>
-                </div>
                 <div className="flex justify-between text-base font-bold text-blue-800 pt-1">
                   <span>TOTALE</span>
                   <span>{fmtEuro(totale)}</span>
                 </div>
+                <div className="text-[10px] text-gray-400 pt-0.5">IVA esclusa: verrà applicata in fattura.</div>
               </div>
 
               {/* Actions */}
@@ -2260,8 +2257,9 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
     const subtotaleView = editMode
       ? editRighe.reduce((s, r) => s + r.qta * r.prezzo, 0)
       : p.subtotale;
-    const ivaView = editMode ? (subtotaleView - editSconto) * 0.22 : p.iva;
-    const totaleView = editMode ? (subtotaleView - editSconto) + ivaView : p.totale;
+    // Il preventivo non calcola l'IVA: e' solo un importo indicativo,
+    // l'IVA si applica in fattura quando il lavoro viene davvero fatturato.
+    const totaleView = editMode ? (subtotaleView - editSconto) : p.totale;
 
     const startEdit = () => {
       setEditRighe(p.righe.map((r) => ({ ...r })));
@@ -2337,16 +2335,17 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
 
     const saveEdit = async () => {
       setSavingEdit(true);
+      // Il preventivo non calcola l'IVA: e' solo un importo indicativo,
+      // l'IVA si applica in fattura quando il lavoro viene davvero fatturato.
       const nuovoSubtotale = editRighe.reduce((s, r) => s + r.qta * r.prezzo, 0);
-      const nuovaIva = (nuovoSubtotale - editSconto) * 0.22;
-      const nuovoTotale = (nuovoSubtotale - editSconto) + nuovaIva;
+      const nuovoTotale = nuovoSubtotale - editSconto;
       const { error: updErr } = await supabase
         .from('preventivi')
         .update({
           righe: editRighe,
           subtotale: nuovoSubtotale,
           sconto: editSconto,
-          iva: nuovaIva,
+          iva: 0,
           totale: nuovoTotale,
           fermo_macchina: editFermoMacchina.trim() || null,
         })
@@ -2383,7 +2382,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
         righe: editRighe,
         subtotale: nuovoSubtotale,
         sconto: editSconto,
-        iva: nuovaIva,
+        iva: 0,
         totale: nuovoTotale,
         cliente_nome: nomeFinale,
         fermo_macchina: editFermoMacchina.trim() || undefined,
@@ -2618,7 +2617,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
         {/* Totali */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
           <div className="flex justify-between text-sm text-gray-600">
-            <span>Subtotale (IVA escl.)</span>
+            <span>Subtotale</span>
             <span>{fmtEuro(subtotaleView)}</span>
           </div>
           {(editMode ? editSconto > 0 : p.sconto > 0) && (
@@ -2627,14 +2626,11 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
               <span>− {fmtEuro(editMode ? editSconto : p.sconto)}</span>
             </div>
           )}
-          <div className="flex justify-between text-sm text-gray-600">
-            <span>IVA 22%</span>
-            <span>{fmtEuro(ivaView)}</span>
-          </div>
           <div className="flex justify-between text-base font-black text-gray-900 pt-2 border-t border-gray-200">
             <span>TOTALE</span>
             <span>{fmtEuro(totaleView)}</span>
           </div>
+          <div className="text-[10px] text-gray-400">IVA esclusa: verrà applicata in fattura.</div>
         </div>
 
         {/* Fermo macchina */}

@@ -209,9 +209,9 @@ export function buildPreventivoHtml(
     </table>
 
     <div class="totals">
-      <div class="row"><span>Subtotale (IVA escl.):</span> <strong>${fmtEuro(preventivo.subtotale)}</strong></div>
+      <div class="row"><span>Subtotale:</span> <strong>${fmtEuro(preventivo.subtotale)}</strong></div>
       ${preventivo.sconto > 0 ? `<div class="row"><span>Sconto:</span> <strong>-${fmtEuro(preventivo.sconto)}</strong></div>` : ''}
-      <div class="row"><span>IVA 22%:</span> <strong>${fmtEuro(preventivo.iva)}</strong></div>
+      ${isFattura ? `<div class="row"><span>IVA 22%:</span> <strong>${fmtEuro(preventivo.iva)}</strong></div>` : ''}
       <div class="row total"><span>TOTALE:</span> <strong>${fmtEuro(preventivo.totale)}</strong></div>
     </div>
   </div>
@@ -228,8 +228,7 @@ export function buildPreventivoHtml(
     <p style="font-size: 11px; color: #666; line-height: 1.6;">
       ${isFattura
         ? 'Documento emesso a saldo della lavorazione eseguita. Si prega di conservare per eventuali garanzie sui ricambi.'
-        : 'Il presente preventivo ha validità 30 giorni dalla data di emissione. I prezzi dei ricambi possono subire variazioni in base alla disponibilità. I tempi di lavorazione sono stimati e possono variare in base alle condizioni effettive del veicolo.'}
-      I prezzi indicati in tabella sono IVA esclusa: l'IVA (22%) viene applicata sul subtotale per calcolare il totale finale.
+        : 'Il presente preventivo ha validità 30 giorni dalla data di emissione. I prezzi dei ricambi possono subire variazioni in base alla disponibilità. I tempi di lavorazione sono stimati e possono variare in base alle condizioni effettive del veicolo. Importo IVA esclusa: l\'IVA verrà applicata in fattura.'}
     </p>
   </div>
 

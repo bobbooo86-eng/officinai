@@ -1185,9 +1185,10 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
     setRighe(righe.filter((_, idx) => idx !== i));
   };
 
+  // Il preventivo non calcola l'IVA: e' solo un importo indicativo, l'IVA
+  // si applica in fattura quando il lavoro viene davvero fatturato.
   const subtotale = righe.reduce((sum, r) => sum + r.qta * r.prezzo, 0);
-  const iva = subtotale * 0.22;
-  const totale = subtotale + iva;
+  const totale = subtotale;
 
   const salva = async (stato: 'bozza' | 'inviato' = 'bozza') => {
     setSaving(true);
@@ -1196,7 +1197,7 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
       righe,
       subtotale,
       sconto: 0,
-      iva,
+      iva: 0,
       totale,
       stato,
     };
@@ -1246,7 +1247,7 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
       await salva('inviato');
       const blob = await buildPreventivoPdfBlob(
         appuntamento,
-        { id: preventivo?.id || '', appuntamento_id: appuntamentoId, righe, subtotale, sconto: 0, iva, totale, stato: 'inviato' },
+        { id: preventivo?.id || '', appuntamento_id: appuntamentoId, righe, subtotale, sconto: 0, iva: 0, totale, stato: 'inviato' },
         officina
       );
       const nome = `Preventivo-${(cliente?.nome || 'cliente').replace(/[^\w-]+/g, '_')}.pdf`;
@@ -1344,17 +1345,10 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
       {/* Totals */}
       {righe.length > 0 && (
         <Card className="!p-3 bg-gray-50">
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between text-gray-600">
-              <span>Subtotale (IVA escl.)</span><span>{fmtEuro(subtotale)}</span>
-            </div>
-            <div className="flex justify-between text-gray-600">
-              <span>IVA 22%</span><span>{fmtEuro(iva)}</span>
-            </div>
-            <div className="flex justify-between text-lg font-bold text-gray-900 pt-1 border-t">
-              <span>Totale</span><span>{fmtEuro(totale)}</span>
-            </div>
+          <div className="flex justify-between text-lg font-bold text-gray-900">
+            <span>Totale</span><span>{fmtEuro(totale)}</span>
           </div>
+          <div className="text-[11px] text-gray-400 mt-1">IVA esclusa: viene applicata quando generi la fattura.</div>
         </Card>
       )}
 
@@ -1404,7 +1398,7 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
 
       {/* PDF Export */}
       {preventivo && righe.length > 0 && (
-        <PDFExport appuntamento={appuntamento} preventivo={{ ...preventivo, righe, subtotale, iva, totale }} />
+        <PDFExport appuntamento={appuntamento} preventivo={{ ...preventivo, righe, subtotale, iva: 0, totale }} />
       )}
     </div>
   );
