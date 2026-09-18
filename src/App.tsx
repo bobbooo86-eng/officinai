@@ -38,7 +38,14 @@ export default function App() {
         setPage('landing');
       }
     };
-    window.history.replaceState({ page: 'landing' }, '', '/');
+    // Sostituisce solo se manca "page": un replaceState secco qui
+    // sovrascriveva tutto l'oggetto state, cancellando altre chiavi salvate
+    // altrove (es. la tab attiva di AppOfficina) e facendo tornare l'app
+    // alla Home ad ogni refresh della pagina.
+    const existing = (window.history.state as Record<string, unknown> | null) || {};
+    if (existing.page === undefined) {
+      window.history.replaceState({ ...existing, page: 'landing' }, '', '/');
+    }
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
