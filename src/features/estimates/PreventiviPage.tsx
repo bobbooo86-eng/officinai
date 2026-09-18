@@ -1178,6 +1178,14 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     </body></html>`;
   };
 
+  // Segna il preventivo come "inviato" appena parte un invio (WhatsApp,
+  // email o PDF vero): prima restava sempre "bozza" anche dopo l'invio,
+  // perche' nessuno di questi tre pulsanti aggiornava lo stato salvato.
+  const marcaPreventivoInviato = async () => {
+    if (!savedPreventivoId) return;
+    await supabase.from('preventivi').update({ stato: 'inviato' }).eq('id', savedPreventivoId);
+  };
+
   const handleStampa = async () => {
     const html = await buildHtmlStampa();
     const w = window.open('', '_blank');
@@ -1787,6 +1795,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <button
                   onClick={() => {
+                    marcaPreventivoInviato();
                     const messaggioBreve = `Gentile ${cliente?.nome || 'Cliente'}, da ${officina?.nome || 'Officina'} le inviamo il preventivo per il suo veicolo ${vMarca} ${vModello}${vTarga && vTarga !== 'MANUALE' ? ` (${vTarga})` : ''}.\nTotale: ${fmtEuro(totale)}`;
                     const testo = encodeURIComponent(
                       savedPdfUrl
@@ -1802,6 +1811,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                 </button>
                 <button
                   onClick={() => {
+                    marcaPreventivoInviato();
                     const oggetto = encodeURIComponent(`Preventivo ${vMarca} ${vModello}${vTarga && vTarga !== 'MANUALE' ? ` (${vTarga})` : ''} — ${officina?.nome || 'Officina'}`);
                     const messaggioBreve = `Gentile ${cliente?.nome || 'Cliente'},\n\nLe inviamo il preventivo per il suo veicolo ${vMarca} ${vModello}${vTarga && vTarga !== 'MANUALE' ? ` (${vTarga})` : ''}.\nTotale: ${fmtEuro(totale)}`;
                     const corpo = encodeURIComponent(
@@ -1861,6 +1871,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                           a.click();
                           URL.revokeObjectURL(url);
                         }
+                        await marcaPreventivoInviato();
                       } catch (e) {
                         if (!(e instanceof DOMException && e.name === 'AbortError')) {
                           alert('Generazione PDF non riuscita');
@@ -2192,6 +2203,16 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
 
   if (view === 'detail' && selectedPreventivo) {
     const p = selectedPreventivo;
+    // Segna il preventivo come "inviato" al primo invio riuscito (WhatsApp,
+    // email o PDF vero): restava sempre "bozza" perche' nessuno dei tre
+    // aggiornava lo stato salvato. Non retrocede un preventivo gia'
+    // accettato/rifiutato se viene rimandato in seguito.
+    const marcaInviatoDettaglio = async () => {
+      if (p.stato !== 'bozza') return;
+      await supabase.from('preventivi').update({ stato: 'inviato' }).eq('id', p.id);
+      setSelectedPreventivo((prev) => (prev ? { ...prev, stato: 'inviato' } : prev));
+      setPreventivi((prev) => prev.map((x) => (x.id === p.id ? { ...x, stato: 'inviato' } : x)));
+    };
     const statoMap: Record<string, { label: string; color: string; bg: string }> = {
       bozza: { label: 'Bozza', color: '#6b7280', bg: '#f3f4f6' },
       inviato: { label: 'Inviato', color: '#3b82f6', bg: '#dbeafe' },
@@ -2674,6 +2695,7 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
                   ? `${detailAppuntamento.veicoli.marca} ${detailAppuntamento.veicoli.modello}`
                   : 'veicolo'
               }${detailAppuntamento.veicoli?.targa ? ` (${detailAppuntamento.veicoli.targa})` : ''}.\nTotale: ${fmtEuro(p.totale)}\n\nResto a disposizione per qualsiasi chiarimento.\n— ${officina?.nome || 'OfficinAI'}`}
+              onSent={marcaInviatoDettaglio}
             />
             </div>
           </div>
