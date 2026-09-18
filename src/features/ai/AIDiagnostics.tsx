@@ -137,7 +137,7 @@ export function AIDiagnostics({ appuntamento }: AIDiagnosticsProps) {
       costo_stimato: {
         manodopera: costoManodopera,
         ricambi: costoRicambi,
-        totale: (costoManodopera + costoRicambi) * 1.22, // +IVA
+        totale: costoManodopera + costoRicambi, // IVA esclusa: si applica in fattura, non nel preventivo
       },
       nota_tecnica: knownCodes.length > 0
         ? `Diagnosi basata su ${knownCodes.length} codici riconosciuti. Confidenza: ${Math.round(confidenza * 100)}%. Si consiglia verifica pratica prima di procedere.`
@@ -177,16 +177,17 @@ export function AIDiagnostics({ appuntamento }: AIDiagnosticsProps) {
       })),
     ];
 
+    // Il preventivo non calcola l'IVA: e' solo un importo indicativo,
+    // l'IVA si applica in fattura quando il lavoro viene davvero fatturato.
     const subtotale = righe.reduce((s, r) => s + r.qta * r.prezzo, 0);
-    const iva = subtotale * 0.22;
 
     const { error } = await supabase.from('preventivi').insert({
       appuntamento_id: appuntamento.id,
       righe,
       subtotale,
       sconto: 0,
-      iva,
-      totale: subtotale + iva,
+      iva: 0,
+      totale: subtotale,
       stato: 'bozza',
     });
 
@@ -343,10 +344,11 @@ export function AIDiagnostics({ appuntamento }: AIDiagnosticsProps) {
                 <span className="text-gray-900">{fmtEuro(result.costo_stimato.ricambi)}</span>
               </div>
               <div className="flex justify-between font-bold text-blue-900 pt-1 border-t border-blue-200">
-                <span>Totale (IVA incl.)</span>
+                <span>Totale</span>
                 <span>{fmtEuro(result.costo_stimato.totale)}</span>
               </div>
             </div>
+            <div className="text-[10px] text-gray-400 mt-1">IVA esclusa: verrà applicata in fattura.</div>
           </Card>
 
           {/* Technical note */}

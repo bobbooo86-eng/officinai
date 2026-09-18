@@ -389,9 +389,10 @@ function ClienteHome() {
             </div>
           ))}
           <div className="flex justify-between text-sm font-bold text-gray-900 mt-2 pt-2 border-t border-blue-200">
-            <span>Totale (IVA incl.)</span>
+            <span>Totale</span>
             <span>{fmtEuro(preventivo.totale)}</span>
           </div>
+          <div className="text-[10px] text-gray-400 mt-0.5">IVA esclusa: verrà applicata in fattura.</div>
           <div className="flex gap-2 mt-3">
             <button
               onClick={async () => {
