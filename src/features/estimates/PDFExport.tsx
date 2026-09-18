@@ -242,12 +242,53 @@ export function buildPreventivoHtml(
 
 export { extractLogoColor };
 
+/** Convert un colore hex (#rrggbb) nella tripletta RGB richiesta da jsPDF. */
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return [30, 64, 175];
+  return [parseInt(clean.slice(0, 2), 16), parseInt(clean.slice(2, 4), 16), parseInt(clean.slice(4, 6), 16)];
+}
+
+/**
+ * Carica il logo dell'officina come data URL PNG (passando per un canvas,
+ * cosi' funziona qualunque sia il formato originale) piu' il suo rapporto
+ * larghezza/altezza, per poterlo disegnare nel PDF senza deformarlo.
+ * Ritorna null se il logo non c'e' o non si riesce a leggere (es. CORS).
+ */
+async function loadLogoDataUrl(logoUrl: string): Promise<{ dataUrl: string; ratio: number } | null> {
+  try {
+    return await new Promise<{ dataUrl: string; ratio: number } | null>((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const w = img.naturalWidth || img.width;
+          const h = img.naturalHeight || img.height;
+          if (!w || !h) { resolve(null); return; }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { resolve(null); return; }
+          ctx.drawImage(img, 0, 0);
+          resolve({ dataUrl: canvas.toDataURL('image/png'), ratio: w / h });
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = logoUrl;
+    });
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Genera un vero file PDF (binario, non la pagina HTML usata per "Esporta
  * PDF"/stampa): serve a poterlo allegare davvero a WhatsApp o email tramite
  * la condivisione nativa del telefono, invece di mandare solo un link.
- * Layout piu' semplice della versione HTML (niente logo/colori dal brand),
- * ma e' un PDF vero che qualsiasi app puo' aprire e allegare.
+ * Usa il logo e il colore del brand dell'officina, come la versione HTML.
  */
 export async function buildPreventivoPdfBlob(
   appuntamento: Appuntamento,
@@ -259,30 +300,40 @@ export async function buildPreventivoPdfBlob(
   // html2canvas/dompurify, ~380KB) entra solo nel chunk lazy di chi genera
   // davvero un PDF, invece di gonfiare il bundle principale caricato da
   // ogni pagina dell'app.
-  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
-    import('jspdf'),
-    import('jspdf-autotable'),
+  const [[{ default: jsPDF }, { default: autoTable }], accentHex, logo] = await Promise.all([
+    Promise.all([import('jspdf'), import('jspdf-autotable')]),
+    extractLogoColor(officina?.logo_url),
+    officina?.logo_url ? loadLogoDataUrl(officina.logo_url) : Promise.resolve(null),
   ]);
+  const rgb = hexToRgb(accentHex);
   const isFattura = opts?.docType === 'fattura';
   const titoloDoc = isFattura ? 'FATTURA' : 'PREVENTIVO';
   const marginX = 14;
   const rightX = 196;
   const doc = new jsPDF();
 
+  let headerX = marginX;
+  if (logo) {
+    const logoH = 16;
+    const logoW = Math.min(28, logoH * logo.ratio);
+    try { doc.addImage(logo.dataUrl, 'PNG', marginX, 10, logoW, logoH); } catch { /* logo illeggibile: si procede senza */ }
+    headerX = marginX + logoW + 4;
+  }
+
   doc.setFontSize(16);
-  doc.setTextColor(30, 64, 175);
-  doc.text(officina?.nome || 'OfficinAI', marginX, 18);
+  doc.setTextColor(rgb[0], rgb[1], rgb[2]);
+  doc.text(officina?.nome || 'OfficinAI', headerX, 18);
 
   doc.setFontSize(9);
   doc.setTextColor(90);
   let y = 24;
-  if (officina?.indirizzo) { doc.text(officina.indirizzo, marginX, y); y += 5; }
+  if (officina?.indirizzo) { doc.text(officina.indirizzo, headerX, y); y += 5; }
   const contatti = [officina?.tel, officina?.email].filter(Boolean).join('  ·  ');
-  if (contatti) { doc.text(contatti, marginX, y); y += 5; }
-  if (officina?.p_iva) { doc.text(`P.IVA: ${officina.p_iva}`, marginX, y); y += 5; }
+  if (contatti) { doc.text(contatti, headerX, y); y += 5; }
+  if (officina?.p_iva) { doc.text(`P.IVA: ${officina.p_iva}`, headerX, y); y += 5; }
 
   doc.setFontSize(14);
-  doc.setTextColor(30, 64, 175);
+  doc.setTextColor(rgb[0], rgb[1], rgb[2]);
   doc.text(opts?.numero ? `${titoloDoc} ${opts.numero}` : titoloDoc, rightX, 18, { align: 'right' });
   doc.setFontSize(9);
   doc.setTextColor(90);
@@ -290,7 +341,7 @@ export async function buildPreventivoPdfBlob(
   doc.text(`Stato: ${preventivo.stato.toUpperCase()}`, rightX, 29, { align: 'right' });
 
   y = Math.max(y, 34) + 4;
-  doc.setDrawColor(30, 64, 175);
+  doc.setDrawColor(rgb[0], rgb[1], rgb[2]);
   doc.setLineWidth(0.8);
   doc.line(marginX, y, rightX, y);
   y += 8;
@@ -319,7 +370,7 @@ export async function buildPreventivoPdfBlob(
       fmtEuro(r.prezzo),
       fmtEuro(r.qta * r.prezzo),
     ]),
-    headStyles: { fillColor: [30, 64, 175] },
+    headStyles: { fillColor: rgb },
     styles: { fontSize: 9 },
     margin: { left: marginX, right: marginX },
   });
@@ -333,7 +384,7 @@ export async function buildPreventivoPdfBlob(
   }
   doc.text(`IVA 22%: ${fmtEuro(preventivo.iva)}`, rightX, ty, { align: 'right' }); ty += 7;
   doc.setFontSize(13);
-  doc.setTextColor(30, 64, 175);
+  doc.setTextColor(rgb[0], rgb[1], rgb[2]);
   doc.text(`TOTALE: ${fmtEuro(preventivo.totale)}`, rightX, ty, { align: 'right' });
 
   if (preventivo.fermo_macchina) {

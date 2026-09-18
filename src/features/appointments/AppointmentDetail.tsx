@@ -1246,7 +1246,8 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
       await salva('inviato');
       const blob = await buildPreventivoPdfBlob(
         appuntamento,
-        { id: preventivo?.id || '', appuntamento_id: appuntamentoId, righe, subtotale, sconto: 0, iva, totale, stato: 'inviato' }
+        { id: preventivo?.id || '', appuntamento_id: appuntamentoId, righe, subtotale, sconto: 0, iva, totale, stato: 'inviato' },
+        officina
       );
       const nome = `Preventivo-${(cliente?.nome || 'cliente').replace(/[^\w-]+/g, '_')}.pdf`;
       const file = new File([blob], nome, { type: 'application/pdf' });
