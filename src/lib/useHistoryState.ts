@@ -16,7 +16,17 @@ export function useHistoryState<T>(
    */
   isValid?: (val: unknown) => boolean
 ): [T, (val: T) => void] {
-  const [state, setState] = useState<T>(initial);
+  // Un refresh di pagina (F5, chiudi/riapri l'app) rimonta il componente da
+  // zero, ma window.history.state sopravvive: senza leggerlo qui si partiva
+  // sempre dal valore iniziale (es. tab Home), perdendo la pagina su cui si
+  // era rimasti.
+  const [state, setState] = useState<T>(() => {
+    const fromHistory = (window.history.state as Record<string, unknown> | null)?.[key];
+    if (fromHistory !== undefined && (!isValid || isValid(fromHistory))) {
+      return fromHistory as T;
+    }
+    return initial;
+  });
 
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
