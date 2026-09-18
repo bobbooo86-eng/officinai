@@ -848,6 +848,20 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
     setRighe(prev => prev.map((r, i) => i === idx ? { ...r, qta } : r));
   };
 
+  const updateRigaDesc = (idx: number, desc: string) => {
+    setRighe(prev => prev.map((r, i) => i === idx ? { ...r, desc } : r));
+  };
+
+  const updateRigaTipo = (idx: number, tipo: 'manodopera' | 'ricambio') => {
+    setRighe(prev => prev.map((r, i) => i === idx ? { ...r, tipo } : r));
+  };
+
+  // Voce libera, per aggiungere qualcosa che non e' nel tariffario, oltre
+  // alle voci preimpostate (che restano comunque modificabili qui sotto).
+  const aggiungiVoceManuale = () => {
+    setRighe(prev => [...prev, { tipo: 'ricambio', desc: '', qta: 1, prezzo: 0 }]);
+  };
+
   const subtotale = righe.reduce((sum, r) => sum + r.qta * r.prezzo, 0);
   const scontoEuro = subtotale * sconto / 100;
   const imponibile = subtotale - scontoEuro;
@@ -1656,9 +1670,22 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                 {righe.map((r, i) => (
                   <div key={i} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-100">
                     <span className={`w-1.5 h-6 rounded-full shrink-0 ${r.tipo === 'manodopera' ? 'bg-blue-400' : 'bg-amber-400'}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs text-gray-700 truncate">{r.desc}</div>
-                      <div className="text-[10px] text-gray-400">{r.tipo === 'manodopera' ? 'Manodopera' : 'Ricambio'}</div>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <input
+                        type="text"
+                        value={r.desc}
+                        onChange={(e) => updateRigaDesc(i, e.target.value)}
+                        placeholder="Descrizione"
+                        className="w-full text-xs text-gray-700 border border-gray-200 rounded-lg py-1 px-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      />
+                      <select
+                        value={r.tipo}
+                        onChange={(e) => updateRigaTipo(i, e.target.value as 'manodopera' | 'ricambio')}
+                        className="text-[10px] text-gray-500 border border-gray-200 rounded-lg py-0.5 px-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      >
+                        <option value="manodopera">Manodopera</option>
+                        <option value="ricambio">Ricambio</option>
+                      </select>
                     </div>
                     <input
                       type="number"
@@ -1687,6 +1714,13 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
                   </div>
                 ))}
               </div>
+
+              <button
+                onClick={aggiungiVoceManuale}
+                className="w-full mt-2 p-2 rounded-lg border-2 border-dashed border-gray-300 text-xs font-semibold text-gray-500 hover:border-blue-300 hover:text-blue-600 cursor-pointer transition-colors"
+              >
+                + Voce personalizzata
+              </button>
 
               {/* Sconto */}
               <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-200">
