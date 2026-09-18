@@ -2451,6 +2451,13 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
         .maybeSingle();
       const lastNum = lastFattura?.numero ? parseInt(lastFattura.numero.split('-').pop() || '0') : 0;
       const numero = `FT-${year}-${String(lastNum + 1).padStart(3, '0')}`;
+      // La fattura calcola l'IVA da sé (22% sul subtotale): il preventivo non
+      // la calcola più (resta un importo indicativo, IVA esclusa), quindi non
+      // si può copiare p.iva/p.totale, altrimenti la fattura risulterebbe
+      // senza IVA.
+      const fatturaSubtotale = p.subtotale;
+      const fatturaIva = fatturaSubtotale * 0.22;
+      const fatturaTotale = fatturaSubtotale + fatturaIva;
       const { data: nuovaFattura, error: fattErr } = await supabase
         .from('fatture')
         .insert({
@@ -2462,9 +2469,9 @@ export function PreventiviPage({ onSelectAppuntamento, onNavigateToCalendar, onN
           cliente_nome: detailAppuntamento?.clienti?.nome || p.cliente_nome || 'Cliente',
           cliente_cf: '',
           righe: p.righe,
-          subtotale: p.subtotale,
-          iva: p.iva,
-          totale: p.totale,
+          subtotale: fatturaSubtotale,
+          iva: fatturaIva,
+          totale: fatturaTotale,
           stato: 'bozza',
           note: '',
         })
