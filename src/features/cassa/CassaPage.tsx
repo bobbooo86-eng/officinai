@@ -512,11 +512,19 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   );
   const totalSpese = useMemo(
     () =>
-      monthTutti.reduce((a, m) => a + spesaMovimento(m), 0) +
+      monthTutti.filter((m) => m.tipo !== 'spesa_titolare').reduce((a, m) => a + spesaMovimento(m), 0) +
       incassiAutoTotaliInRange.reduce((a, app) => a + spesaRicambi(app.pagamento), 0),
     [monthTutti, incassiAutoTotaliInRange]
   );
-  const saldo = totalIncassi - totalSpese;
+  // Le spese del titolare sono prelievi personali, non costi dell'officina:
+  // tenute fuori dal riquadro "Spese" (che mostra solo i costi operativi) e
+  // mostrate a parte, ma restano sottratte dal saldo cassa perche' quei
+  // soldi sono comunque usciti davvero.
+  const totalSpeseTitolare = useMemo(
+    () => monthTutti.filter((m) => m.tipo === 'spesa_titolare').reduce((a, m) => a + spesaMovimento(m), 0),
+    [monthTutti]
+  );
+  const saldo = totalIncassi - totalSpese - totalSpeseTitolare;
   const totalDaIncassare = useMemo(
     () => incassiAutoTotaliInRange.reduce((a, app) => a + restoDaIncassare(app), 0),
     [incassiAutoTotaliInRange]
@@ -802,7 +810,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center">
             <div className="text-[10px] text-emerald-700 font-semibold">Incassi</div>
             <div className="text-sm font-bold text-emerald-900">{fmtEuro(totalIncassi)}</div>
@@ -810,6 +818,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
           <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 text-center">
             <div className="text-[10px] text-red-700 font-semibold">Spese</div>
             <div className="text-sm font-bold text-red-900">{fmtEuro(totalSpese)}</div>
+          </div>
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-2.5 text-center">
+            <div className="text-[10px] text-purple-700 font-semibold">Spese titolare</div>
+            <div className="text-sm font-bold text-purple-900">{fmtEuro(totalSpeseTitolare)}</div>
           </div>
           <div className={`border rounded-xl p-2.5 text-center ${
             saldo >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-orange-50 border-orange-200'
