@@ -77,10 +77,13 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
           const appsFornitore = appuntamenti
             .filter((a) => a.pagamento?.fornitore_ricambi === f.id && (a.pagamento?.costo_ricambi || 0) > 0)
             .sort((a, b) => new Date(b.pagamento?.data_consegna || b.data_ora).getTime() - new Date(a.pagamento?.data_consegna || a.data_ora).getTime());
-          // "Pagati subito" (es. saldato sul momento, o il cliente paga il
-          // fornitore direttamente): quel lavoro non resta da pagare, va
-          // escluso dal saldo anche se e' segnato su questo fornitore.
-          const daPagare = appsFornitore.filter((a) => !a.pagamento?.ricambi_pagati_subito);
+          // "Pagati subito" (saldato sul momento dall'officina) o
+          // "fornitore pagato dal cliente" (il cliente salda il fornitore
+          // direttamente): in entrambi i casi quel lavoro non resta da
+          // pagare, va escluso dal saldo anche se e' segnato su questo
+          // fornitore.
+          const giaSaldato = (a: Appuntamento) => !!(a.pagamento?.ricambi_pagati_subito || a.pagamento?.fornitore_pagato_da_cliente);
+          const daPagare = appsFornitore.filter((a) => !giaSaldato(a));
           const totaleNonSaldato = daPagare.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
           const totaleSegnato = appsFornitore.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
           const totalePagato = movimenti
@@ -119,9 +122,10 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                       <div key={a.id} className="flex items-center justify-between text-[11px] py-1">
                         <span className="text-gray-600 truncate">
                           {a.clienti?.nome || 'Cliente'}{a.veicoli?.targa ? ` — ${a.veicoli.targa}` : ''}
+                          {a.pagamento?.fornitore_pagato_da_cliente && <span className="text-emerald-600"> · pagato dal cliente</span>}
                           {a.pagamento?.ricambi_pagati_subito && <span className="text-emerald-600"> · saldato</span>}
                         </span>
-                        <span className={`font-semibold shrink-0 ml-2 ${a.pagamento?.ricambi_pagati_subito ? 'text-gray-400' : 'text-gray-700'}`}>
+                        <span className={`font-semibold shrink-0 ml-2 ${giaSaldato(a) ? 'text-gray-400' : 'text-gray-700'}`}>
                           {fmtEuro(a.pagamento?.costo_ricambi || 0)}
                         </span>
                       </div>

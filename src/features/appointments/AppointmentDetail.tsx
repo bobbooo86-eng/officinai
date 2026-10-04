@@ -568,6 +568,7 @@ function ModalPagamento({ onConferma, onAnnulla }: {
   const [importoTotale, setImportoTotale] = useState('');
   const [costoRicambi, setCostoRicambi] = useState('');
   const [ricambiSubito, setRicambiSubito] = useState(false);
+  const [fornitorePagatoDaCliente, setFornitorePagatoDaCliente] = useState(false);
   const [fornitoreRicambi, setFornitoreRicambi] = useState<'' | 'autoricambi' | 'monti'>('');
   const [note, setNote] = useState('');
 
@@ -584,6 +585,7 @@ function ModalPagamento({ onConferma, onAnnulla }: {
       importo_totale: importoTotale ? parseFloat(importoTotale) : undefined,
       costo_ricambi: costoRicambi ? parseFloat(costoRicambi) : undefined,
       ricambi_pagati_subito: ricambiSubito,
+      fornitore_pagato_da_cliente: fornitorePagatoDaCliente,
       fornitore_ricambi: fornitoreRicambi || null,
       data_consegna: new Date().toISOString(),
       note: note.trim() || undefined,
@@ -669,10 +671,19 @@ function ModalPagamento({ onConferma, onAnnulla }: {
               <input
                 type="checkbox"
                 checked={ricambiSubito}
-                onChange={(e) => setRicambiSubito(e.target.checked)}
+                onChange={(e) => { setRicambiSubito(e.target.checked); if (e.target.checked) setFornitorePagatoDaCliente(false); }}
                 className="rounded"
               />
-              Già saldato (es. sfascio, o pagato dal cliente al fornitore) — non resta da pagare
+              Pagati subito da me (es. sfascio in contanti) — conta come spesa
+            </label>
+            <label className="flex items-center gap-2 mt-1 text-xs text-gray-500 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={fornitorePagatoDaCliente}
+                onChange={(e) => { setFornitorePagatoDaCliente(e.target.checked); if (e.target.checked) setRicambiSubito(false); }}
+                className="rounded"
+              />
+              Il cliente paga il fornitore direttamente — non lo incasso io
             </label>
             <div className="mt-1.5">
               <label className="block text-[11px] text-gray-500 mb-1">Fornitore ricambi (opzionale)</label>

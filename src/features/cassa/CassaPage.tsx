@@ -104,7 +104,24 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   // conta come spesa solo quando spuntato.
   const toggleRicambiSubito = async (app: Appuntamento) => {
     if (!app.pagamento) return;
-    const nuovoPagamento = { ...app.pagamento, ricambi_pagati_subito: !app.pagamento.ricambi_pagati_subito };
+    const nuovoPagamento = {
+      ...app.pagamento,
+      ricambi_pagati_subito: !app.pagamento.ricambi_pagati_subito,
+      fornitore_pagato_da_cliente: false,
+    };
+    setIncassiAuto((prev) => prev.map((a) => (a.id === app.id ? { ...a, pagamento: nuovoPagamento } : a)));
+    await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', app.id);
+  };
+
+  // Idem, per il caso in cui e' il cliente a pagare il fornitore dei
+  // ricambi direttamente: mutuamente esclusiva con "pagati subito".
+  const toggleFornitorePagatoDaCliente = async (app: Appuntamento) => {
+    if (!app.pagamento) return;
+    const nuovoPagamento = {
+      ...app.pagamento,
+      fornitore_pagato_da_cliente: !app.pagamento.fornitore_pagato_da_cliente,
+      ricambi_pagati_subito: false,
+    };
     setIncassiAuto((prev) => prev.map((a) => (a.id === app.id ? { ...a, pagamento: nuovoPagamento } : a)));
     await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', app.id);
   };
@@ -961,20 +978,34 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                             {app.pagamento?.stato === 'acconto' && ' · acconto'}
                           </div>
                           {ricambi > 0 && (
-                            <label
-                              onClick={(e) => e.stopPropagation()}
-                              className={`flex items-center gap-1.5 text-[11px] truncate cursor-pointer ${app.pagamento?.ricambi_pagati_subito ? 'text-red-500' : 'text-gray-400'}`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={!!app.pagamento?.ricambi_pagati_subito}
-                                onChange={() => toggleRicambiSubito(app)}
-                                className="rounded shrink-0"
-                              />
-                              {app.pagamento?.ricambi_pagati_subito
-                                ? `− Costo ricambi: ${fmtEuro(ricambi)} (conta come spesa)`
-                                : `Costo ricambi: ${fmtEuro(ricambi)} (non conta come spesa)`}
-                            </label>
+                            <>
+                              <label
+                                onClick={(e) => e.stopPropagation()}
+                                className={`flex items-center gap-1.5 text-[11px] truncate cursor-pointer ${app.pagamento?.ricambi_pagati_subito ? 'text-red-500' : 'text-gray-400'}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!app.pagamento?.ricambi_pagati_subito}
+                                  onChange={() => toggleRicambiSubito(app)}
+                                  className="rounded shrink-0"
+                                />
+                                {app.pagamento?.ricambi_pagati_subito
+                                  ? `− Costo ricambi: ${fmtEuro(ricambi)} (pagati da me)`
+                                  : `Costo ricambi: ${fmtEuro(ricambi)} (non pagati da me)`}
+                              </label>
+                              <label
+                                onClick={(e) => e.stopPropagation()}
+                                className={`flex items-center gap-1.5 text-[11px] truncate cursor-pointer ${app.pagamento?.fornitore_pagato_da_cliente ? 'text-red-500' : 'text-gray-400'}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!app.pagamento?.fornitore_pagato_da_cliente}
+                                  onChange={() => toggleFornitorePagatoDaCliente(app)}
+                                  className="rounded shrink-0"
+                                />
+                                {app.pagamento?.fornitore_pagato_da_cliente ? 'Pagato dal cliente al fornitore (non incassato)' : 'Non pagato dal cliente al fornitore'}
+                              </label>
+                            </>
                           )}
                           {resto > 0 && (
                             <div className="text-[11px] text-amber-600 truncate">Ancora da incassare: {fmtEuro(resto)}</div>

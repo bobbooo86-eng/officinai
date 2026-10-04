@@ -101,7 +101,12 @@ export interface PagamentoInfo {
   importo_pagato?: number;   // per acconto: quanto ha gia pagato
   importo_totale?: number;   // importo totale da pagare
   costo_ricambi?: number;    // costo dei ricambi usati, per calcolare il guadagno netto
-  ricambi_pagati_subito?: boolean; // true se gia' saldati (pagati sul momento, es. sfascio, oppure il cliente paga il fornitore direttamente): conta come spesa e non resta a debito sul conto fornitore. Se pagati poi al ricambista (es. a blocchi), NON conta qui: quella spesa si registra a parte in Movimenti
+  // Tre stati possibili per il costo ricambi (mutuamente esclusivi):
+  // - nessuno dei due flag: si paga a blocchi dopo (resta a debito sul conto fornitore)
+  // - ricambi_pagati_subito: li ha pagati subito l'officina stessa (es. sfascio in contanti) -> conta come spesa, non resta a debito, ma l'incassato dal cliente resta intero (il cliente paga comunque il prezzo pieno all'officina)
+  // - fornitore_pagato_da_cliente: il cliente paga il fornitore direttamente (es. Monti) -> l'officina non incassa quella parte (va sottratta dall'incassato), non conta come spesa (l'officina non ha speso nulla), non resta a debito
+  ricambi_pagati_subito?: boolean;
+  fornitore_pagato_da_cliente?: boolean;
   fornitore_ricambi?: 'autoricambi' | 'monti' | null; // da chi vengono i ricambi di questa consegna, per tenere il conto di quanto si deve ancora a ciascun fornitore
   data_consegna?: string;    // quando e' stata confermata la consegna: appuntamenti non ha altrimenti una data di consegna, solo data_ora (la data prenotata)
   note?: string;

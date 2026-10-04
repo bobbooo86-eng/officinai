@@ -40,6 +40,9 @@ export const spesaMovimento = (m: Movimento): number =>
 // ricambisti vengono pagati a blocchi (es. 800€ tutti insieme), non pezzo
 // per pezzo, e quella spesa si registra a parte come movimento
 // "spesa_officina". Conta come spesa qui solo se segnato "pagati subito"
-// (es. pezzi usati allo sfascio, pagati sul momento).
+// (pagati sul momento dall'officina stessa, es. sfascio in contanti): se
+// invece e' il cliente a pagare il fornitore direttamente, l'officina non
+// ha speso nulla, quindi non e' una spesa (vedi incassato() per l'altro
+// lato di quel caso: va sottratto dall'incassato, non dalle spese).
 export const spesaRicambi = (p?: PagamentoInfo | null): number =>
   p?.ricambi_pagati_subito ? Number(p.costo_ricambi) || 0 : 0;

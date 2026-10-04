@@ -25,6 +25,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
   const [editTotale, setEditTotale] = useState('');
   const [editRicambi, setEditRicambi] = useState('');
   const [editRicambiSubito, setEditRicambiSubito] = useState(false);
+  const [editFornitorePagatoDaCliente, setEditFornitorePagatoDaCliente] = useState(false);
   const [editFornitoreRicambi, setEditFornitoreRicambi] = useState<'' | 'autoricambi' | 'monti'>('');
   const [editOperaio, setEditOperaio] = useState('');
   const [editData, setEditData] = useState('');
@@ -42,6 +43,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
     setEditTotale(String(a.pagamento?.importo_totale ?? 0));
     setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
     setEditRicambiSubito(!!a.pagamento?.ricambi_pagati_subito);
+    setEditFornitorePagatoDaCliente(!!a.pagamento?.fornitore_pagato_da_cliente);
     setEditFornitoreRicambi(a.pagamento?.fornitore_ricambi || '');
     setEditOperaio(a.pagamento?.operaio || '');
     setEditData(dataInputValue(a.pagamento?.data_consegna || a.data_ora));
@@ -68,6 +70,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
       importo_totale: nuovoTotale,
       costo_ricambi: nuovoRicambi,
       ricambi_pagati_subito: editRicambiSubito,
+      fornitore_pagato_da_cliente: editFornitorePagatoDaCliente,
       fornitore_ricambi: editFornitoreRicambi || null,
       operaio: editOperaio.trim() || undefined,
       data_consegna: nuovaDataConsegna,
@@ -84,6 +87,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
   return {
     editingId, editPagato, setEditPagato, editTotale, setEditTotale,
     editRicambi, setEditRicambi, editRicambiSubito, setEditRicambiSubito,
+    editFornitorePagatoDaCliente, setEditFornitorePagatoDaCliente,
     editFornitoreRicambi, setEditFornitoreRicambi,
     editOperaio, setEditOperaio,
     editData, setEditData, salvando,
@@ -226,13 +230,18 @@ export function inPeriodo(d: Date, periodo: Periodo, riferimento: Date): boolean
 
 /** Quanto e' stato davvero incassato per questo veicolo: pagato completo
  * conta il totale, un acconto conta solo la parte gia' versata, il resto
- * (se c'e') non e' cassa finche' non arriva. */
+ * (se c'e') non e' cassa finche' non arriva. Se il cliente ha pagato il
+ * fornitore dei ricambi direttamente (es. Monti), quella parte non e'
+ * mai passata dall'officina: va sottratta, altrimenti l'incassato
+ * sembrerebbe piu' alto di quanto davvero arrivato in cassa. */
 export function incassato(a: Appuntamento): number {
   const p = a.pagamento;
   if (!p) return 0;
-  if (p.stato === 'pagato') return p.importo_totale || 0;
-  if (p.stato === 'acconto') return p.importo_pagato || 0;
-  return 0;
+  const base = p.stato === 'pagato' ? (p.importo_totale || 0)
+    : p.stato === 'acconto' ? (p.importo_pagato || 0)
+    : 0;
+  const pagatoAlFornitore = p.fornitore_pagato_da_cliente ? (p.costo_ricambi || 0) : 0;
+  return Math.max(0, base - pagatoAlFornitore);
 }
 
 /** Valore del lavoro fatturato al cliente, incassato o no: il guadagno
@@ -244,13 +253,18 @@ export function valoreLavoro(a: Appuntamento): number {
 }
 
 /** Quanto resta ancora da farsi pagare per questo veicolo (acconto non
- * saldato o consegna non pagata): 0 se e' gia' tutto incassato.
+ * saldato o consegna non pagata): 0 se e' gia' tutto incassato. Stessa
+ * rettifica di incassato(): se il cliente paga il fornitore dei ricambi
+ * direttamente, quella parte non e' (e non sara' mai) da farsi pagare
+ * dall'officina.
  * Esportata perche' Movimenti (CassaPage) la mostra sulla stessa riga. */
 export function restoDaIncassare(a: Appuntamento): number {
   const p = a.pagamento;
   if (!p) return 0;
-  if (p.stato === 'acconto') return Math.max(0, (p.importo_totale || 0) - (p.importo_pagato || 0));
-  if (p.stato === 'non_pagato') return p.importo_totale || 0;
+  const pagatoAlFornitore = p.fornitore_pagato_da_cliente ? (p.costo_ricambi || 0) : 0;
+  const totaleOfficina = Math.max(0, (p.importo_totale || 0) - pagatoAlFornitore);
+  if (p.stato === 'acconto') return Math.max(0, totaleOfficina - (p.importo_pagato || 0));
+  if (p.stato === 'non_pagato') return totaleOfficina;
   return 0;
 }
 
@@ -287,7 +301,24 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   // conta come spesa solo quando spuntato.
   const toggleRicambiSubito = async (a: Appuntamento) => {
     if (!a.pagamento) return;
-    const nuovoPagamento = { ...a.pagamento, ricambi_pagati_subito: !a.pagamento.ricambi_pagati_subito };
+    const nuovoPagamento = {
+      ...a.pagamento,
+      ricambi_pagati_subito: !a.pagamento.ricambi_pagati_subito,
+      fornitore_pagato_da_cliente: false,
+    };
+    setAppuntamenti((prev) => prev.map((x) => (x.id === a.id ? { ...x, pagamento: nuovoPagamento } : x)));
+    await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
+  };
+
+  // Idem, per il caso in cui e' il cliente a pagare il fornitore dei
+  // ricambi direttamente: mutuamente esclusiva con "pagati subito".
+  const toggleFornitorePagatoDaCliente = async (a: Appuntamento) => {
+    if (!a.pagamento) return;
+    const nuovoPagamento = {
+      ...a.pagamento,
+      fornitore_pagato_da_cliente: !a.pagamento.fornitore_pagato_da_cliente,
+      ricambi_pagati_subito: false,
+    };
     setAppuntamenti((prev) => prev.map((x) => (x.id === a.id ? { ...x, pagamento: nuovoPagamento } : x)));
     await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
   };
@@ -435,20 +466,34 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                       {p.operaio && <span className="text-gray-400"> · 🔧 {p.operaio}</span>}
                     </div>
                     {(p.costo_ricambi || 0) > 0 && (
-                      <label
-                        onClick={(e) => e.stopPropagation()}
-                        className={`flex items-center gap-1.5 mt-0.5 cursor-pointer ${p.ricambi_pagati_subito ? 'text-red-500' : 'text-gray-400'}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={!!p.ricambi_pagati_subito}
-                          onChange={() => toggleRicambiSubito(a)}
-                          className="rounded shrink-0"
-                        />
-                        {p.ricambi_pagati_subito
-                          ? `conta come spesa · netto ${fmtEuro(valoreLavoro(a) - spesaRicambi(p))}`
-                          : 'non conta come spesa'}
-                      </label>
+                      <>
+                        <label
+                          onClick={(e) => e.stopPropagation()}
+                          className={`flex items-center gap-1.5 mt-0.5 cursor-pointer ${p.ricambi_pagati_subito ? 'text-red-500' : 'text-gray-400'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!p.ricambi_pagati_subito}
+                            onChange={() => toggleRicambiSubito(a)}
+                            className="rounded shrink-0"
+                          />
+                          {p.ricambi_pagati_subito
+                            ? `pagati da me · netto ${fmtEuro(valoreLavoro(a) - spesaRicambi(p))}`
+                            : 'non pagati da me'}
+                        </label>
+                        <label
+                          onClick={(e) => e.stopPropagation()}
+                          className={`flex items-center gap-1.5 mt-0.5 cursor-pointer ${p.fornitore_pagato_da_cliente ? 'text-red-500' : 'text-gray-400'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!p.fornitore_pagato_da_cliente}
+                            onChange={() => toggleFornitorePagatoDaCliente(a)}
+                            className="rounded shrink-0"
+                          />
+                          {p.fornitore_pagato_da_cliente ? 'pagati dal cliente al fornitore (non incassato)' : 'non pagati dal cliente al fornitore'}
+                        </label>
+                      </>
                     )}
                   </div>
                   {!inEdit && (

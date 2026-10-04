@@ -16,13 +16,17 @@ interface Props {
 /** Quanto e' stato davvero incassato per questo veicolo: pagato completo
  * conta il totale, un acconto conta solo la parte gia' versata. Stessa
  * logica di IncassiOfficina, duplicata qui perche' l'acconto va anche
- * corretto da qui, non solo da Cassa. */
+ * corretto da qui, non solo da Cassa. Se il cliente paga il fornitore dei
+ * ricambi direttamente, quella parte va sottratta: non e' mai passata
+ * dall'officina. */
 function incassato(a: Appuntamento): number {
   const p = a.pagamento;
   if (!p) return 0;
-  if (p.stato === 'pagato') return p.importo_totale || 0;
-  if (p.stato === 'acconto') return p.importo_pagato || 0;
-  return 0;
+  const base = p.stato === 'pagato' ? (p.importo_totale || 0)
+    : p.stato === 'acconto' ? (p.importo_pagato || 0)
+    : 0;
+  const pagatoAlFornitore = p.fornitore_pagato_da_cliente ? (p.costo_ricambi || 0) : 0;
+  return Math.max(0, base - pagatoAlFornitore);
 }
 
 export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props) {
@@ -35,6 +39,7 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
   const [editTotale, setEditTotale] = useState('');
   const [editRicambi, setEditRicambi] = useState('');
   const [editRicambiSubito, setEditRicambiSubito] = useState(false);
+  const [editFornitorePagatoDaCliente, setEditFornitorePagatoDaCliente] = useState(false);
   const [editFornitoreRicambi, setEditFornitoreRicambi] = useState<'' | 'autoricambi' | 'monti'>('');
   const [salvandoPagamento, setSalvandoPagamento] = useState<string | null>(null);
 
@@ -51,6 +56,7 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
     setEditTotale(String(a.pagamento?.importo_totale ?? 0));
     setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
     setEditRicambiSubito(!!a.pagamento?.ricambi_pagati_subito);
+    setEditFornitorePagatoDaCliente(!!a.pagamento?.fornitore_pagato_da_cliente);
     setEditFornitoreRicambi(a.pagamento?.fornitore_ricambi || '');
   };
 
@@ -70,6 +76,7 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
       importo_totale: nuovoTotale,
       costo_ricambi: nuovoRicambi,
       ricambi_pagati_subito: editRicambiSubito,
+      fornitore_pagato_da_cliente: editFornitorePagatoDaCliente,
       fornitore_ricambi: editFornitoreRicambi || null,
       stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
     };
@@ -318,10 +325,19 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
                               <input
                                 type="checkbox"
                                 checked={editRicambiSubito}
-                                onChange={(e) => setEditRicambiSubito(e.target.checked)}
+                                onChange={(e) => { setEditRicambiSubito(e.target.checked); if (e.target.checked) setEditFornitorePagatoDaCliente(false); }}
                                 className="rounded"
                               />
-                              Già saldato (es. sfascio, o pagato dal cliente al fornitore) — non resta da pagare
+                              Pagati subito da me (es. sfascio in contanti) — conta come spesa
+                            </label>
+                            <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={editFornitorePagatoDaCliente}
+                                onChange={(e) => { setEditFornitorePagatoDaCliente(e.target.checked); if (e.target.checked) setEditRicambiSubito(false); }}
+                                className="rounded"
+                              />
+                              Il cliente paga il fornitore direttamente — non lo incasso io
                             </label>
                             <div>
                               <label className="text-[10px] text-gray-400 block">Fornitore ricambi</label>
