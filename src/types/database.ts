@@ -44,6 +44,9 @@ export interface Officina {
   logo_url?: string | null;
   servizi?: { id: string; label: string }[];
   orari_apertura?: { giorno: string; attivo: boolean; apertura: string; chiusura: string }[];
+  // Saldo di partenza per ciascun fornitore di ricambi, per far iniziare il
+  // conto fornitori da un debito/credito gia' esistente invece che da zero.
+  saldi_fornitori_ricambi?: { autoricambi?: number; monti?: number } | null;
   piano: string;
   created_at?: string;
 }
