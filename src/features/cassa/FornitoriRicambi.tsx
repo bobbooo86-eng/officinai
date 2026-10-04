@@ -77,11 +77,16 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
           const appsFornitore = appuntamenti
             .filter((a) => a.pagamento?.fornitore_ricambi === f.id && (a.pagamento?.costo_ricambi || 0) > 0)
             .sort((a, b) => new Date(b.pagamento?.data_consegna || b.data_ora).getTime() - new Date(a.pagamento?.data_consegna || a.data_ora).getTime());
-          const totaleRicambi = appsFornitore.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
+          // "Pagati subito" (es. saldato sul momento, o il cliente paga il
+          // fornitore direttamente): quel lavoro non resta da pagare, va
+          // escluso dal saldo anche se e' segnato su questo fornitore.
+          const daPagare = appsFornitore.filter((a) => !a.pagamento?.ricambi_pagati_subito);
+          const totaleNonSaldato = daPagare.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
+          const totaleSegnato = appsFornitore.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
           const totalePagato = movimenti
             .filter((m) => m.tipo === f.tipoMovimento)
             .reduce((s, m) => s + Number(m.importo), 0);
-          const saldo = totaleRicambi - totalePagato;
+          const saldo = totaleNonSaldato - totalePagato;
           const aperto = espanso === f.id;
 
           return (
@@ -102,7 +107,7 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                 </div>
               </button>
               <div className="flex justify-between text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-                <span>Ricambi segnati: {fmtEuro(totaleRicambi)}</span>
+                <span>Ricambi segnati: {fmtEuro(totaleSegnato)}</span>
                 <span>Pagato: {fmtEuro(totalePagato)}</span>
               </div>
               {aperto && (
@@ -114,8 +119,11 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                       <div key={a.id} className="flex items-center justify-between text-[11px] py-1">
                         <span className="text-gray-600 truncate">
                           {a.clienti?.nome || 'Cliente'}{a.veicoli?.targa ? ` — ${a.veicoli.targa}` : ''}
+                          {a.pagamento?.ricambi_pagati_subito && <span className="text-emerald-600"> · saldato</span>}
                         </span>
-                        <span className="font-semibold text-gray-700 shrink-0 ml-2">{fmtEuro(a.pagamento?.costo_ricambi || 0)}</span>
+                        <span className={`font-semibold shrink-0 ml-2 ${a.pagamento?.ricambi_pagati_subito ? 'text-gray-400' : 'text-gray-700'}`}>
+                          {fmtEuro(a.pagamento?.costo_ricambi || 0)}
+                        </span>
                       </div>
                     ))
                   )}

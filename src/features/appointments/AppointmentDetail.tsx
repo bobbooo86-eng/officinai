@@ -672,7 +672,7 @@ function ModalPagamento({ onConferma, onAnnulla }: {
                 onChange={(e) => setRicambiSubito(e.target.checked)}
                 className="rounded"
               />
-              Pagati subito (es. sfascio) — conta come spesa
+              Già saldato (es. sfascio, o pagato dal cliente al fornitore) — non resta da pagare
             </label>
             <div className="mt-1.5">
               <label className="block text-[11px] text-gray-500 mb-1">Fornitore ricambi (opzionale)</label>

@@ -321,7 +321,7 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
                                 onChange={(e) => setEditRicambiSubito(e.target.checked)}
                                 className="rounded"
                               />
-                              Pagati subito (es. sfascio) — conta come spesa
+                              Già saldato (es. sfascio, o pagato dal cliente al fornitore) — non resta da pagare
                             </label>
                             <div>
                               <label className="text-[10px] text-gray-400 block">Fornitore ricambi</label>
