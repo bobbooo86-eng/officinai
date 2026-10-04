@@ -321,6 +321,22 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
                                 />
                               </div>
                             </div>
+                            <div>
+                              <label className="text-[10px] text-gray-400 block">Fornitore ricambi</label>
+                              <select
+                                value={editFornitoreRicambi}
+                                onChange={(e) => {
+                                  const v = e.target.value as '' | 'autoricambi' | 'monti';
+                                  setEditFornitoreRicambi(v);
+                                  if (!v) setEditFornitorePagatoDaCliente(false);
+                                }}
+                                className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              >
+                                <option value="">Non segnato</option>
+                                <option value="autoricambi">Autoricambi</option>
+                                <option value="monti">Autodemolizioni Monti</option>
+                              </select>
+                            </div>
                             <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
                               <input
                                 type="checkbox"
@@ -330,27 +346,17 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
                               />
                               Pagati subito da me (es. sfascio in contanti) — conta come spesa
                             </label>
-                            <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={editFornitorePagatoDaCliente}
-                                onChange={(e) => { setEditFornitorePagatoDaCliente(e.target.checked); if (e.target.checked) setEditRicambiSubito(false); }}
-                                className="rounded"
-                              />
-                              Il cliente paga il fornitore direttamente — non lo incasso io
-                            </label>
-                            <div>
-                              <label className="text-[10px] text-gray-400 block">Fornitore ricambi</label>
-                              <select
-                                value={editFornitoreRicambi}
-                                onChange={(e) => setEditFornitoreRicambi(e.target.value as '' | 'autoricambi' | 'monti')}
-                                className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                              >
-                                <option value="">Non segnato</option>
-                                <option value="autoricambi">Autoricambi</option>
-                                <option value="monti">Autodemolizioni Monti</option>
-                              </select>
-                            </div>
+                            {editFornitoreRicambi && (
+                              <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={editFornitorePagatoDaCliente}
+                                  onChange={(e) => { setEditFornitorePagatoDaCliente(e.target.checked); if (e.target.checked) setEditRicambiSubito(false); }}
+                                  className="rounded"
+                                />
+                                Il cliente paga {editFornitoreRicambi === 'monti' ? 'Monti' : 'Autoricambi'} direttamente — non lo incasso io
+                              </label>
+                            )}
                             <div className="flex gap-2">
                               <button
                                 onClick={(e) => salvaModificaPagamento(app, e)}

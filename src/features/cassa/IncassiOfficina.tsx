@@ -481,18 +481,21 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                             ? `pagati da me · netto ${fmtEuro(valoreLavoro(a) - spesaRicambi(p))}`
                             : 'non pagati da me'}
                         </label>
-                        <label
-                          onClick={(e) => e.stopPropagation()}
-                          className={`flex items-center gap-1.5 mt-0.5 cursor-pointer ${p.fornitore_pagato_da_cliente ? 'text-red-500' : 'text-gray-400'}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={!!p.fornitore_pagato_da_cliente}
-                            onChange={() => toggleFornitorePagatoDaCliente(a)}
-                            className="rounded shrink-0"
-                          />
-                          {p.fornitore_pagato_da_cliente ? 'pagati dal cliente al fornitore (non incassato)' : 'non pagati dal cliente al fornitore'}
-                        </label>
+                        {/* Ha senso solo se c'e' un fornitore selezionato per questo lavoro. */}
+                        {p.fornitore_ricambi && (
+                          <label
+                            onClick={(e) => e.stopPropagation()}
+                            className={`flex items-center gap-1.5 mt-0.5 cursor-pointer ${p.fornitore_pagato_da_cliente ? 'text-red-500' : 'text-gray-400'}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!p.fornitore_pagato_da_cliente}
+                              onChange={() => toggleFornitorePagatoDaCliente(a)}
+                              className="rounded shrink-0"
+                            />
+                            {p.fornitore_pagato_da_cliente ? `pagati dal cliente a ${p.fornitore_ricambi === 'monti' ? 'Monti' : 'Autoricambi'} (non incassato)` : `non pagati dal cliente a ${p.fornitore_ricambi === 'monti' ? 'Monti' : 'Autoricambi'}`}
+                          </label>
+                        )}
                       </>
                     )}
                   </div>

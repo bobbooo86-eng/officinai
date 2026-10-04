@@ -667,6 +667,22 @@ function ModalPagamento({ onConferma, onAnnulla }: {
               placeholder="es. 80"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <div className="mt-1.5">
+              <label className="block text-[11px] text-gray-500 mb-1">Fornitore ricambi (opzionale)</label>
+              <select
+                value={fornitoreRicambi}
+                onChange={(e) => {
+                  const v = e.target.value as '' | 'autoricambi' | 'monti';
+                  setFornitoreRicambi(v);
+                  if (!v) setFornitorePagatoDaCliente(false);
+                }}
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Non segnato</option>
+                <option value="autoricambi">Autoricambi</option>
+                <option value="monti">Autodemolizioni Monti</option>
+              </select>
+            </div>
             <label className="flex items-center gap-2 mt-1.5 text-xs text-gray-500 cursor-pointer">
               <input
                 type="checkbox"
@@ -676,27 +692,18 @@ function ModalPagamento({ onConferma, onAnnulla }: {
               />
               Pagati subito da me (es. sfascio in contanti) — conta come spesa
             </label>
-            <label className="flex items-center gap-2 mt-1 text-xs text-gray-500 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={fornitorePagatoDaCliente}
-                onChange={(e) => { setFornitorePagatoDaCliente(e.target.checked); if (e.target.checked) setRicambiSubito(false); }}
-                className="rounded"
-              />
-              Il cliente paga il fornitore direttamente — non lo incasso io
-            </label>
-            <div className="mt-1.5">
-              <label className="block text-[11px] text-gray-500 mb-1">Fornitore ricambi (opzionale)</label>
-              <select
-                value={fornitoreRicambi}
-                onChange={(e) => setFornitoreRicambi(e.target.value as '' | 'autoricambi' | 'monti')}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Non segnato</option>
-                <option value="autoricambi">Autoricambi</option>
-                <option value="monti">Autodemolizioni Monti</option>
-              </select>
-            </div>
+            {/* Ha senso solo se c'e' un fornitore selezionato: altrimenti non c'e' nessun conto da far scendere. */}
+            {fornitoreRicambi && (
+              <label className="flex items-center gap-2 mt-1 text-xs text-gray-500 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={fornitorePagatoDaCliente}
+                  onChange={(e) => { setFornitorePagatoDaCliente(e.target.checked); if (e.target.checked) setRicambiSubito(false); }}
+                  className="rounded"
+                />
+                Il cliente paga {fornitoreRicambi === 'monti' ? 'Monti' : 'Autoricambi'} direttamente — non lo incasso io
+              </label>
+            )}
           </div>
           {statoPag !== 'pagato' && (
             <div>

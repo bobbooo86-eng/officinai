@@ -993,18 +993,23 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                                   ? `− Costo ricambi: ${fmtEuro(ricambi)} (pagati da me)`
                                   : `Costo ricambi: ${fmtEuro(ricambi)} (non pagati da me)`}
                               </label>
-                              <label
-                                onClick={(e) => e.stopPropagation()}
-                                className={`flex items-center gap-1.5 text-[11px] truncate cursor-pointer ${app.pagamento?.fornitore_pagato_da_cliente ? 'text-red-500' : 'text-gray-400'}`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={!!app.pagamento?.fornitore_pagato_da_cliente}
-                                  onChange={() => toggleFornitorePagatoDaCliente(app)}
-                                  className="rounded shrink-0"
-                                />
-                                {app.pagamento?.fornitore_pagato_da_cliente ? 'Pagato dal cliente al fornitore (non incassato)' : 'Non pagato dal cliente al fornitore'}
-                              </label>
+                              {/* Ha senso solo se c'e' un fornitore selezionato per questo lavoro. */}
+                              {app.pagamento?.fornitore_ricambi && (
+                                <label
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={`flex items-center gap-1.5 text-[11px] truncate cursor-pointer ${app.pagamento?.fornitore_pagato_da_cliente ? 'text-red-500' : 'text-gray-400'}`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={!!app.pagamento?.fornitore_pagato_da_cliente}
+                                    onChange={() => toggleFornitorePagatoDaCliente(app)}
+                                    className="rounded shrink-0"
+                                  />
+                                  {app.pagamento?.fornitore_pagato_da_cliente
+                                    ? `Pagato dal cliente a ${app.pagamento.fornitore_ricambi === 'monti' ? 'Monti' : 'Autoricambi'} (non incassato)`
+                                    : `Non pagato dal cliente a ${app.pagamento.fornitore_ricambi === 'monti' ? 'Monti' : 'Autoricambi'}`}
+                                </label>
+                              )}
                             </>
                           )}
                           {resto > 0 && (
