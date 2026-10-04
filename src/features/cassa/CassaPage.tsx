@@ -11,7 +11,7 @@ import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncass
 import { SEGNO, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento, spesaRicambi } from './movimentiTotali';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente, Appuntamento } from '@/types/database';
 
-type CassaTab = 'tutti' | 'incasso_extra' | 'spesa_officina' | 'spesa_titolare' | 'dipendenti' | 'spesa_revisione_gianni' | 'spesa_centraline_daniele';
+type CassaTab = 'tutti' | 'incasso_extra' | 'da_incassare' | 'spesa_officina' | 'spesa_titolare' | 'dipendenti' | 'spesa_revisione_gianni' | 'spesa_centraline_daniele';
 
 interface TipoConfig {
   id: MovimentoTipo;
@@ -448,6 +448,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
 
   const filteredByTab = useMemo(() => {
     if (tab === 'tutti') return movimenti;
+    // "Da incassare" riguarda solo le consegne auto con resto da pagare,
+    // mai i movimenti manuali (che non hanno un concetto di acconto).
+    if (tab === 'da_incassare') return [];
     if (tab === 'dipendenti') {
       return movimenti.filter((m) => m.tipo === 'anticipo_dipendente' || m.tipo === 'spesa_dipendente');
     }
@@ -459,8 +462,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   const riferimento = useMemo(() => new Date(), []);
 
   // Gli incassi auto sono incassi: compaiono solo nei tab dove un incasso
-  // avrebbe senso (Tutti / Incassi), non dentro Officina/Titolare/Dipendenti.
-  const mostraIncassiAuto = tab === 'tutti' || tab === 'incasso_extra';
+  // avrebbe senso (Tutti / Incassi / Da incassare), non dentro Officina/
+  // Titolare/Dipendenti.
+  const mostraIncassiAuto = tab === 'tutti' || tab === 'incasso_extra' || tab === 'da_incassare';
 
   // Con una ricerca attiva si cerca su tutto lo storico (per targa/nome),
   // non solo nel periodo selezionato: altrimenti un veicolo fuori dal
@@ -469,16 +473,19 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
 
   const incassiAutoInRange = useMemo(() => {
     if (!mostraIncassiAuto) return [];
-    if (q) {
-      return incassiAuto.filter((a) =>
-        a.clienti?.nome?.toLowerCase().includes(q) ||
-        a.veicoli?.targa?.toLowerCase().includes(q) ||
-        a.veicoli?.marca?.toLowerCase().includes(q) ||
-        a.veicoli?.modello?.toLowerCase().includes(q)
-      );
-    }
-    return incassiAuto.filter((a) => inPeriodo(dataIncasso(a), periodo, riferimento));
-  }, [incassiAuto, periodo, riferimento, mostraIncassiAuto, q]);
+    const base = q
+      ? incassiAuto.filter((a) =>
+          a.clienti?.nome?.toLowerCase().includes(q) ||
+          a.veicoli?.targa?.toLowerCase().includes(q) ||
+          a.veicoli?.marca?.toLowerCase().includes(q) ||
+          a.veicoli?.modello?.toLowerCase().includes(q)
+        )
+      : incassiAuto.filter((a) => inPeriodo(dataIncasso(a), periodo, riferimento));
+    // "Da incassare" mostra solo le consegne con un resto ancora da pagare,
+    // a prescindere dal periodo: un acconto vecchio non ancora saldato va
+    // visto finche' non viene chiuso, non solo finche' dura il periodo.
+    return tab === 'da_incassare' ? base.filter((a) => restoDaIncassare(a) > 0) : base;
+  }, [incassiAuto, periodo, riferimento, mostraIncassiAuto, q, tab]);
 
   // Lista mostrata sotto: rispetta il filtro per tipo selezionato, e la
   // ricerca (per descrizione o nome dipendente/titolare) quando attiva.
@@ -843,6 +850,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
         {([
           { id: 'tutti', label: 'Tutti', icon: '📒' },
           { id: 'incasso_extra', label: 'Incassi', icon: '💵' },
+          { id: 'da_incassare', label: 'Da incassare', icon: '⏳' },
           { id: 'spesa_officina', label: 'Officina', icon: '🧾' },
           { id: 'spesa_titolare', label: 'Titolare', icon: '👔' },
           { id: 'dipendenti', label: 'Dipendenti', icon: '👷' },
@@ -870,9 +878,13 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
         <Card className="!p-6 text-center">
           <div className="text-4xl mb-2">📭</div>
           <div className="text-sm text-gray-500">
-            {search.trim() ? 'Nessun risultato per la ricerca' : 'Nessun movimento in questo periodo'}
+            {search.trim()
+              ? 'Nessun risultato per la ricerca'
+              : tab === 'da_incassare'
+              ? 'Niente da incassare: tutto saldato'
+              : 'Nessun movimento in questo periodo'}
           </div>
-          {!search.trim() && (
+          {!search.trim() && tab !== 'da_incassare' && (
             <div className="text-xs text-gray-400 mt-1">Clicca "+ Nuovo movimento" per iniziare</div>
           )}
         </Card>
