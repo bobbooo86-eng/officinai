@@ -412,6 +412,7 @@ export function AppOfficina() {
               { id: 'incasso', icon: '💵', label: 'Incasso extra', desc: 'Vendita al banco, entrata fuori appuntamento', onClick: () => fabApriCassaConTipo('incasso_extra'), color: 'from-emerald-50 to-green-50 border-emerald-200' },
               { id: 'spesa_off', icon: '🧾', label: 'Spesa officina', desc: 'Fattura fornitore, materiali, bollette', onClick: () => fabApriCassaConTipo('spesa_officina'), color: 'from-red-50 to-rose-50 border-red-200' },
               { id: 'spesa_tit', icon: '👔', label: 'Spesa titolare', desc: 'Prelievo cassa, spesa personale', onClick: () => fabApriCassaConTipo('spesa_titolare'), color: 'from-purple-50 to-fuchsia-50 border-purple-200' },
+              { id: 'spesa_affitto', icon: '🏠', label: 'Spesa affitto', desc: 'Affitto dei locali dell\'officina', onClick: () => fabApriCassaConTipo('spesa_affitto'), color: 'from-pink-50 to-rose-50 border-pink-200' },
               { id: 'revisione_gianni', icon: '🔧', label: 'Revisione (Gianni)', desc: 'Spesa per revisioni fatte da Gianni', onClick: () => fabApriCassaConTipo('spesa_revisione_gianni'), color: 'from-orange-50 to-amber-50 border-orange-200' },
               { id: 'centraline_daniele', icon: '💻', label: 'Centraline (Daniele)', desc: 'Spesa per centraline fatte da Daniele', onClick: () => fabApriCassaConTipo('spesa_centraline_daniele'), color: 'from-cyan-50 to-sky-50 border-cyan-200' },
             ]).map((opt) => (

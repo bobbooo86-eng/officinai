@@ -292,6 +292,7 @@ export type MovimentoTipo =
   | 'incasso_extra'
   | 'spesa_officina'
   | 'spesa_titolare'
+  | 'spesa_affitto'
   | 'anticipo_dipendente'
   | 'spesa_dipendente'
   | 'spesa_revisione_gianni'

@@ -11,7 +11,7 @@ import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncass
 import { SEGNO, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento, spesaRicambi } from './movimentiTotali';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente, Appuntamento } from '@/types/database';
 
-type CassaTab = 'tutti' | 'incasso_extra' | 'da_incassare' | 'spesa_officina' | 'spesa_titolare' | 'dipendenti' | 'spesa_revisione_gianni' | 'spesa_centraline_daniele';
+type CassaTab = 'tutti' | 'incasso_extra' | 'da_incassare' | 'spesa_officina' | 'spesa_titolare' | 'spesa_affitto' | 'dipendenti' | 'spesa_revisione_gianni' | 'spesa_centraline_daniele';
 
 interface TipoConfig {
   id: MovimentoTipo;
@@ -33,6 +33,7 @@ const TIPI: TipoConfig[] = [
   { id: 'incasso_extra', label: 'Incasso extra', short: 'Incasso', icon: '💵', color: 'text-emerald-700', bg: 'bg-emerald-100', sign: SEGNO.incasso_extra },
   { id: 'spesa_officina', label: 'Spesa officina', short: 'Spesa officina', icon: '🧾', color: 'text-red-700', bg: 'bg-red-100', sign: SEGNO.spesa_officina },
   { id: 'spesa_titolare', label: 'Spesa titolare', short: 'Spesa titolare', icon: '👔', color: 'text-purple-700', bg: 'bg-purple-100', sign: SEGNO.spesa_titolare },
+  { id: 'spesa_affitto', label: 'Spesa affitto', short: 'Spesa affitto', icon: '🏠', color: 'text-pink-700', bg: 'bg-pink-100', sign: SEGNO.spesa_affitto },
   { id: 'anticipo_dipendente', label: 'Anticipo dipendente', short: 'Anticipo', icon: '💶', color: 'text-amber-700', bg: 'bg-amber-100', sign: SEGNO.anticipo_dipendente },
   { id: 'spesa_dipendente', label: 'Spesa dipendente', short: 'Spesa dip.', icon: '👷', color: 'text-blue-700', bg: 'bg-blue-100', sign: SEGNO.spesa_dipendente },
   { id: 'spesa_revisione_gianni', label: 'Revisione (Gianni)', short: 'Revisione Gianni', icon: '🔧', color: 'text-orange-700', bg: 'bg-orange-100', sign: SEGNO.spesa_revisione_gianni },
@@ -519,7 +520,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   );
   const totalSpese = useMemo(
     () =>
-      monthTutti.filter((m) => m.tipo !== 'spesa_titolare').reduce((a, m) => a + spesaMovimento(m), 0) +
+      monthTutti.filter((m) => m.tipo !== 'spesa_titolare' && m.tipo !== 'spesa_affitto').reduce((a, m) => a + spesaMovimento(m), 0) +
       incassiAutoTotaliInRange.reduce((a, app) => a + spesaRicambi(app.pagamento), 0),
     [monthTutti, incassiAutoTotaliInRange]
   );
@@ -531,7 +532,15 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     () => monthTutti.filter((m) => m.tipo === 'spesa_titolare').reduce((a, m) => a + spesaMovimento(m), 0),
     [monthTutti]
   );
-  const saldo = totalIncassi - totalSpese - totalSpeseTitolare;
+  // Stessa logica delle spese titolare: l'affitto e' una spesa fissa, mostrata
+  // a parte invece che dentro "Spese" per non confonderla con i costi
+  // variabili dell'officina.
+  const totalSpesaAffitto = useMemo(
+    () => monthTutti.filter((m) => m.tipo === 'spesa_affitto').reduce((a, m) => a + spesaMovimento(m), 0),
+    [monthTutti]
+  );
+  const totaleSpeseComplessivo = totalSpese + totalSpeseTitolare + totalSpesaAffitto;
+  const saldo = totalIncassi - totaleSpeseComplessivo;
   const totalDaIncassare = useMemo(
     () => incassiAutoTotaliInRange.reduce((a, app) => a + restoDaIncassare(app), 0),
     [incassiAutoTotaliInRange]
@@ -817,7 +826,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center">
             <div className="text-[10px] text-emerald-700 font-semibold">Incassi</div>
             <div className="text-sm font-bold text-emerald-900">{fmtEuro(totalIncassi)}</div>
@@ -829,6 +838,14 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
           <div className="bg-purple-50 border border-purple-200 rounded-xl p-2.5 text-center">
             <div className="text-[10px] text-purple-700 font-semibold">Spese titolare</div>
             <div className="text-sm font-bold text-purple-900">{fmtEuro(totalSpeseTitolare)}</div>
+          </div>
+          <div className="bg-pink-50 border border-pink-200 rounded-xl p-2.5 text-center">
+            <div className="text-[10px] text-pink-700 font-semibold">Spesa affitto</div>
+            <div className="text-sm font-bold text-pink-900">{fmtEuro(totalSpesaAffitto)}</div>
+          </div>
+          <div className="bg-gray-100 border border-gray-300 rounded-xl p-2.5 text-center">
+            <div className="text-[10px] text-gray-600 font-semibold">Totale spese</div>
+            <div className="text-sm font-bold text-gray-900">{fmtEuro(totaleSpeseComplessivo)}</div>
           </div>
           <div className={`border rounded-xl p-2.5 text-center ${
             saldo >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-orange-50 border-orange-200'
@@ -853,6 +870,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
           { id: 'da_incassare', label: 'Da incassare', icon: '⏳' },
           { id: 'spesa_officina', label: 'Officina', icon: '🧾' },
           { id: 'spesa_titolare', label: 'Titolare', icon: '👔' },
+          { id: 'spesa_affitto', label: 'Affitto', icon: '🏠' },
           { id: 'dipendenti', label: 'Dipendenti', icon: '👷' },
           { id: 'spesa_revisione_gianni', label: 'Revisione Gianni', icon: '🔧' },
           { id: 'spesa_centraline_daniele', label: 'Centraline Daniele', icon: '💻' },
