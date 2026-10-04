@@ -571,9 +571,15 @@ function ModalPagamento({ onConferma, onAnnulla }: {
   const [note, setNote] = useState('');
 
   const conferma = () => {
+    // "Pagato completo" mostra un solo campo (il totale): l'incassato deve
+    // coincidere con quello, altrimenti restava vuoto/a zero e riaprendo la
+    // modifica (matita in Cassa) bisognava reinserirlo da capo.
+    const importoPagatoFinale = statoPag === 'pagato'
+      ? (importoTotale ? parseFloat(importoTotale) : undefined)
+      : (importoPagato ? parseFloat(importoPagato) : undefined);
     onConferma({
       stato: statoPag,
-      importo_pagato: importoPagato ? parseFloat(importoPagato) : undefined,
+      importo_pagato: importoPagatoFinale,
       importo_totale: importoTotale ? parseFloat(importoTotale) : undefined,
       costo_ricambi: costoRicambi ? parseFloat(costoRicambi) : undefined,
       ricambi_pagati_subito: ricambiSubito,

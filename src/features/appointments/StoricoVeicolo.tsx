@@ -40,7 +40,13 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
   const apriModificaPagamento = (a: Appuntamento, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingPagamentoId(a.id);
-    setEditPagato(String(a.pagamento?.importo_pagato ?? 0));
+    // "Pagato completo" aveva salvato solo il totale, senza mai valorizzare
+    // l'incassato: qui lo ricostruisce (incassato = totale) per i pagamenti
+    // vecchi, cosi' non va reinserito a mano ogni volta che si apre la matita.
+    const pagatoDefault = a.pagamento?.stato === 'pagato'
+      ? (a.pagamento?.importo_pagato ?? a.pagamento?.importo_totale ?? 0)
+      : (a.pagamento?.importo_pagato ?? 0);
+    setEditPagato(String(pagatoDefault));
     setEditTotale(String(a.pagamento?.importo_totale ?? 0));
     setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
     setEditRicambiSubito(!!a.pagamento?.ricambi_pagati_subito);
