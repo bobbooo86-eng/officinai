@@ -1,5 +1,7 @@
 name: Ripara database Supabase
 
+# Rilancio manuale dopo aggiornamento di SUPABASE_ACCESS_TOKEN.
+#
 # Applica le migrazioni correttive al database di produzione usando la
 # Management API di Supabase via HTTPS, invece di una connessione
 # Postgres diretta.
