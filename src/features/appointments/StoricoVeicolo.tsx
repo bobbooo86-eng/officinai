@@ -35,6 +35,7 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
   const [editTotale, setEditTotale] = useState('');
   const [editRicambi, setEditRicambi] = useState('');
   const [editRicambiSubito, setEditRicambiSubito] = useState(false);
+  const [editFornitoreRicambi, setEditFornitoreRicambi] = useState<'' | 'autoricambi' | 'monti'>('');
   const [salvandoPagamento, setSalvandoPagamento] = useState<string | null>(null);
 
   const apriModificaPagamento = (a: Appuntamento, e: React.MouseEvent) => {
@@ -50,6 +51,7 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
     setEditTotale(String(a.pagamento?.importo_totale ?? 0));
     setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
     setEditRicambiSubito(!!a.pagamento?.ricambi_pagati_subito);
+    setEditFornitoreRicambi(a.pagamento?.fornitore_ricambi || '');
   };
 
   // Stessa logica di Incassi officina: incassato finora, totale da pagare
@@ -68,6 +70,7 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
       importo_totale: nuovoTotale,
       costo_ricambi: nuovoRicambi,
       ricambi_pagati_subito: editRicambiSubito,
+      fornitore_ricambi: editFornitoreRicambi || null,
       stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
     };
     setSalvandoPagamento(a.id);
@@ -320,6 +323,18 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
                               />
                               Pagati subito (es. sfascio) — conta come spesa
                             </label>
+                            <div>
+                              <label className="text-[10px] text-gray-400 block">Fornitore ricambi</label>
+                              <select
+                                value={editFornitoreRicambi}
+                                onChange={(e) => setEditFornitoreRicambi(e.target.value as '' | 'autoricambi' | 'monti')}
+                                className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              >
+                                <option value="">Non segnato</option>
+                                <option value="autoricambi">Autoricambi</option>
+                                <option value="monti">Autodemolizioni Monti</option>
+                              </select>
+                            </div>
                             <div className="flex gap-2">
                               <button
                                 onClick={(e) => salvaModificaPagamento(app, e)}

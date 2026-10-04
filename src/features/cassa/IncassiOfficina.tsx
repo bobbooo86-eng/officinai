@@ -25,6 +25,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
   const [editTotale, setEditTotale] = useState('');
   const [editRicambi, setEditRicambi] = useState('');
   const [editRicambiSubito, setEditRicambiSubito] = useState(false);
+  const [editFornitoreRicambi, setEditFornitoreRicambi] = useState<'' | 'autoricambi' | 'monti'>('');
   const [editOperaio, setEditOperaio] = useState('');
   const [editData, setEditData] = useState('');
   const [salvando, setSalvando] = useState<string | null>(null);
@@ -41,6 +42,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
     setEditTotale(String(a.pagamento?.importo_totale ?? 0));
     setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
     setEditRicambiSubito(!!a.pagamento?.ricambi_pagati_subito);
+    setEditFornitoreRicambi(a.pagamento?.fornitore_ricambi || '');
     setEditOperaio(a.pagamento?.operaio || '');
     setEditData(dataInputValue(a.pagamento?.data_consegna || a.data_ora));
   };
@@ -66,6 +68,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
       importo_totale: nuovoTotale,
       costo_ricambi: nuovoRicambi,
       ricambi_pagati_subito: editRicambiSubito,
+      fornitore_ricambi: editFornitoreRicambi || null,
       operaio: editOperaio.trim() || undefined,
       data_consegna: nuovaDataConsegna,
       stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
@@ -81,6 +84,7 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
   return {
     editingId, editPagato, setEditPagato, editTotale, setEditTotale,
     editRicambi, setEditRicambi, editRicambiSubito, setEditRicambiSubito,
+    editFornitoreRicambi, setEditFornitoreRicambi,
     editOperaio, setEditOperaio,
     editData, setEditData, salvando,
     apri, annulla, salva,
@@ -127,6 +131,18 @@ export function PagamentoEditFields({ editor, appuntamento }: { editor: Pagament
             className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>
+      </div>
+      <div>
+        <label className="text-[10px] text-gray-400 block">Fornitore ricambi</label>
+        <select
+          value={editor.editFornitoreRicambi}
+          onChange={(e) => editor.setEditFornitoreRicambi(e.target.value as '' | 'autoricambi' | 'monti')}
+          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        >
+          <option value="">Non segnato</option>
+          <option value="autoricambi">Autoricambi</option>
+          <option value="monti">Autodemolizioni Monti</option>
+        </select>
       </div>
       <div className="flex items-center gap-2">
         <div className="flex-1">

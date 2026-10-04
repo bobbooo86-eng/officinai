@@ -102,6 +102,7 @@ export interface PagamentoInfo {
   importo_totale?: number;   // importo totale da pagare
   costo_ricambi?: number;    // costo dei ricambi usati, per calcolare il guadagno netto
   ricambi_pagati_subito?: boolean; // true solo se pagati sul momento (es. sfascio): conta come spesa. Se pagati poi al ricambista (es. a blocchi), NON conta qui: quella spesa si registra a parte in Movimenti
+  fornitore_ricambi?: 'autoricambi' | 'monti' | null; // da chi vengono i ricambi di questa consegna, per tenere il conto di quanto si deve ancora a ciascun fornitore
   data_consegna?: string;    // quando e' stata confermata la consegna: appuntamenti non ha altrimenti una data di consegna, solo data_ora (la data prenotata)
   note?: string;
   operaio?: string;          // nome di chi ha eseguito il lavoro sull'auto
@@ -293,6 +294,8 @@ export type MovimentoTipo =
   | 'spesa_officina'
   | 'spesa_titolare'
   | 'spesa_affitto'
+  | 'spesa_autoricambi'
+  | 'spesa_monti'
   | 'anticipo_dipendente'
   | 'spesa_dipendente'
   | 'spesa_revisione_gianni'

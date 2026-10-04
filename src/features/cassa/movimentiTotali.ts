@@ -10,6 +10,8 @@ export const SEGNO: Record<MovimentoTipo, 1 | -1> = {
   spesa_officina: -1,
   spesa_titolare: -1,
   spesa_affitto: -1,
+  spesa_autoricambi: -1,
+  spesa_monti: -1,
   anticipo_dipendente: -1,
   spesa_dipendente: -1,
   spesa_revisione_gianni: -1,

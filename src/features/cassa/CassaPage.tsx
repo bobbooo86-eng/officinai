@@ -8,10 +8,11 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { VoiceButton } from '@/components/VoiceInput';
 import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncassare, usePagamentoEditor, PagamentoEditFields, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
+import { FornitoriRicambi } from './FornitoriRicambi';
 import { SEGNO, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento, spesaRicambi } from './movimentiTotali';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente, Appuntamento } from '@/types/database';
 
-type CassaTab = 'tutti' | 'incasso_extra' | 'da_incassare' | 'spesa_officina' | 'spesa_titolare' | 'spesa_affitto' | 'dipendenti' | 'spesa_revisione_gianni' | 'spesa_centraline_daniele';
+type CassaTab = 'tutti' | 'incasso_extra' | 'da_incassare' | 'spesa_officina' | 'spesa_titolare' | 'spesa_affitto' | 'spesa_autoricambi' | 'spesa_monti' | 'dipendenti' | 'spesa_revisione_gianni' | 'spesa_centraline_daniele';
 
 interface TipoConfig {
   id: MovimentoTipo;
@@ -34,6 +35,8 @@ const TIPI: TipoConfig[] = [
   { id: 'spesa_officina', label: 'Spesa officina', short: 'Spesa officina', icon: '🧾', color: 'text-red-700', bg: 'bg-red-100', sign: SEGNO.spesa_officina },
   { id: 'spesa_titolare', label: 'Spesa titolare', short: 'Spesa titolare', icon: '👔', color: 'text-purple-700', bg: 'bg-purple-100', sign: SEGNO.spesa_titolare },
   { id: 'spesa_affitto', label: 'Spesa affitto', short: 'Spesa affitto', icon: '🏠', color: 'text-pink-700', bg: 'bg-pink-100', sign: SEGNO.spesa_affitto },
+  { id: 'spesa_autoricambi', label: 'Autoricambi', short: 'Autoricambi', icon: '🏭', color: 'text-teal-700', bg: 'bg-teal-100', sign: SEGNO.spesa_autoricambi },
+  { id: 'spesa_monti', label: 'Autodemolizioni Monti', short: 'Monti', icon: '🚙', color: 'text-lime-700', bg: 'bg-lime-100', sign: SEGNO.spesa_monti },
   { id: 'anticipo_dipendente', label: 'Anticipo dipendente', short: 'Anticipo', icon: '💶', color: 'text-amber-700', bg: 'bg-amber-100', sign: SEGNO.anticipo_dipendente },
   { id: 'spesa_dipendente', label: 'Spesa dipendente', short: 'Spesa dip.', icon: '👷', color: 'text-blue-700', bg: 'bg-blue-100', sign: SEGNO.spesa_dipendente },
   { id: 'spesa_revisione_gianni', label: 'Revisione (Gianni)', short: 'Revisione Gianni', icon: '🔧', color: 'text-orange-700', bg: 'bg-orange-100', sign: SEGNO.spesa_revisione_gianni },
@@ -80,7 +83,7 @@ interface CassaPageProps {
 
 export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPageProps) {
   const { officina, utente } = useAuthStore();
-  const [sezione, setSezione] = useState<'movimenti' | 'incassi'>('movimenti');
+  const [sezione, setSezione] = useState<'movimenti' | 'incassi' | 'fornitori'>('movimenti');
   const [tab, setTab] = useState<CassaTab>('tutti');
   const [movimenti, setMovimenti] = useState<Movimento[]>([]);
   const [dipendenti, setDipendenti] = useState<Utente[]>([]);
@@ -581,8 +584,8 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
         )}
       </div>
 
-      {/* Movimenti (cassa manuale) vs Incassi officina (pagamenti alla consegna) */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Movimenti (cassa manuale) vs Incassi officina (pagamenti alla consegna) vs Fornitori ricambi */}
+      <div className="grid grid-cols-3 gap-2">
         <button
           onClick={() => setSezione('movimenti')}
           className={`py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
@@ -599,9 +602,18 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
         >
           🚗 Incassi officina
         </button>
+        <button
+          onClick={() => setSezione('fornitori')}
+          className={`py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+            sezione === 'fornitori' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          🔧 Fornitori ricambi
+        </button>
       </div>
 
       {sezione === 'incassi' && <IncassiOfficina officinaId={officinaId} />}
+      {sezione === 'fornitori' && <FornitoriRicambi officinaId={officinaId} />}
 
       {sezione === 'movimenti' && (
       <>
@@ -871,6 +883,8 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
           { id: 'spesa_officina', label: 'Officina', icon: '🧾' },
           { id: 'spesa_titolare', label: 'Titolare', icon: '👔' },
           { id: 'spesa_affitto', label: 'Affitto', icon: '🏠' },
+          { id: 'spesa_autoricambi', label: 'Autoricambi', icon: '🏭' },
+          { id: 'spesa_monti', label: 'Monti', icon: '🚙' },
           { id: 'dipendenti', label: 'Dipendenti', icon: '👷' },
           { id: 'spesa_revisione_gianni', label: 'Revisione Gianni', icon: '🔧' },
           { id: 'spesa_centraline_daniele', label: 'Centraline Daniele', icon: '💻' },

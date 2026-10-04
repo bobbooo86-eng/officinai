@@ -568,6 +568,7 @@ function ModalPagamento({ onConferma, onAnnulla }: {
   const [importoTotale, setImportoTotale] = useState('');
   const [costoRicambi, setCostoRicambi] = useState('');
   const [ricambiSubito, setRicambiSubito] = useState(false);
+  const [fornitoreRicambi, setFornitoreRicambi] = useState<'' | 'autoricambi' | 'monti'>('');
   const [note, setNote] = useState('');
 
   const conferma = () => {
@@ -583,6 +584,7 @@ function ModalPagamento({ onConferma, onAnnulla }: {
       importo_totale: importoTotale ? parseFloat(importoTotale) : undefined,
       costo_ricambi: costoRicambi ? parseFloat(costoRicambi) : undefined,
       ricambi_pagati_subito: ricambiSubito,
+      fornitore_ricambi: fornitoreRicambi || null,
       data_consegna: new Date().toISOString(),
       note: note.trim() || undefined,
     });
@@ -672,6 +674,18 @@ function ModalPagamento({ onConferma, onAnnulla }: {
               />
               Pagati subito (es. sfascio) — conta come spesa
             </label>
+            <div className="mt-1.5">
+              <label className="block text-[11px] text-gray-500 mb-1">Fornitore ricambi (opzionale)</label>
+              <select
+                value={fornitoreRicambi}
+                onChange={(e) => setFornitoreRicambi(e.target.value as '' | 'autoricambi' | 'monti')}
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Non segnato</option>
+                <option value="autoricambi">Autoricambi</option>
+                <option value="monti">Autodemolizioni Monti</option>
+              </select>
+            </div>
           </div>
           {statoPag !== 'pagato' && (
             <div>
