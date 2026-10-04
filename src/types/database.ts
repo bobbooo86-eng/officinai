@@ -338,3 +338,16 @@ export interface Movimento {
   // Relations (joined)
   dipendente?: Utente | null;
 }
+
+// Acquisto registrato a mano sul conto di un fornitore di ricambi, non
+// legato a nessuna consegna specifica (es. un pezzo comprato per
+// magazzino): alza il debito verso quel fornitore.
+export interface AcquistoFornitoreRicambi {
+  id: string;
+  officina_id: string;
+  fornitore: 'autoricambi' | 'monti';
+  descrizione: string;
+  importo: number;
+  data: string;
+  created_at?: string;
+}

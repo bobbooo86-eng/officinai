@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
-import type { Appuntamento, Movimento, MovimentoTipo } from '@/types/database';
+import type { Appuntamento, Movimento, MovimentoTipo, AcquistoFornitoreRicambi } from '@/types/database';
 
 const fmtEuro = (n: number) =>
   new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
@@ -22,25 +22,31 @@ type SaldiFornitori = { autoricambi?: number; monti?: number };
  * Conto corrente con ciascun fornitore di ricambi: un saldo di partenza
  * (impostabile a mano, per chi aveva gia' un debito prima di usare questa
  * funzione) piu' quanto e' stato segnato come "ricambi da {fornitore}"
- * sulle consegne (il debito che cresce) meno quanto e' gia' stato pagato
- * (i movimenti spesa_autoricambi/spesa_monti registrati in Cassa >
+ * sulle consegne piu' gli acquisti aggiunti a mano (es. un pezzo per
+ * magazzino, non legato a nessuna consegna) meno quanto e' gia' stato
+ * pagato (i movimenti spesa_autoricambi/spesa_monti registrati in Cassa >
  * Movimenti). Non e' legato al periodo selezionato altrove in Cassa: e'
  * un saldo che resta finche' non viene saldato, come il tab "Da incassare".
  */
 export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [movimenti, setMovimenti] = useState<Movimento[]>([]);
+  const [acquisti, setAcquisti] = useState<AcquistoFornitoreRicambi[]>([]);
   const [saldiIniziali, setSaldiIniziali] = useState<SaldiFornitori>({});
   const [loading, setLoading] = useState(true);
   const [espanso, setEspanso] = useState<string | null>(null);
   const [editandoSaldo, setEditandoSaldo] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [salvandoSaldo, setSalvandoSaldo] = useState(false);
+  const [aggiungendoAcquisto, setAggiungendoAcquisto] = useState<string | null>(null);
+  const [nuovaDesc, setNuovaDesc] = useState('');
+  const [nuovoImporto, setNuovoImporto] = useState('');
+  const [salvandoAcquisto, setSalvandoAcquisto] = useState(false);
 
   const load = useCallback(async () => {
     if (!officinaId) return;
     setLoading(true);
-    const [{ data: apps }, { data: movs }, { data: officina }] = await Promise.all([
+    const [{ data: apps }, { data: movs }, { data: officina }, { data: acq }] = await Promise.all([
       supabase
         .from('appuntamenti')
         .select('*, clienti(nome), veicoli(marca,modello,targa)')
@@ -58,10 +64,16 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
         .select('saldi_fornitori_ricambi')
         .eq('id', officinaId)
         .maybeSingle(),
+      supabase
+        .from('acquisti_fornitori_ricambi')
+        .select('*')
+        .eq('officina_id', officinaId)
+        .order('data', { ascending: false }),
     ]);
     setAppuntamenti((apps as Appuntamento[]) || []);
     setMovimenti((movs as Movimento[]) || []);
     setSaldiIniziali((officina?.saldi_fornitori_ricambi as SaldiFornitori) || {});
+    setAcquisti((acq as AcquistoFornitoreRicambi[]) || []);
     setLoading(false);
   }, [officinaId]);
 
@@ -73,6 +85,7 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'appuntamenti', filter: `officina_id=eq.${officinaId}` }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'movimenti', filter: `officina_id=eq.${officinaId}` }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'officine', filter: `id=eq.${officinaId}` }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'acquisti_fornitori_ricambi', filter: `officina_id=eq.${officinaId}` }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [officinaId, load]);
@@ -93,12 +106,37 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
     setEditandoSaldo(null);
   };
 
+  const apriAggiungiAcquisto = (fornitoreId: string) => {
+    setAggiungendoAcquisto(fornitoreId);
+    setNuovaDesc('');
+    setNuovoImporto('');
+  };
+
+  const salvaAcquisto = async (fornitoreId: 'autoricambi' | 'monti') => {
+    if (!officinaId || !nuovoImporto) return;
+    setSalvandoAcquisto(true);
+    const { error } = await supabase.from('acquisti_fornitori_ricambi').insert({
+      officina_id: officinaId,
+      fornitore: fornitoreId,
+      descrizione: nuovaDesc.trim(),
+      importo: parseFloat(nuovoImporto) || 0,
+    });
+    setSalvandoAcquisto(false);
+    if (error) { alert('Acquisto non salvato: ' + error.message); return; }
+    setAggiungendoAcquisto(null);
+  };
+
+  const eliminaAcquisto = async (id: string) => {
+    if (!confirm('Eliminare questo acquisto?')) return;
+    await supabase.from('acquisti_fornitori_ricambi').delete().eq('id', id);
+  };
+
   if (!officinaId) return null;
 
   return (
     <div className="space-y-3">
       <p className="text-[11px] text-gray-400 px-1">
-        Il saldo cresce quando su una consegna segni "da chi" vengono i ricambi, e scende quando registri un pagamento a quel fornitore da Movimenti. La matita ✏️ imposta un saldo di partenza, se avevi già un debito prima di usare questa pagina.
+        Il saldo cresce quando su una consegna segni "da chi" vengono i ricambi o aggiungi un acquisto con "+", e scende quando registri un pagamento a quel fornitore da Movimenti. La matita ✏️ imposta un saldo di partenza, se avevi già un debito prima di usare questa pagina.
       </p>
       {loading ? (
         <div className="text-center py-6 text-xs text-gray-400">Caricamento...</div>
@@ -107,6 +145,7 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
           const appsFornitore = appuntamenti
             .filter((a) => a.pagamento?.fornitore_ricambi === f.id && (a.pagamento?.costo_ricambi || 0) > 0)
             .sort((a, b) => new Date(b.pagamento?.data_consegna || b.data_ora).getTime() - new Date(a.pagamento?.data_consegna || a.data_ora).getTime());
+          const acquistiFornitore = acquisti.filter((a) => a.fornitore === f.id);
           // "Pagati subito" (saldato sul momento dall'officina) o
           // "fornitore pagato dal cliente" (il cliente salda il fornitore
           // direttamente): in entrambi i casi quel lavoro non resta da
@@ -116,13 +155,15 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
           const daPagare = appsFornitore.filter((a) => !giaSaldato(a));
           const totaleNonSaldato = daPagare.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
           const totaleSegnato = appsFornitore.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
+          const totaleAcquisti = acquistiFornitore.reduce((s, a) => s + Number(a.importo), 0);
           const totalePagato = movimenti
             .filter((m) => m.tipo === f.tipoMovimento)
             .reduce((s, m) => s + Number(m.importo), 0);
           const saldoIniziale = saldiIniziali[f.id] || 0;
-          const saldo = saldoIniziale + totaleNonSaldato - totalePagato;
+          const saldo = saldoIniziale + totaleNonSaldato + totaleAcquisti - totalePagato;
           const aperto = espanso === f.id;
           const inEditSaldo = editandoSaldo === f.id;
+          const inAggiungi = aggiungendoAcquisto === f.id;
 
           return (
             <Card key={f.id} className="!p-3">
@@ -133,6 +174,13 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                 >
                   <span className="text-xl">{f.icon}</span>
                   <span className="text-sm font-semibold text-gray-900">{f.label}</span>
+                </button>
+                <button
+                  onClick={() => apriAggiungiAcquisto(f.id)}
+                  className="text-gray-400 hover:text-emerald-600 cursor-pointer px-1.5 shrink-0 text-base font-bold"
+                  title="Aggiungi un acquisto"
+                >
+                  +
                 </button>
                 {!inEditSaldo && (
                   <button
@@ -150,6 +198,50 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                   <div className="text-[10px] text-gray-400">da pagare</div>
                 </button>
               </div>
+              {inAggiungi && (
+                <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-[2]">
+                      <label className="text-[10px] text-gray-400 block">Cosa hai comprato</label>
+                      <input
+                        type="text"
+                        value={nuovaDesc}
+                        onChange={(e) => setNuovaDesc(e.target.value)}
+                        placeholder="es. ABS"
+                        className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] text-gray-400 block">Importo €</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={nuovoImporto}
+                        onChange={(e) => setNuovoImporto(e.target.value)}
+                        placeholder="es. 100"
+                        className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => salvaAcquisto(f.id)}
+                      disabled={salvandoAcquisto || !nuovoImporto}
+                      className="flex-1 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
+                    >
+                      {salvandoAcquisto ? 'Salvataggio...' : 'Aggiungi al conto'}
+                    </button>
+                    <button
+                      onClick={() => setAggiungendoAcquisto(null)}
+                      disabled={salvandoAcquisto}
+                      className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
+                    >
+                      Annulla
+                    </button>
+                  </div>
+                </div>
+              )}
               {inEditSaldo && (
                 <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2">
                   <div className="flex-1">
@@ -181,26 +273,39 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
               )}
               <div className="flex justify-between text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
                 <span>Saldo iniziale: {fmtEuro(saldoIniziale)}</span>
-                <span>Ricambi segnati: {fmtEuro(totaleSegnato)}</span>
+                <span>Ricambi: {fmtEuro(totaleSegnato + totaleAcquisti)}</span>
                 <span>Pagato: {fmtEuro(totalePagato)}</span>
               </div>
               {aperto && (
                 <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
-                  {appsFornitore.length === 0 ? (
+                  {appsFornitore.length === 0 && acquistiFornitore.length === 0 ? (
                     <div className="text-[11px] text-gray-400 text-center py-2">Nessun ricambio segnato per questo fornitore</div>
                   ) : (
-                    appsFornitore.map((a) => (
-                      <div key={a.id} className="flex items-center justify-between text-[11px] py-1">
-                        <span className="text-gray-600 truncate">
-                          {a.clienti?.nome || 'Cliente'}{a.veicoli?.targa ? ` — ${a.veicoli.targa}` : ''}
-                          {a.pagamento?.fornitore_pagato_da_cliente && <span className="text-emerald-600"> · pagato dal cliente</span>}
-                          {a.pagamento?.ricambi_pagati_subito && <span className="text-emerald-600"> · saldato</span>}
-                        </span>
-                        <span className={`font-semibold shrink-0 ml-2 ${giaSaldato(a) ? 'text-gray-400' : 'text-gray-700'}`}>
-                          {fmtEuro(a.pagamento?.costo_ricambi || 0)}
-                        </span>
-                      </div>
-                    ))
+                    <>
+                      {acquistiFornitore.map((a) => (
+                        <div key={a.id} className="flex items-center justify-between text-[11px] py-1">
+                          <span className="text-gray-600 truncate">
+                            🧾 {a.descrizione || 'Acquisto'} · {new Date(a.data + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                          </span>
+                          <span className="flex items-center gap-1.5 shrink-0 ml-2">
+                            <span className="font-semibold text-gray-700">{fmtEuro(a.importo)}</span>
+                            <button onClick={() => eliminaAcquisto(a.id)} className="text-red-400 hover:text-red-600 cursor-pointer">✕</button>
+                          </span>
+                        </div>
+                      ))}
+                      {appsFornitore.map((a) => (
+                        <div key={a.id} className="flex items-center justify-between text-[11px] py-1">
+                          <span className="text-gray-600 truncate">
+                            {a.clienti?.nome || 'Cliente'}{a.veicoli?.targa ? ` — ${a.veicoli.targa}` : ''}
+                            {a.pagamento?.fornitore_pagato_da_cliente && <span className="text-emerald-600"> · pagato dal cliente</span>}
+                            {a.pagamento?.ricambi_pagati_subito && <span className="text-emerald-600"> · saldato</span>}
+                          </span>
+                          <span className={`font-semibold shrink-0 ml-2 ${giaSaldato(a) ? 'text-gray-400' : 'text-gray-700'}`}>
+                            {fmtEuro(a.pagamento?.costo_ricambi || 0)}
+                          </span>
+                        </div>
+                      ))}
+                    </>
                   )}
                 </div>
               )}

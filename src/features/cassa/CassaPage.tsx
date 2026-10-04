@@ -99,22 +99,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   // pannello di Incassi officina: prima si poteva solo da quella sezione.
   const editorAuto = usePagamentoEditor();
 
-  // Spunta rapida sulla riga stessa, senza apire la matita: il costo
-  // ricambi e' spesso solo informativo (pagato a blocchi al ricambista),
-  // conta come spesa solo quando spuntato.
-  const toggleRicambiSubito = async (app: Appuntamento) => {
-    if (!app.pagamento) return;
-    const nuovoPagamento = {
-      ...app.pagamento,
-      ricambi_pagati_subito: !app.pagamento.ricambi_pagati_subito,
-      fornitore_pagato_da_cliente: false,
-    };
-    setIncassiAuto((prev) => prev.map((a) => (a.id === app.id ? { ...a, pagamento: nuovoPagamento } : a)));
-    await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', app.id);
-  };
-
-  // Idem, per il caso in cui e' il cliente a pagare il fornitore dei
-  // ricambi direttamente: mutuamente esclusiva con "pagati subito".
+  // Spunta rapida sulla riga stessa, senza apire la matita: il cliente ha
+  // pagato il fornitore dei ricambi direttamente, quindi quella parte non
+  // la incassa l'officina e non resta a debito sul conto fornitore.
   const toggleFornitorePagatoDaCliente = async (app: Appuntamento) => {
     if (!app.pagamento) return;
     const nuovoPagamento = {
@@ -979,20 +966,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                           </div>
                           {ricambi > 0 && (
                             <>
-                              <label
-                                onClick={(e) => e.stopPropagation()}
-                                className={`flex items-center gap-1.5 text-[11px] truncate cursor-pointer ${app.pagamento?.ricambi_pagati_subito ? 'text-red-500' : 'text-gray-400'}`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={!!app.pagamento?.ricambi_pagati_subito}
-                                  onChange={() => toggleRicambiSubito(app)}
-                                  className="rounded shrink-0"
-                                />
-                                {app.pagamento?.ricambi_pagati_subito
-                                  ? `− Costo ricambi: ${fmtEuro(ricambi)} (pagati da me)`
-                                  : `Costo ricambi: ${fmtEuro(ricambi)} (non pagati da me)`}
-                              </label>
+                              <div className="text-[11px] text-gray-400 truncate">
+                                Costo ricambi: {fmtEuro(ricambi)}
+                              </div>
                               {/* Ha senso solo se c'e' un fornitore selezionato per questo lavoro. */}
                               {app.pagamento?.fornitore_ricambi && (
                                 <label

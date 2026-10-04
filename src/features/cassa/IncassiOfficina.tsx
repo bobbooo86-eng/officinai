@@ -296,22 +296,9 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
     setLoading(false);
   }, [officinaId]);
 
-  // Spunta rapida sulla riga stessa, senza apire la matita: il costo
-  // ricambi e' spesso solo informativo (pagato a blocchi al ricambista),
-  // conta come spesa solo quando spuntato.
-  const toggleRicambiSubito = async (a: Appuntamento) => {
-    if (!a.pagamento) return;
-    const nuovoPagamento = {
-      ...a.pagamento,
-      ricambi_pagati_subito: !a.pagamento.ricambi_pagati_subito,
-      fornitore_pagato_da_cliente: false,
-    };
-    setAppuntamenti((prev) => prev.map((x) => (x.id === a.id ? { ...x, pagamento: nuovoPagamento } : x)));
-    await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
-  };
-
-  // Idem, per il caso in cui e' il cliente a pagare il fornitore dei
-  // ricambi direttamente: mutuamente esclusiva con "pagati subito".
+  // Spunta rapida sulla riga stessa, senza apire la matita: il cliente ha
+  // pagato il fornitore dei ricambi direttamente, quindi quella parte non
+  // la incassa l'officina e non resta a debito sul conto fornitore.
   const toggleFornitorePagatoDaCliente = async (a: Appuntamento) => {
     if (!a.pagamento) return;
     const nuovoPagamento = {
@@ -465,38 +452,20 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                       Costo ricambi: <span className="font-semibold text-gray-700">{fmtEuro(p.costo_ricambi || 0)}</span>
                       {p.operaio && <span className="text-gray-400"> · 🔧 {p.operaio}</span>}
                     </div>
-                    {(p.costo_ricambi || 0) > 0 && (
-                      <>
-                        <label
-                          onClick={(e) => e.stopPropagation()}
-                          className={`flex items-center gap-1.5 mt-0.5 cursor-pointer ${p.ricambi_pagati_subito ? 'text-red-500' : 'text-gray-400'}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={!!p.ricambi_pagati_subito}
-                            onChange={() => toggleRicambiSubito(a)}
-                            className="rounded shrink-0"
-                          />
-                          {p.ricambi_pagati_subito
-                            ? `pagati da me · netto ${fmtEuro(valoreLavoro(a) - spesaRicambi(p))}`
-                            : 'non pagati da me'}
-                        </label>
-                        {/* Ha senso solo se c'e' un fornitore selezionato per questo lavoro. */}
-                        {p.fornitore_ricambi && (
-                          <label
-                            onClick={(e) => e.stopPropagation()}
-                            className={`flex items-center gap-1.5 mt-0.5 cursor-pointer ${p.fornitore_pagato_da_cliente ? 'text-red-500' : 'text-gray-400'}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={!!p.fornitore_pagato_da_cliente}
-                              onChange={() => toggleFornitorePagatoDaCliente(a)}
-                              className="rounded shrink-0"
-                            />
-                            {p.fornitore_pagato_da_cliente ? `pagati dal cliente a ${p.fornitore_ricambi === 'monti' ? 'Monti' : 'Autoricambi'} (non incassato)` : `non pagati dal cliente a ${p.fornitore_ricambi === 'monti' ? 'Monti' : 'Autoricambi'}`}
-                          </label>
-                        )}
-                      </>
+                    {/* Ha senso solo se c'e' un fornitore selezionato per questo lavoro. */}
+                    {(p.costo_ricambi || 0) > 0 && p.fornitore_ricambi && (
+                      <label
+                        onClick={(e) => e.stopPropagation()}
+                        className={`flex items-center gap-1.5 mt-0.5 cursor-pointer ${p.fornitore_pagato_da_cliente ? 'text-red-500' : 'text-gray-400'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!p.fornitore_pagato_da_cliente}
+                          onChange={() => toggleFornitorePagatoDaCliente(a)}
+                          className="rounded shrink-0"
+                        />
+                        {p.fornitore_pagato_da_cliente ? `pagati dal cliente a ${p.fornitore_ricambi === 'monti' ? 'Monti' : 'Autoricambi'} (non incassato)` : `non pagati dal cliente a ${p.fornitore_ricambi === 'monti' ? 'Monti' : 'Autoricambi'}`}
+                      </label>
                     )}
                   </div>
                   {!inEdit && (
