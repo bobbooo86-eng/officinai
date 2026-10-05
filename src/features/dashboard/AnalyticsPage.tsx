@@ -5,7 +5,7 @@ import { fmtEuro, dayKey } from '@/lib/format';
 import { STATO_CONFIG } from '@/lib/constants';
 import { useAuthStore } from '@/stores/authStore';
 import { dataIncasso, inPeriodo, valoreLavoro, PERIODI, type Periodo } from '@/features/cassa/IncassiOfficina';
-import { incassoMovimento, spesaMovimento, spesaRicambi } from '@/features/cassa/movimentiTotali';
+import { incassoMovimento, spesaMovimento } from '@/features/cassa/movimentiTotali';
 import type { Appuntamento, Preventivo, Recensione, Movimento, Utente } from '@/types/database';
 
 // Nomi da cercare ovunque compaiano — nel campo "operaio" della consegna,
@@ -133,9 +133,10 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
   // Guadagno per collaboratore: solo lavorazioni vere e proprie svolte da
   // quella persona (consegne auto dove e' "operaio", voci Revisione
   // Gianni/Centraline Daniele) — non spese titolare/dipendente/acconti,
-  // che non sono un lavoro prodotto da lui/lei. Stesso criterio "valore
-  // lavoro - ricambi" di Incassi officina, cosi' i numeri non si
-  // contraddicono fra le pagine.
+  // che non sono un lavoro prodotto da lui/lei. Il costo ricambi si
+  // toglie sempre dal guadagno (margine vero), a prescindere da chi e
+  // quando paga il fornitore — a differenza di "spesa" in Cassa, che
+  // conta solo i ricambi pagati subito dall'officina.
   const collaboratori = useMemo(() => {
     const riferimento = new Date();
     const consegnati = appuntamenti.filter(
@@ -159,7 +160,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
         const citati = COLLABORATORI.filter((n) => menziona(operaioText, n));
         const quota = citati.length > 1 ? 1 / citati.length : 1;
         const incasso = valoreLavoro(a) * quota;
-        const spesa = spesaRicambi(a.pagamento) * quota;
+        const spesa = (Number(a.pagamento?.costo_ricambi) || 0) * quota;
         incassi += incasso;
         spese += spesa;
         const veicolo = [a.veicoli?.marca, a.veicoli?.modello].filter(Boolean).join(' ');

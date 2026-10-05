@@ -16,14 +16,31 @@ export function useHistoryState<T>(
    */
   isValid?: (val: unknown) => boolean
 ): [T, (val: T) => void] {
+  const storageKey = `hs:${key}`;
+
+  const leggiSessionStorage = (): T | undefined => {
+    try {
+      const raw = sessionStorage.getItem(storageKey);
+      return raw === null ? undefined : (JSON.parse(raw) as T);
+    } catch {
+      return undefined;
+    }
+  };
+
   // Un refresh di pagina (F5, chiudi/riapri l'app) rimonta il componente da
-  // zero, ma window.history.state sopravvive: senza leggerlo qui si partiva
-  // sempre dal valore iniziale (es. tab Home), perdendo la pagina su cui si
-  // era rimasti.
+  // zero. window.history.state di solito sopravvive e basta, ma non sempre:
+  // nelle PWA installate su Android il "tira per aggiornare" puo' comportarsi
+  // come un avvio nuovo invece che come un reload, azzerando history.state.
+  // sessionStorage invece resta sempre finche' non si chiude davvero la
+  // scheda/app, quindi e' il ripiego che tiene la tab giusta in ogni caso.
   const [state, setState] = useState<T>(() => {
     const fromHistory = (window.history.state as Record<string, unknown> | null)?.[key];
     if (fromHistory !== undefined && (!isValid || isValid(fromHistory))) {
       return fromHistory as T;
+    }
+    const fromSession = leggiSessionStorage();
+    if (fromSession !== undefined && (!isValid || isValid(fromSession))) {
+      return fromSession;
     }
     return initial;
   });
@@ -48,7 +65,13 @@ export function useHistoryState<T>(
     setState(val);
     const currentState = window.history.state || {};
     window.history.pushState({ ...currentState, [key]: val }, '');
-  }, [key]);
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify(val));
+    } catch {
+      // storage pieno o bloccato (es. navigazione privata): non deve
+      // bloccare il cambio di tab, resta solo il ripiego su history.state.
+    }
+  }, [key, storageKey]);
 
   return [state, setWithHistory];
 }
