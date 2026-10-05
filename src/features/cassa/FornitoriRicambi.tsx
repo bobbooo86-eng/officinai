@@ -11,9 +11,12 @@ export const FORNITORI_RICAMBI: {
   label: string;
   icon: string;
   tipoMovimento: MovimentoTipo;
+  // Autoricambi si gestisce solo col saldo impostato a mano (riconciliato
+  // ogni settimana), senza registrare acquisti singoli uno per uno.
+  acquistiManuali: boolean;
 }[] = [
-  { id: 'autoricambi', label: 'Autoricambi', icon: '🏭', tipoMovimento: 'spesa_autoricambi' },
-  { id: 'monti', label: 'Autodemolizioni Monti', icon: '🚙', tipoMovimento: 'spesa_monti' },
+  { id: 'autoricambi', label: 'Autoricambi', icon: '🏭', tipoMovimento: 'spesa_autoricambi', acquistiManuali: false },
+  { id: 'monti', label: 'Autodemolizioni Monti', icon: '🚙', tipoMovimento: 'spesa_monti', acquistiManuali: true },
 ];
 
 type SaldiFornitori = { autoricambi?: number; monti?: number };
@@ -115,20 +118,26 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
   const salvaAcquisto = async (fornitoreId: 'autoricambi' | 'monti') => {
     if (!officinaId || !nuovoImporto) return;
     setSalvandoAcquisto(true);
-    const { error } = await supabase.from('acquisti_fornitori_ricambi').insert({
+    const { data, error } = await supabase.from('acquisti_fornitori_ricambi').insert({
       officina_id: officinaId,
       fornitore: fornitoreId,
       descrizione: nuovaDesc.trim(),
       importo: parseFloat(nuovoImporto) || 0,
-    });
+    }).select().single();
     setSalvandoAcquisto(false);
-    if (error) { alert('Acquisto non salvato: ' + error.message); return; }
+    if (error || !data) { alert('Acquisto non salvato: ' + (error?.message || 'errore sconosciuto')); return; }
+    // Aggiorna subito la lista: non aspetta il giro del realtime, che non
+    // sempre arriva in tempo (o per niente, se non e' attivo sul progetto).
+    setAcquisti((prev) => [data as AcquistoFornitoreRicambi, ...prev]);
     setAggiungendoAcquisto(null);
+    setEspanso(fornitoreId);
   };
 
   const eliminaAcquisto = async (id: string) => {
     if (!confirm('Eliminare questo acquisto?')) return;
-    await supabase.from('acquisti_fornitori_ricambi').delete().eq('id', id);
+    setAcquisti((prev) => prev.filter((a) => a.id !== id));
+    const { error } = await supabase.from('acquisti_fornitori_ricambi').delete().eq('id', id);
+    if (error) { alert('Eliminazione non riuscita: ' + error.message); load(); }
   };
 
   if (!officinaId) return null;
@@ -136,7 +145,7 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
   return (
     <div className="space-y-3">
       <p className="text-[11px] text-gray-400 px-1">
-        Il saldo cresce quando su una consegna segni "da chi" vengono i ricambi o aggiungi un acquisto con "+", e scende quando registri un pagamento a quel fornitore da Movimenti. La matita ✏️ imposta un saldo di partenza, se avevi già un debito prima di usare questa pagina.
+        Il saldo cresce quando su una consegna segni "da chi" vengono i ricambi o (su Monti) aggiungi un acquisto con "+", e scende quando registri un pagamento a quel fornitore da Movimenti. La matita ✏️ corregge il saldo a mano in qualsiasi momento.
       </p>
       {loading ? (
         <div className="text-center py-6 text-xs text-gray-400">Caricamento...</div>
@@ -178,18 +187,20 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
-                <button
-                  onClick={() => apriAggiungiAcquisto(f.id)}
-                  className="text-gray-400 hover:text-emerald-600 cursor-pointer px-1.5 shrink-0 text-base font-bold"
-                  title="Aggiungi un acquisto"
-                >
-                  +
-                </button>
+                {f.acquistiManuali && (
+                  <button
+                    onClick={() => apriAggiungiAcquisto(f.id)}
+                    className="text-gray-400 hover:text-emerald-600 cursor-pointer px-1.5 shrink-0 text-base font-bold"
+                    title="Aggiungi un acquisto"
+                  >
+                    +
+                  </button>
+                )}
                 {!inEditSaldo && (
                   <button
                     onClick={() => apriEditSaldo(f.id)}
                     className="text-gray-400 hover:text-emerald-600 cursor-pointer px-1.5 shrink-0"
-                    title="Imposta saldo di partenza"
+                    title="Modifica il saldo"
                   >
                     ✏️
                   </button>
@@ -248,7 +259,7 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
               {inEditSaldo && (
                 <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2">
                   <div className="flex-1">
-                    <label className="text-[10px] text-gray-400 block">Saldo di partenza €</label>
+                    <label className="text-[10px] text-gray-400 block">Saldo €</label>
                     <input
                       type="number"
                       step="0.01"
@@ -275,7 +286,7 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                 </div>
               )}
               <div className="flex justify-between text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-                <span>Saldo iniziale: {fmtEuro(saldoIniziale)}</span>
+                <span>Saldo: {fmtEuro(saldoIniziale)}</span>
                 <span>Ricambi: {fmtEuro(totaleSegnato + totaleAcquisti)}</span>
                 <span>Pagato: {fmtEuro(totalePagato)}</span>
               </div>
