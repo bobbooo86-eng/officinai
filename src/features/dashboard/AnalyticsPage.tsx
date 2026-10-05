@@ -146,7 +146,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
     return COLLABORATORI.map((nome) => {
       let incassi = 0;
       let spese = 0;
-      const dettagli: { id: string; data: Date; label: string; sub: string; targa?: string; clienteId?: string; incasso: number; spesa: number }[] = [];
+      const dettagli: { id: string; data: Date; label: string; sub: string; targa?: string; clienteId?: string; incasso: number; spesa: number; totaleLavoro?: number; costoRicambiTotale?: number }[] = [];
 
       consegnati.forEach((a) => {
         const operaioText = a.pagamento?.operaio;
@@ -176,6 +176,11 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
           clienteId: a.cliente_id || undefined,
           incasso,
           spesa,
+          // Valori della lavorazione intera (non divisi a meta'), solo per
+          // riferimento: fanno capire da dove viene il guadagno netto
+          // (gia' diviso) mostrato come cifra principale.
+          totaleLavoro: valoreLavoro(a),
+          costoRicambiTotale: Number(a.pagamento?.costo_ricambi) || 0,
         });
       });
 
@@ -407,18 +412,25 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
                     ) : (
                       c.dettagli.map((d) => {
                         const cliccabile = !!d.clienteId && !!onNavigateToCliente;
+                        const netto = d.incasso - d.spesa;
                         const contenuto = (
                           <>
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-xs font-semibold text-gray-800 truncate">
                                 {d.label}{d.targa && <span className="ml-1.5 font-mono text-[10px] text-gray-500">{d.targa}</span>}
                               </span>
-                              <span className="text-xs font-bold text-emerald-600 shrink-0">+{fmtEuro(d.incasso)}</span>
+                              <span className={`text-xs font-bold shrink-0 ${netto >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {netto >= 0 ? '+' : ''}{fmtEuro(netto)}
+                              </span>
                             </div>
                             <div className="flex items-center justify-between gap-2 text-[10px] text-gray-400 mt-0.5">
                               <span className="truncate">{d.sub} · {d.data.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                              {d.spesa > 0 && <span className="text-red-500 shrink-0">− {fmtEuro(d.spesa)}</span>}
                             </div>
+                            {d.totaleLavoro !== undefined && (
+                              <div className="text-[10px] text-gray-400 mt-0.5">
+                                Totale lavoro {fmtEuro(d.totaleLavoro)}{d.costoRicambiTotale ? ` · Ricambi ${fmtEuro(d.costoRicambiTotale)}` : ''}
+                              </div>
+                            )}
                             {cliccabile && (
                               <div className="text-[9px] text-blue-500 mt-0.5">Tocca per vedere la scheda cliente →</div>
                             )}

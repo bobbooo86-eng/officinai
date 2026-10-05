@@ -973,10 +973,13 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                             {app.clienti?.nome || 'Cliente'} — consegna auto
                           </div>
                           <div className="text-[11px] text-gray-500 truncate">
-                            Incasso officina
+                            {[app.veicoli?.marca, app.veicoli?.modello].filter(Boolean).join(' ') || 'Veicolo'}
                             {app.veicoli?.targa && ` · ${app.veicoli.targa}`}
                             {app.pagamento?.stato === 'acconto' && ' · acconto'}
                           </div>
+                          {app.problema && (
+                            <div className="text-[11px] text-gray-400 truncate">{app.problema}</div>
+                          )}
                           {ricambi > 0 && (
                             <>
                               <label
