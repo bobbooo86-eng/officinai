@@ -116,6 +116,18 @@ export interface PagamentoInfo {
   operaio?: string;          // nome di chi ha eseguito il lavoro sull'auto
 }
 
+// Acconto preso mentre l'auto e' ancora in lavorazione, prima della
+// consegna finale (quando viene scritto pagamento). Ogni acconto genera
+// anche un movimento "incasso_extra" in Cassa datato data_acconto, cosi'
+// conta nel resoconto del giorno in cui e' stato davvero incassato invece
+// che accumularsi tutto sul giorno della consegna.
+export interface Acconto {
+  data_acconto: string;
+  importo: number;
+  movimento_id?: string;
+  nota?: string;
+}
+
 export interface Appuntamento {
   id: string;
   officina_id: string;
@@ -131,6 +143,7 @@ export interface Appuntamento {
   data_proposta?: string;
   nota_officina?: string;
   pagamento?: PagamentoInfo | null;
+  acconti?: Acconto[] | null;
   created_at?: string;
   // Relations (joined)
   clienti?: Cliente;

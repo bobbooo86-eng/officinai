@@ -233,14 +233,20 @@ export function inPeriodo(d: Date, periodo: Periodo, riferimento: Date): boolean
  * (se c'e') non e' cassa finche' non arriva. Se il cliente ha pagato il
  * fornitore dei ricambi direttamente (es. Monti), tutto il resto del
  * lavoro finisce a lui, non in cassa: l'officina ha incassato solo quello
- * che il cliente le ha dato di persona finora. */
+ * che il cliente le ha dato di persona finora.
+ * Gli acconti presi prima della consegna (mentre l'auto era ancora in
+ * lavorazione) sono gia' stati contati come movimenti a parte, datati al
+ * giorno vero in cui sono arrivati: vanno tolti da qui, altrimenti alla
+ * consegna finale verrebbero ricontati una seconda volta. */
 export function incassato(a: Appuntamento): number {
   const p = a.pagamento;
   if (!p) return 0;
-  if (p.fornitore_pagato_da_cliente) return p.importo_pagato || 0;
-  if (p.stato === 'pagato') return p.importo_totale || 0;
-  if (p.stato === 'acconto') return p.importo_pagato || 0;
-  return 0;
+  const accontiPrecedenti = (a.acconti || []).reduce((s, acc) => s + Number(acc.importo), 0);
+  const base = p.fornitore_pagato_da_cliente ? (p.importo_pagato || 0)
+    : p.stato === 'pagato' ? (p.importo_totale || 0)
+    : p.stato === 'acconto' ? (p.importo_pagato || 0)
+    : 0;
+  return Math.max(0, base - accontiPrecedenti);
 }
 
 /** Valore del lavoro fatturato al cliente, incassato o no: il guadagno

@@ -25,6 +25,7 @@ const SOURCES = [
   'supabase/migrations/029_movimenti_fornitori_ricambi.sql',
   'supabase/migrations/030_officine_saldi_fornitori_ricambi.sql',
   'supabase/migrations/031_acquisti_fornitori_ricambi.sql',
+  'supabase/migrations/032_appuntamenti_acconti.sql',
 ];
 const TARGET = 'src/lib/dbRepairSql.ts';
 

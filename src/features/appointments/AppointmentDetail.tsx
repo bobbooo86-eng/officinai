@@ -16,7 +16,7 @@ import { it as itLocale } from 'date-fns/locale';
 import { AccettazioneVeicolo } from './AccettazioneVeicolo';
 import { StoricoVeicolo } from './StoricoVeicolo';
 import { VoiceButton } from '@/components/VoiceInput';
-import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, Difetto, PagamentoInfo, PagamentoStato } from '@/types/database';
+import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, Difetto, PagamentoInfo, PagamentoStato, Acconto } from '@/types/database';
 
 interface Props {
   appuntamento: Appuntamento;
@@ -559,12 +559,17 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
 }
 
 // ==================== MODAL PAGAMENTO CONSEGNA ====================
-function ModalPagamento({ onConferma, onAnnulla }: {
+function ModalPagamento({ acconti, onConferma, onAnnulla }: {
+  acconti?: Acconto[] | null;
   onConferma: (pagamento: PagamentoInfo) => void;
   onAnnulla: () => void;
 }) {
+  const totaleAcconti = (acconti || []).reduce((s, a) => s + Number(a.importo), 0);
   const [statoPag, setStatoPag] = useState<PagamentoStato>('pagato');
-  const [importoPagato, setImportoPagato] = useState('');
+  // Pre-riempito con quanto gia' incassato in acconto, cosi' chi consegna
+  // non deve ricordarselo a mente: parte da li' e aggiunge solo quanto
+  // incassa oggi.
+  const [importoPagato, setImportoPagato] = useState(totaleAcconti ? String(totaleAcconti) : '');
   const [importoTotale, setImportoTotale] = useState('');
   const [costoRicambi, setCostoRicambi] = useState('');
   const [ricambiSubito, setRicambiSubito] = useState(false);
@@ -600,6 +605,12 @@ function ModalPagamento({ onConferma, onAnnulla }: {
           <h3 className="text-base font-bold text-gray-900">Consegna auto</h3>
           <p className="text-xs text-gray-500 mt-0.5">Come ha pagato il cliente?</p>
         </div>
+
+        {totaleAcconti > 0 && (
+          <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+            💛 Ha già versato <strong>{fmtEuro(totaleAcconti)}</strong> in acconto prima d'oggi (vedi Movimenti). Se oggi salda tutto scegli "Pagato completo"; se manca ancora qualcosa scegli "Acconto / parziale" — il campo "Già pagato" parte già da quella cifra.
+          </div>
+        )}
 
         {/* Opzioni pagamento */}
         <div className="space-y-2">
@@ -738,15 +749,105 @@ function ModalPagamento({ onConferma, onAnnulla }: {
   );
 }
 
+// ==================== MODAL ACCONTO (auto ancora in lavorazione) ====================
+function ModalAcconto({ onSalva, onAnnulla }: {
+  onSalva: (importo: number, data: string, nota: string) => Promise<{ error: string | null }>;
+  onAnnulla: () => void;
+}) {
+  const [importo, setImporto] = useState('');
+  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [nota, setNota] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [errore, setErrore] = useState('');
+
+  const salva = async () => {
+    const n = parseFloat((importo || '').replace(',', '.'));
+    if (!Number.isFinite(n) || n <= 0) { setErrore('Inserisci un importo valido'); return; }
+    setSalvando(true);
+    setErrore('');
+    const { error } = await onSalva(n, data, nota.trim());
+    setSalvando(false);
+    if (error) { setErrore('Acconto non salvato: ' + error); return; }
+    onAnnulla();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm space-y-4 p-5 animate-fade-in">
+        <div className="text-center">
+          <div className="text-3xl mb-1">💛</div>
+          <h3 className="text-base font-bold text-gray-900">Registra acconto</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Quanto ha versato il cliente oggi, mentre l'auto resta in lavorazione?</p>
+        </div>
+
+        <div className="space-y-2">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Importo (€)</label>
+            <input
+              type="number"
+              value={importo}
+              onChange={(e) => setImporto(e.target.value)}
+              placeholder="es. 500"
+              autoFocus
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Data</label>
+            <input
+              type="date"
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nota (opzionale)</label>
+            <input
+              type="text"
+              value={nota}
+              onChange={(e) => setNota(e.target.value)}
+              placeholder="es. contanti alla consegna dei ricambi"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <p className="text-[11px] text-gray-400">
+            Viene subito segnato come incasso in Cassa &gt; Movimenti (così conta nel resoconto di oggi) e resta visibile su questa scheda finché non consegni l'auto.
+          </p>
+          {errore && <div className="text-xs text-red-600">{errore}</div>}
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={onAnnulla}
+            disabled={salvando}
+            className="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 cursor-pointer transition-colors disabled:opacity-50"
+          >
+            Annulla
+          </button>
+          <button
+            onClick={salva}
+            disabled={salvando}
+            className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 cursor-pointer transition-colors disabled:opacity-50"
+          >
+            {salvando ? 'Salvataggio...' : 'Salva acconto'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ==================== TAB STATO ====================
 function TabStato({ app }: { app: Appuntamento }) {
-  const { officina } = useAuthStore();
+  const { officina, utente } = useAuthStore();
   const [updating, setUpdating] = useState(false);
   const [showProposta, setShowProposta] = useState(false);
   const [propostaData, setPropostaData] = useState('');
   const [propostaOra, setPropostaOra] = useState('09:00');
   const [propostaNota, setPropostaNota] = useState('');
   const [showConsegnaModal, setShowConsegnaModal] = useState(false);
+  const [showAccontoModal, setShowAccontoModal] = useState(false);
   const [erroreAzione, setErroreAzione] = useState('');
 
   // Auto-send email on status change
@@ -787,6 +888,42 @@ function TabStato({ app }: { app: Appuntamento }) {
   const confermaConsegna = async (pagamento: PagamentoInfo) => {
     setShowConsegnaModal(false);
     await cambiaStato('consegnato', pagamento);
+  };
+
+  // Acconto preso mentre l'auto e' ancora in lavorazione: crea subito un
+  // movimento in Cassa datato oggi (cosi' conta nel resoconto del giorno
+  // giusto, non in quello della consegna finale) e lo registra anche
+  // sull'appuntamento, cosi' resta un promemoria visibile riaprendo la
+  // scheda tra un mese.
+  const registraAcconto = async (importo: number, data: string, nota: string) => {
+    if (!officina?.id) return { error: 'Officina non trovata' };
+    const clienteNome = app.clienti?.nome || 'Cliente';
+    const targa = app.veicoli?.targa ? ` — ${app.veicoli.targa}` : '';
+    const { data: movimento, error: movErr } = await supabase
+      .from('movimenti')
+      .insert({
+        officina_id: officina.id,
+        tipo: 'incasso_extra',
+        importo,
+        descrizione: `Acconto — ${clienteNome}${targa}`,
+        metodo_pagamento: 'contanti',
+        data,
+        dipendente_id: null,
+        created_by: utente?.id || null,
+        note: nota || null,
+        spese_lavorazione: null,
+      })
+      .select()
+      .single();
+    if (movErr || !movimento) return { error: movErr?.message || 'Movimento non salvato' };
+
+    const nuovoAcconto: Acconto = { data_acconto: data, importo, movimento_id: movimento.id, nota: nota || undefined };
+    const { error: appErr } = await supabase
+      .from('appuntamenti')
+      .update({ acconti: [...(app.acconti || []), nuovoAcconto] })
+      .eq('id', app.id);
+    if (appErr) return { error: appErr.message };
+    return { error: null };
   };
 
   const notifyClienteInApp = async (titolo: string, messaggio: string) => {
@@ -1082,9 +1219,45 @@ function TabStato({ app }: { app: Appuntamento }) {
       {bannerErrore}
       {showConsegnaModal && (
         <ModalPagamento
+          acconti={app.acconti}
           onConferma={confermaConsegna}
           onAnnulla={() => setShowConsegnaModal(false)}
         />
+      )}
+
+      {showAccontoModal && (
+        <ModalAcconto
+          onSalva={registraAcconto}
+          onAnnulla={() => setShowAccontoModal(false)}
+        />
+      )}
+
+      {/* Promemoria acconti ricevuti prima della consegna finale */}
+      {app.acconti && app.acconti.length > 0 && (
+        <div className="p-3 rounded-xl bg-amber-50 border-2 border-amber-200 mb-2">
+          <div className="text-sm font-bold text-amber-800">
+            💛 Acconti ricevuti: {fmtEuro(app.acconti.reduce((s, a) => s + Number(a.importo), 0))}
+          </div>
+          <div className="text-xs text-amber-700 mt-0.5 space-y-0.5">
+            {app.acconti.map((a, i) => (
+              <div key={i}>
+                {fmtEuro(a.importo)} il {format(parseISO(a.data_acconto), 'dd/MM/yyyy', { locale: itLocale })}
+                {a.nota ? ` — ${a.nota}` : ''}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Registra acconto — solo prima della consegna finale */}
+      {app.stato !== 'consegnato' && (
+        <button
+          onClick={() => setShowAccontoModal(true)}
+          disabled={updating}
+          className="w-full py-2.5 rounded-xl border-2 border-amber-300 bg-amber-50 text-amber-800 text-sm font-semibold hover:bg-amber-100 transition-colors cursor-pointer disabled:opacity-50 mb-2"
+        >
+          💛 Registra acconto
+        </button>
       )}
 
       {/* Pagamento info — se già consegnato */}

@@ -18,14 +18,18 @@ interface Props {
  * logica di IncassiOfficina, duplicata qui perche' l'acconto va anche
  * corretto da qui, non solo da Cassa. Se il cliente paga il fornitore dei
  * ricambi direttamente, tutto il resto finisce a lui: l'officina ha
- * incassato solo quello che il cliente le ha dato di persona finora. */
+ * incassato solo quello che il cliente le ha dato di persona finora. Gli
+ * acconti presi prima della consegna sono gia' stati contati come
+ * movimenti a parte: vanno tolti da qui per non ricontarli. */
 function incassato(a: Appuntamento): number {
   const p = a.pagamento;
   if (!p) return 0;
-  if (p.fornitore_pagato_da_cliente) return p.importo_pagato || 0;
-  if (p.stato === 'pagato') return p.importo_totale || 0;
-  if (p.stato === 'acconto') return p.importo_pagato || 0;
-  return 0;
+  const accontiPrecedenti = (a.acconti || []).reduce((s, acc) => s + Number(acc.importo), 0);
+  const base = p.fornitore_pagato_da_cliente ? (p.importo_pagato || 0)
+    : p.stato === 'pagato' ? (p.importo_totale || 0)
+    : p.stato === 'acconto' ? (p.importo_pagato || 0)
+    : 0;
+  return Math.max(0, base - accontiPrecedenti);
 }
 
 export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props) {
