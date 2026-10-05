@@ -156,9 +156,8 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
           const totaleNonSaldato = daPagare.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
           const totaleSegnato = appsFornitore.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
           const totaleAcquisti = acquistiFornitore.reduce((s, a) => s + Number(a.importo), 0);
-          const totalePagato = movimenti
-            .filter((m) => m.tipo === f.tipoMovimento)
-            .reduce((s, m) => s + Number(m.importo), 0);
+          const movimentiFornitore = movimenti.filter((m) => m.tipo === f.tipoMovimento);
+          const totalePagato = movimentiFornitore.reduce((s, m) => s + Number(m.importo), 0);
           const saldoIniziale = saldiIniziali[f.id] || 0;
           const saldo = saldoIniziale + totaleNonSaldato + totaleAcquisti - totalePagato;
           const aperto = espanso === f.id;
@@ -174,6 +173,10 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                 >
                   <span className="text-xl">{f.icon}</span>
                   <span className="text-sm font-semibold text-gray-900">{f.label}</span>
+                  <span className="text-[10px] text-gray-400">({acquistiFornitore.length + appsFornitore.length} voci)</span>
+                  <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform shrink-0 ${aperto ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
                 </button>
                 <button
                   onClick={() => apriAggiungiAcquisto(f.id)}
@@ -277,34 +280,59 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                 <span>Pagato: {fmtEuro(totalePagato)}</span>
               </div>
               {aperto && (
-                <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
-                  {appsFornitore.length === 0 && acquistiFornitore.length === 0 ? (
-                    <div className="text-[11px] text-gray-400 text-center py-2">Nessun ricambio segnato per questo fornitore</div>
+                <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
+                  {appsFornitore.length === 0 && acquistiFornitore.length === 0 && movimentiFornitore.length === 0 ? (
+                    <div className="text-[11px] text-gray-400 text-center py-2">Nessun movimento per questo fornitore</div>
                   ) : (
                     <>
-                      {acquistiFornitore.map((a) => (
-                        <div key={a.id} className="flex items-center justify-between text-[11px] py-1">
-                          <span className="text-gray-600 truncate">
-                            🧾 {a.descrizione || 'Acquisto'} · {new Date(a.data + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
-                          </span>
-                          <span className="flex items-center gap-1.5 shrink-0 ml-2">
-                            <span className="font-semibold text-gray-700">{fmtEuro(a.importo)}</span>
-                            <button onClick={() => eliminaAcquisto(a.id)} className="text-red-400 hover:text-red-600 cursor-pointer">✕</button>
-                          </span>
+                      {(acquistiFornitore.length > 0 || appsFornitore.length > 0) && (
+                        <div>
+                          <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Acquisti e lavori (debito)</div>
+                          <div className="space-y-1">
+                            {acquistiFornitore.map((a) => (
+                              <div key={a.id} className="flex items-center justify-between text-[11px] py-0.5">
+                                <span className="text-gray-600 truncate">
+                                  🧾 {a.descrizione || 'Acquisto'} · {new Date(a.data + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                                </span>
+                                <span className="flex items-center gap-1.5 shrink-0 ml-2">
+                                  <span className="font-semibold text-gray-700">{fmtEuro(a.importo)}</span>
+                                  <button onClick={() => eliminaAcquisto(a.id)} className="text-red-400 hover:text-red-600 cursor-pointer">✕</button>
+                                </span>
+                              </div>
+                            ))}
+                            {appsFornitore.map((a) => (
+                              <div key={a.id} className="flex items-center justify-between text-[11px] py-0.5">
+                                <span className="text-gray-600 truncate">
+                                  🔧 {a.clienti?.nome || 'Cliente'}{a.veicoli?.targa ? ` — ${a.veicoli.targa}` : ''}
+                                  {a.pagamento?.fornitore_pagato_da_cliente && <span className="text-emerald-600"> · pagato dal cliente</span>}
+                                  {a.pagamento?.ricambi_pagati_subito && <span className="text-emerald-600"> · saldato</span>}
+                                </span>
+                                <span className={`font-semibold shrink-0 ml-2 ${giaSaldato(a) ? 'text-gray-400' : 'text-gray-700'}`}>
+                                  {fmtEuro(a.pagamento?.costo_ricambi || 0)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ))}
-                      {appsFornitore.map((a) => (
-                        <div key={a.id} className="flex items-center justify-between text-[11px] py-1">
-                          <span className="text-gray-600 truncate">
-                            {a.clienti?.nome || 'Cliente'}{a.veicoli?.targa ? ` — ${a.veicoli.targa}` : ''}
-                            {a.pagamento?.fornitore_pagato_da_cliente && <span className="text-emerald-600"> · pagato dal cliente</span>}
-                            {a.pagamento?.ricambi_pagati_subito && <span className="text-emerald-600"> · saldato</span>}
-                          </span>
-                          <span className={`font-semibold shrink-0 ml-2 ${giaSaldato(a) ? 'text-gray-400' : 'text-gray-700'}`}>
-                            {fmtEuro(a.pagamento?.costo_ricambi || 0)}
-                          </span>
+                      )}
+                      {movimentiFornitore.length > 0 && (
+                        <div>
+                          <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Pagamenti fatti</div>
+                          <div className="space-y-1">
+                            {movimentiFornitore
+                              .slice()
+                              .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
+                              .map((m) => (
+                                <div key={m.id} className="flex items-center justify-between text-[11px] py-0.5">
+                                  <span className="text-gray-600 truncate">
+                                    💶 {m.descrizione || 'Pagamento'} · {new Date(m.data + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                                  </span>
+                                  <span className="font-semibold text-emerald-700 shrink-0 ml-2">− {fmtEuro(Number(m.importo))}</span>
+                                </div>
+                              ))}
+                          </div>
                         </div>
-                      ))}
+                      )}
                     </>
                   )}
                 </div>
