@@ -3,6 +3,7 @@ import { Card } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import type { Appuntamento, Movimento, MovimentoTipo, AcquistoFornitoreRicambi } from '@/types/database';
 import { creditoFornitoreDiretto } from './movimentiTotali';
+import { useHistoryState } from '@/lib/useHistoryState';
 
 const fmtEuro = (n: number) =>
   new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
@@ -38,7 +39,11 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
   const [acquisti, setAcquisti] = useState<AcquistoFornitoreRicambi[]>([]);
   const [saldiIniziali, setSaldiIniziali] = useState<SaldiFornitori>({});
   const [loading, setLoading] = useState(true);
-  const [espanso, setEspanso] = useState<string | null>(null);
+  // Persistita: altrimenti un refresh richiudeva sempre la scheda del
+  // fornitore che si stava guardando (es. Autoricambi).
+  const [espanso, setEspanso] = useHistoryState<string | null>(
+    'fornitori-espanso', null, (v) => v === null || FORNITORI_RICAMBI.some((f) => f.id === v)
+  );
   const [editandoSaldo, setEditandoSaldo] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [salvandoSaldo, setSalvandoSaldo] = useState(false);

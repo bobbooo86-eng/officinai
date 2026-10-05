@@ -6,6 +6,7 @@ import {
   aggiornaLocale, aggiungiLocale, isLocale, leggiLocali, perSupabase, rimuoviLocale, svuotaLocali,
 } from '@/lib/cassaLocale';
 import { useAuthStore } from '@/stores/authStore';
+import { useHistoryState } from '@/lib/useHistoryState';
 import { VoiceButton } from '@/components/VoiceInput';
 import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncassare, usePagamentoEditor, PagamentoEditFields, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
 import { FornitoriRicambi } from './FornitoriRicambi';
@@ -83,7 +84,12 @@ interface CassaPageProps {
 
 export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPageProps) {
   const { officina, utente } = useAuthStore();
-  const [sezione, setSezione] = useState<'movimenti' | 'incassi' | 'fornitori'>('movimenti');
+  // Persistita (non un semplice useState): un "tira per aggiornare" su una
+  // PWA installata puo' far perdere la sezione in cui ci si trovava (es. da
+  // Fornitori ricambi si tornava sempre a Movimenti).
+  const [sezione, setSezione] = useHistoryState<'movimenti' | 'incassi' | 'fornitori'>(
+    'cassa-sezione', 'movimenti', (v) => v === 'movimenti' || v === 'incassi' || v === 'fornitori'
+  );
   const [tab, setTab] = useState<CassaTab>('tutti');
   const [movimenti, setMovimenti] = useState<Movimento[]>([]);
   const [dipendenti, setDipendenti] = useState<Utente[]>([]);
