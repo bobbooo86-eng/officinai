@@ -149,17 +149,29 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
       const dettagli: { id: string; data: Date; label: string; sub: string; targa?: string; clienteId?: string; incasso: number; spesa: number }[] = [];
 
       consegnati.forEach((a) => {
-        if (!menziona(a.pagamento?.operaio, nome)) return;
-        const incasso = valoreLavoro(a);
-        const spesa = spesaRicambi(a.pagamento);
+        const operaioText = a.pagamento?.operaio;
+        if (!menziona(operaioText, nome)) return;
+        // Se il campo "operaio" cita piu' di un collaboratore (es. "Gianni
+        // e Daniele": uno ha smontato, l'altro rimontato), il valore del
+        // lavoro si divide in parti uguali fra chi e' citato, invece di
+        // contare l'intero importo per ciascuno (altrimenti un lavoro da
+        // 300€ risulterebbe 300€ per Gianni E 300€ per Daniele).
+        const citati = COLLABORATORI.filter((n) => menziona(operaioText, n));
+        const quota = citati.length > 1 ? 1 / citati.length : 1;
+        const incasso = valoreLavoro(a) * quota;
+        const spesa = spesaRicambi(a.pagamento) * quota;
         incassi += incasso;
         spese += spesa;
         const veicolo = [a.veicoli?.marca, a.veicoli?.modello].filter(Boolean).join(' ');
+        const altriCitati = citati.filter((n) => n !== nome);
+        const notaQuota = altriCitati.length > 0
+          ? (citati.length === 2 ? `metà con ${altriCitati.join(', ')}` : `quota ${Math.round(quota * 100)}% con ${altriCitati.join(', ')}`)
+          : null;
         dettagli.push({
           id: `app-${a.id}`,
           data: dataIncasso(a),
           label: veicolo || 'Veicolo',
-          sub: [a.problema, a.clienti?.nome].filter(Boolean).join(' · '),
+          sub: [a.problema, a.clienti?.nome, notaQuota].filter(Boolean).join(' · '),
           targa: a.veicoli?.targa || undefined,
           clienteId: a.cliente_id || undefined,
           incasso,
@@ -190,11 +202,24 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
     });
   }, [appuntamenti, movimenti, periodoCollab]);
 
-  // Spese per collaboratore: qui invece il contrario — solo le spese
-  // titolare/dipendente/acconti prese dalla cassa per lui, scelte dal
-  // menu a tendina (dipendente_id) o scritte nella descrizione/nota.
-  // Esclusi i movimenti Revisione Gianni/Centraline Daniele, che sono
-  // gia' contati (come lavorazione) nella finestra "Guadagno".
+  // Spese per collaboratore: qui invece il contrario — tutte le spese
+  // (titolare, dipendente, anticipi...) prese dalla cassa e assegnate a
+  // lui, scelte dal menu a tendina (dipendente_id) o scritte nella
+  // descrizione/nota. Esclusi i movimenti Revisione Gianni/Centraline
+  // Daniele, che sono gia' contati (come lavorazione) nella finestra
+  // "Guadagno". A differenza di "Guadagno" (solo i 4 collaboratori che
+  // fanno lavorazioni), qui l'elenco e' TUTTI i dipendenti/titolari
+  // registrati nell'officina — chiunque abbia una spesa assegnata deve
+  // trovare un posto dove conteggiarla — piu' gli eventuali collaboratori
+  // esterni (Gianni/Daniele) non registrati come utenti.
+  const persone = useMemo(() => {
+    const elenco: { key: string; nome: string; utenteId?: string }[] = dipendenti.map((d) => ({ key: d.id, nome: d.nome, utenteId: d.id }));
+    COLLABORATORI.forEach((nome) => {
+      if (!elenco.some((p) => menziona(p.nome, nome))) elenco.push({ key: nome, nome });
+    });
+    return elenco;
+  }, [dipendenti]);
+
   const spesePerCollaboratore = useMemo(() => {
     const riferimento = new Date();
     const movimentiInPeriodo = movimenti.filter(
@@ -203,15 +228,14 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
         inPeriodo(dataMovimento(m), periodoSpese, riferimento)
     );
 
-    return COLLABORATORI.map((nome) => {
+    return persone.map(({ key, nome, utenteId }) => {
       let spese = 0;
       const dettagli: { id: string; data: Date; label: string; sub: string; spesa: number }[] = [];
 
       movimentiInPeriodo.forEach((m) => {
-        const dipendente = m.dipendente_id ? dipendenti.find((d) => d.id === m.dipendente_id) : null;
-        const perDipendente = !!dipendente && menziona(dipendente.nome, nome);
-        const perTestoLibero = menziona(m.descrizione, nome) || menziona(m.note, nome);
-        if (!perDipendente && !perTestoLibero) return;
+        const perId = !!utenteId && m.dipendente_id === utenteId;
+        const perTestoLibero = !m.dipendente_id && (menziona(m.descrizione, nome) || menziona(m.note, nome));
+        if (!perId && !perTestoLibero) return;
         const spesa = spesaMovimento(m);
         if (spesa <= 0) return;
         spese += spesa;
@@ -225,9 +249,9 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
       });
 
       dettagli.sort((x, y) => y.data.getTime() - x.data.getTime());
-      return { nome, spese, voci: dettagli.length, dettagli };
+      return { id: key, nome, spese, voci: dettagli.length, dettagli };
     });
-  }, [movimenti, dipendenti, periodoSpese]);
+  }, [movimenti, persone, periodoSpese]);
 
   const exportCSV = () => {
     const days = periodo === '7d' ? 7 : periodo === '30d' ? 30 : periodo === '90d' ? 90 : 365;
@@ -423,7 +447,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
           })}
         </div>
         <div className="text-[10px] text-gray-400 mt-2">
-          Solo lavorazioni: campo "operaio" della consegna auto e movimenti Revisione Gianni/Centraline Daniele — non spese titolare/dipendente. Clicca su un nome per vedere i lavori.
+          Solo lavorazioni: campo "operaio" della consegna auto e movimenti Revisione Gianni/Centraline Daniele — non spese titolare/dipendente. Se nel campo "operaio" sono scritti più nomi (es. uno smonta, l'altro rimonta), l'importo si divide in parti uguali fra loro. Clicca su un nome per vedere i lavori.
         </div>
       </Card>
 
@@ -445,11 +469,11 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
         </div>
         <div className="space-y-2">
           {spesePerCollaboratore.map((c) => {
-            const espanso = speseEspanse === c.nome;
+            const espanso = speseEspanse === c.id;
             return (
-              <div key={c.nome} className="rounded-xl border border-gray-100 bg-gray-50/50 overflow-hidden">
+              <div key={c.id} className="rounded-xl border border-gray-100 bg-gray-50/50 overflow-hidden">
                 <button
-                  onClick={() => setSpeseEspanse(espanso ? null : c.nome)}
+                  onClick={() => setSpeseEspanse(espanso ? null : c.id)}
                   className="w-full text-left p-2.5 cursor-pointer"
                 >
                   <div className="flex items-center justify-between">
@@ -488,7 +512,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
           })}
         </div>
         <div className="text-[10px] text-gray-400 mt-2">
-          Spese titolare/dipendente/acconti prese dalla cassa per lui, scelte dal menu a tendina o scritte nella descrizione/nota. Clicca su un nome per vedere le voci.
+          Tutte le spese dalla cassa assegnate a dipendenti e titolari (menu a tendina in Movimenti), piu' quelle scritte nella descrizione/nota senza nessuno selezionato. Clicca su un nome per vedere le voci.
         </div>
       </Card>
 
