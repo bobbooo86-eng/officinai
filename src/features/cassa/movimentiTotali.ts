@@ -46,3 +46,11 @@ export const spesaMovimento = (m: Movimento): number =>
 // lato di quel caso: va sottratto dall'incassato, non dalle spese).
 export const spesaRicambi = (p?: PagamentoInfo | null): number =>
   p?.ricambi_pagati_subito ? Number(p.costo_ricambi) || 0 : 0;
+
+// Quando il cliente paga il fornitore dei ricambi direttamente (es. Monti),
+// tutto il resto del lavoro (non solo il costo ricambi) finisce a lui, non
+// in cassa: e' quell'importo intero che va contato come "pagato" sul conto
+// di quel fornitore, non il costo ricambi (che resta solo informativo per
+// il margine). Vedi anche incassato()/restoDaIncassare() in IncassiOfficina.
+export const creditoFornitoreDiretto = (p?: PagamentoInfo | null): number =>
+  p?.fornitore_pagato_da_cliente ? Math.max(0, (p.importo_totale || 0) - (p.importo_pagato || 0)) : 0;

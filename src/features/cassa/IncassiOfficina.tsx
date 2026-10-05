@@ -231,17 +231,16 @@ export function inPeriodo(d: Date, periodo: Periodo, riferimento: Date): boolean
 /** Quanto e' stato davvero incassato per questo veicolo: pagato completo
  * conta il totale, un acconto conta solo la parte gia' versata, il resto
  * (se c'e') non e' cassa finche' non arriva. Se il cliente ha pagato il
- * fornitore dei ricambi direttamente (es. Monti), quella parte non e'
- * mai passata dall'officina: va sottratta, altrimenti l'incassato
- * sembrerebbe piu' alto di quanto davvero arrivato in cassa. */
+ * fornitore dei ricambi direttamente (es. Monti), tutto il resto del
+ * lavoro finisce a lui, non in cassa: l'officina ha incassato solo quello
+ * che il cliente le ha dato di persona finora. */
 export function incassato(a: Appuntamento): number {
   const p = a.pagamento;
   if (!p) return 0;
-  const base = p.stato === 'pagato' ? (p.importo_totale || 0)
-    : p.stato === 'acconto' ? (p.importo_pagato || 0)
-    : 0;
-  const pagatoAlFornitore = p.fornitore_pagato_da_cliente ? (p.costo_ricambi || 0) : 0;
-  return Math.max(0, base - pagatoAlFornitore);
+  if (p.fornitore_pagato_da_cliente) return p.importo_pagato || 0;
+  if (p.stato === 'pagato') return p.importo_totale || 0;
+  if (p.stato === 'acconto') return p.importo_pagato || 0;
+  return 0;
 }
 
 /** Valore del lavoro fatturato al cliente, incassato o no: il guadagno
@@ -255,16 +254,14 @@ export function valoreLavoro(a: Appuntamento): number {
 /** Quanto resta ancora da farsi pagare per questo veicolo (acconto non
  * saldato o consegna non pagata): 0 se e' gia' tutto incassato. Stessa
  * rettifica di incassato(): se il cliente paga il fornitore dei ricambi
- * direttamente, quella parte non e' (e non sara' mai) da farsi pagare
- * dall'officina.
+ * direttamente, tutto il resto non e' (e non sara' mai) da farsi pagare
+ * dall'officina, lo riceve lui.
  * Esportata perche' Movimenti (CassaPage) la mostra sulla stessa riga. */
 export function restoDaIncassare(a: Appuntamento): number {
   const p = a.pagamento;
-  if (!p) return 0;
-  const pagatoAlFornitore = p.fornitore_pagato_da_cliente ? (p.costo_ricambi || 0) : 0;
-  const totaleOfficina = Math.max(0, (p.importo_totale || 0) - pagatoAlFornitore);
-  if (p.stato === 'acconto') return Math.max(0, totaleOfficina - (p.importo_pagato || 0));
-  if (p.stato === 'non_pagato') return totaleOfficina;
+  if (!p || p.fornitore_pagato_da_cliente) return 0;
+  if (p.stato === 'acconto') return Math.max(0, (p.importo_totale || 0) - (p.importo_pagato || 0));
+  if (p.stato === 'non_pagato') return p.importo_totale || 0;
   return 0;
 }
 

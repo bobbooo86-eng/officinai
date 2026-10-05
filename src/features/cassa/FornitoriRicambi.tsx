@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import type { Appuntamento, Movimento, MovimentoTipo, AcquistoFornitoreRicambi } from '@/types/database';
+import { creditoFornitoreDiretto } from './movimentiTotali';
 
 const fmtEuro = (n: number) =>
   new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
@@ -152,7 +153,7 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
       ) : (
         FORNITORI_RICAMBI.map((f) => {
           const appsFornitore = appuntamenti
-            .filter((a) => a.pagamento?.fornitore_ricambi === f.id && (a.pagamento?.costo_ricambi || 0) > 0)
+            .filter((a) => a.pagamento?.fornitore_ricambi === f.id && ((a.pagamento?.costo_ricambi || 0) > 0 || a.pagamento?.fornitore_pagato_da_cliente))
             .sort((a, b) => new Date(b.pagamento?.data_consegna || b.data_ora).getTime() - new Date(a.pagamento?.data_consegna || a.data_ora).getTime());
           const acquistiFornitore = acquisti.filter((a) => a.fornitore === f.id);
           // "Pagati subito" (saldato sul momento dall'officina) o
@@ -166,9 +167,19 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
           const totaleSegnato = appsFornitore.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
           const totaleAcquisti = acquistiFornitore.reduce((s, a) => s + Number(a.importo), 0);
           const movimentiFornitore = movimenti.filter((m) => m.tipo === f.tipoMovimento);
-          const totalePagato = movimentiFornitore.reduce((s, m) => s + Number(m.importo), 0);
+          // Quando il cliente paga il fornitore direttamente, l'intero resto
+          // del lavoro (non il costo ricambi) va scalato dal conto: e' un
+          // pagamento vero e proprio al fornitore, solo fatto da un'altra
+          // tasca invece che dalla cassa dell'officina.
+          const totaleCreditoDiretto = appsFornitore.reduce((s, a) => s + creditoFornitoreDiretto(a.pagamento), 0);
+          const totalePagato = movimentiFornitore.reduce((s, m) => s + Number(m.importo), 0) + totaleCreditoDiretto;
           const saldoIniziale = saldiIniziali[f.id] || 0;
-          const saldo = saldoIniziale + totaleNonSaldato + totaleAcquisti - totalePagato;
+          // Autoricambi si gestisce solo coi due numeri: "da pagare" e'
+          // sempre il saldo scritto a mano (si riconcilia a parte), non una
+          // formula; "pagato" resta solo un riferimento informativo.
+          const saldo = f.acquistiManuali
+            ? saldoIniziale + totaleNonSaldato + totaleAcquisti - totalePagato
+            : saldoIniziale;
           const aperto = espanso === f.id;
           const inEditSaldo = editandoSaldo === f.id;
           const inAggiungi = aggiungendoAcquisto === f.id;
@@ -286,9 +297,15 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                 </div>
               )}
               <div className="flex justify-between text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-                <span>Saldo: {fmtEuro(saldoIniziale)}</span>
-                <span>Ricambi: {fmtEuro(totaleSegnato + totaleAcquisti)}</span>
-                <span>Pagato: {fmtEuro(totalePagato)}</span>
+                {f.acquistiManuali ? (
+                  <>
+                    <span>Saldo: {fmtEuro(saldoIniziale)}</span>
+                    <span>Ricambi: {fmtEuro(totaleSegnato + totaleAcquisti)}</span>
+                    <span>Pagato: {fmtEuro(totalePagato)}</span>
+                  </>
+                ) : (
+                  <span>Pagato: {fmtEuro(totalePagato)}</span>
+                )}
               </div>
               {aperto && (
                 <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
@@ -311,18 +328,22 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                                 </span>
                               </div>
                             ))}
-                            {appsFornitore.map((a) => (
-                              <div key={a.id} className="flex items-center justify-between text-[11px] py-0.5">
-                                <span className="text-gray-600 truncate">
-                                  🔧 {a.clienti?.nome || 'Cliente'}{a.veicoli?.targa ? ` — ${a.veicoli.targa}` : ''}
-                                  {a.pagamento?.fornitore_pagato_da_cliente && <span className="text-emerald-600"> · pagato dal cliente</span>}
-                                  {a.pagamento?.ricambi_pagati_subito && <span className="text-emerald-600"> · saldato</span>}
-                                </span>
-                                <span className={`font-semibold shrink-0 ml-2 ${giaSaldato(a) ? 'text-gray-400' : 'text-gray-700'}`}>
-                                  {fmtEuro(a.pagamento?.costo_ricambi || 0)}
-                                </span>
-                              </div>
-                            ))}
+                            {appsFornitore.map((a) => {
+                              const credito = creditoFornitoreDiretto(a.pagamento);
+                              const importo = credito > 0 ? credito : (a.pagamento?.costo_ricambi || 0);
+                              return (
+                                <div key={a.id} className="flex items-center justify-between text-[11px] py-0.5">
+                                  <span className="text-gray-600 truncate">
+                                    🔧 {a.clienti?.nome || 'Cliente'}{a.veicoli?.targa ? ` — ${a.veicoli.targa}` : ''}
+                                    {a.pagamento?.fornitore_pagato_da_cliente && <span className="text-emerald-600"> · pagato dal cliente</span>}
+                                    {a.pagamento?.ricambi_pagati_subito && <span className="text-emerald-600"> · saldato</span>}
+                                  </span>
+                                  <span className={`font-semibold shrink-0 ml-2 ${giaSaldato(a) ? 'text-gray-400' : 'text-gray-700'}`}>
+                                    {fmtEuro(importo)}
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
