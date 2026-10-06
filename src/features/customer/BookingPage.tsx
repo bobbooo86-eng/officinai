@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Button, Card, Input } from '@/components/ui';
+import { Button, Card } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { validateRequired } from '@/lib/validation';
-import { fmtGiornoSettimana } from '@/lib/format';
+import { DateField } from '@/components/DateField';
 import type { Veicolo } from '@/types/database';
 
 export function BookingPage() {
@@ -169,14 +169,10 @@ export function BookingPage() {
         <div className="space-y-3">
           <p className="text-sm text-gray-600">Scegli data e orario:</p>
 
-          <Input
-            label="Data"
-            type="date"
-            value={data}
-            min={today}
-            onChange={(e) => setData(e.target.value)}
-          />
-          {data && <p className="text-xs text-gray-500 -mt-1">{fmtGiornoSettimana(data)}</p>}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Data</label>
+            <DateField value={data} onChange={setData} min={today} />
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Orario</label>

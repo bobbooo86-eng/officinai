@@ -45,23 +45,6 @@ export function fmtDataOra(dateStr: string): string {
   return `${fmtData(dateStr)} ${fmtOra(dateStr)}`;
 }
 
-const GIORNI_SETTIMANA = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
-
-/**
- * Giorno della settimana (es. "Mercoledì") da una stringa data (YYYY-MM-DD)
- * o data-ora (YYYY-MM-DDTHH:mm): da mostrare accanto ai selettori di data,
- * dove il calendario nativo del telefono non lo indica e altrimenti
- * bisognerebbe calcolarlo a mente.
- */
-export function fmtGiornoSettimana(dateStr: string): string {
-  if (!dateStr) return '';
-  // Una data "sola" (senza ora) va letta in locale, non in UTC: altrimenti
-  // in alcuni fusi orari risulterebbe il giorno prima.
-  const d = new Date(dateStr.length <= 10 ? `${dateStr}T00:00:00` : dateStr);
-  if (Number.isNaN(d.getTime())) return '';
-  return GIORNI_SETTIMANA[d.getDay()];
-}
-
 export function fmtEuro(amount: number): string {
   return new Intl.NumberFormat('it-IT', {
     style: 'currency',

@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { VoiceButton } from '@/components/VoiceInput';
-import { fmtGiornoSettimana } from '@/lib/format';
+import { DateField } from '@/components/DateField';
 
 interface NuovoAppuntamentoProps {
   onBack: () => void;
@@ -11,9 +11,17 @@ interface NuovoAppuntamentoProps {
   initialDate?: Date;
 }
 
-/** Converte una Date nel formato accettato da <input type="datetime-local">, in ora locale. */
-function toLocalInputValue(d: Date): string {
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+/** Data in formato YYYY-MM-DD, in ora locale. */
+function toDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = (d.getMonth() + 1).toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Ora in formato HH:mm, in ora locale. */
+function toTimeKey(d: Date): string {
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
 // Una sola schermata: nome, marca/modello, targa, km, telefono, problema,
@@ -33,10 +41,7 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
   const [targa, setTarga] = useState('');
   const [km, setKm] = useState('');
   const [problema, setProblema] = useState('');
-  const [dataOra, setDataOra] = useState(() => {
-    // L'input datetime-local lavora in ora locale: toISOString() darebbe UTC
-    // e in Italia proporrebbe un orario 1-2 ore indietro (a notte fonda
-    // addirittura il giorno precedente).
+  const dataIniziale = (() => {
     const base = initialDate ? new Date(initialDate) : new Date();
     if (initialDate) {
       const now = new Date();
@@ -47,8 +52,10 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
     } else {
       base.setHours(base.getHours() + 1, 0, 0, 0);
     }
-    return toLocalInputValue(base);
-  });
+    return base;
+  })();
+  const [dataApp, setDataApp] = useState(toDateKey(dataIniziale));
+  const [oraApp, setOraApp] = useState(toTimeKey(dataIniziale));
 
   // Un ref invece di solo "loading": lo stato aggiornato da setLoading non e'
   // ancora visibile al render successivo, quindi un doppio tocco molto
@@ -98,7 +105,7 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
           officina_id: officina.id,
           cliente_id: newCl.id,
           veicolo_id: newVe.id,
-          data_ora: new Date(dataOra).toISOString(),
+          data_ora: new Date(`${dataApp}T${oraApp}`).toISOString(),
           stato: 'prenotato',
           priorita: 'normale',
           problema: problema.trim(),
@@ -178,10 +185,15 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
           </div>
         </div>
 
-        <div>
-          <label className={labelClass}>Data e ora *</label>
-          <input type="datetime-local" value={dataOra} onChange={(e) => setDataOra(e.target.value)} className={inputClass} />
-          {dataOra && <p className="text-xs text-gray-500 mt-1">{fmtGiornoSettimana(dataOra)}</p>}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className={labelClass}>Data *</label>
+            <DateField value={dataApp} onChange={setDataApp} className={inputClass + ' text-left cursor-pointer'} />
+          </div>
+          <div>
+            <label className={labelClass}>Ora *</label>
+            <input type="time" value={oraApp} onChange={(e) => setOraApp(e.target.value)} className={inputClass} />
+          </div>
         </div>
       </div>
 

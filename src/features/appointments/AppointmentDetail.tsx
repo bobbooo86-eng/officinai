@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Button, Card, Badge, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG, STATI_ORDINE, GRAVITA_CONFIG } from '@/lib/constants';
-import { fmtEuro, fmtDataOra, fmtGiornoSettimana } from '@/lib/format';
+import { fmtEuro, fmtDataOra } from '@/lib/format';
+import { DateField } from '@/components/DateField';
 import { toWhatsAppNumber } from '@/lib/whatsapp';
 import { useAuthStore } from '@/stores/authStore';
 import { ChatPanel } from '@/features/chat/ChatPanel';
@@ -355,13 +356,11 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Data</label>
-                <input
-                  type="date"
+                <DateField
                   value={editDataApp}
-                  onChange={(e) => setEditDataApp(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={setEditDataApp}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                {editDataApp && <p className="text-[11px] text-gray-400 mt-1">{fmtGiornoSettimana(editDataApp)}</p>}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Ora</label>
@@ -1110,14 +1109,12 @@ function TabStato({ app }: { app: Appuntamento }) {
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Data</label>
-              <input
-                type="date"
+              <DateField
                 value={propostaData}
+                onChange={setPropostaData}
                 min={today}
-                onChange={(e) => setPropostaData(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              {propostaData && <p className="text-[11px] text-gray-400 mt-1">{fmtGiornoSettimana(propostaData)}</p>}
             </div>
 
             <div>
