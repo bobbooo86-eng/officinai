@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button, Card, Badge, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG, STATI_ORDINE, GRAVITA_CONFIG } from '@/lib/constants';
-import { fmtEuro, fmtDataOra } from '@/lib/format';
+import { fmtEuro, fmtDataOra, fmtGiornoSettimana } from '@/lib/format';
 import { toWhatsAppNumber } from '@/lib/whatsapp';
 import { useAuthStore } from '@/stores/authStore';
 import { ChatPanel } from '@/features/chat/ChatPanel';
@@ -361,6 +361,7 @@ export function AppointmentDetail({ appuntamento, onBack, onNavigateToCliente }:
                   onChange={(e) => setEditDataApp(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {editDataApp && <p className="text-[11px] text-gray-400 mt-1">{fmtGiornoSettimana(editDataApp)}</p>}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Ora</label>
@@ -1116,6 +1117,7 @@ function TabStato({ app }: { app: Appuntamento }) {
                 onChange={(e) => setPropostaData(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              {propostaData && <p className="text-[11px] text-gray-400 mt-1">{fmtGiornoSettimana(propostaData)}</p>}
             </div>
 
             <div>

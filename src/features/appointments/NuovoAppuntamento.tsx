@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { VoiceButton } from '@/components/VoiceInput';
+import { fmtGiornoSettimana } from '@/lib/format';
 
 interface NuovoAppuntamentoProps {
   onBack: () => void;
@@ -180,6 +181,7 @@ export function NuovoAppuntamento({ onBack, onCreated, initialDate }: NuovoAppun
         <div>
           <label className={labelClass}>Data e ora *</label>
           <input type="datetime-local" value={dataOra} onChange={(e) => setDataOra(e.target.value)} className={inputClass} />
+          {dataOra && <p className="text-xs text-gray-500 mt-1">{fmtGiornoSettimana(dataOra)}</p>}
         </div>
       </div>
 
