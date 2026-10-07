@@ -128,6 +128,18 @@ export interface Acconto {
   nota?: string;
 }
 
+// Ricambi comprati mentre l'auto e' ancora in lavorazione, prima della
+// consegna finale. Ogni acquisto genera anche un movimento "spesa_officina"
+// in Cassa datato data_acquisto, cosi' conta come spesa sul resoconto del
+// giorno vero in cui e' stato comprato, e resta visibile sulla scheda
+// dell'auto come promemoria di cosa e' stato preso per quel mezzo.
+export interface RicambioAcquistato {
+  data_acquisto: string;
+  importo: number;
+  descrizione?: string;
+  movimento_id?: string;
+}
+
 export interface Appuntamento {
   id: string;
   officina_id: string;
@@ -144,6 +156,7 @@ export interface Appuntamento {
   nota_officina?: string;
   pagamento?: PagamentoInfo | null;
   acconti?: Acconto[] | null;
+  ricambi_acquistati?: RicambioAcquistato[] | null;
   created_at?: string;
   // Relations (joined)
   clienti?: Cliente;

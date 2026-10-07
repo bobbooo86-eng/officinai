@@ -17,7 +17,7 @@ import { it as itLocale } from 'date-fns/locale';
 import { AccettazioneVeicolo } from './AccettazioneVeicolo';
 import { StoricoVeicolo } from './StoricoVeicolo';
 import { VoiceButton } from '@/components/VoiceInput';
-import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, Difetto, PagamentoInfo, PagamentoStato, Acconto } from '@/types/database';
+import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, Difetto, PagamentoInfo, PagamentoStato, Acconto, RicambioAcquistato } from '@/types/database';
 
 interface Props {
   appuntamento: Appuntamento;
@@ -838,6 +838,95 @@ function ModalAcconto({ onSalva, onAnnulla }: {
   );
 }
 
+// ==================== MODAL RICAMBI ACQUISTATI (auto ancora in lavorazione) ====================
+function ModalRicambioAcquistato({ onSalva, onAnnulla }: {
+  onSalva: (importo: number, data: string, descrizione: string) => Promise<{ error: string | null }>;
+  onAnnulla: () => void;
+}) {
+  const [importo, setImporto] = useState('');
+  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [descrizione, setDescrizione] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [errore, setErrore] = useState('');
+
+  const salva = async () => {
+    const n = parseFloat((importo || '').replace(',', '.'));
+    if (!Number.isFinite(n) || n <= 0) { setErrore('Inserisci un importo valido'); return; }
+    setSalvando(true);
+    setErrore('');
+    const { error } = await onSalva(n, data, descrizione.trim());
+    setSalvando(false);
+    if (error) { setErrore('Ricambi non salvati: ' + error); return; }
+    onAnnulla();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm space-y-4 p-5 animate-fade-in">
+        <div className="text-center">
+          <div className="text-3xl mb-1">🔧</div>
+          <h3 className="text-base font-bold text-gray-900">Ricambi acquistati</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Quanto hai speso oggi per i ricambi di questo mezzo?</p>
+        </div>
+
+        <div className="space-y-2">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Importo (€)</label>
+            <input
+              type="number"
+              value={importo}
+              onChange={(e) => setImporto(e.target.value)}
+              placeholder="es. 150"
+              autoFocus
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Data</label>
+            <input
+              type="date"
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Cosa hai comprato (opzionale)</label>
+            <input
+              type="text"
+              value={descrizione}
+              onChange={(e) => setDescrizione(e.target.value)}
+              placeholder="es. pastiglie freni"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <p className="text-[11px] text-gray-400">
+            Viene subito segnato come spesa in Cassa &gt; Movimenti (così conta nel resoconto di oggi) e resta visibile su questa scheda come spesa sul mezzo.
+          </p>
+          {errore && <div className="text-xs text-red-600">{errore}</div>}
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={onAnnulla}
+            disabled={salvando}
+            className="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 cursor-pointer transition-colors disabled:opacity-50"
+          >
+            Annulla
+          </button>
+          <button
+            onClick={salva}
+            disabled={salvando}
+            className="flex-1 py-2.5 rounded-xl bg-orange-500 text-white text-sm font-bold hover:bg-orange-600 cursor-pointer transition-colors disabled:opacity-50"
+          >
+            {salvando ? 'Salvataggio...' : 'Salva spesa'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ==================== TAB STATO ====================
 function TabStato({ app }: { app: Appuntamento }) {
   const { officina, utente } = useAuthStore();
@@ -848,6 +937,7 @@ function TabStato({ app }: { app: Appuntamento }) {
   const [propostaNota, setPropostaNota] = useState('');
   const [showConsegnaModal, setShowConsegnaModal] = useState(false);
   const [showAccontoModal, setShowAccontoModal] = useState(false);
+  const [showRicambioModal, setShowRicambioModal] = useState(false);
   const [erroreAzione, setErroreAzione] = useState('');
 
   // Auto-send email on status change
@@ -921,6 +1011,42 @@ function TabStato({ app }: { app: Appuntamento }) {
     const { error: appErr } = await supabase
       .from('appuntamenti')
       .update({ acconti: [...(app.acconti || []), nuovoAcconto] })
+      .eq('id', app.id);
+    if (appErr) return { error: appErr.message };
+    return { error: null };
+  };
+
+  // Ricambi comprati mentre l'auto e' ancora in lavorazione: stesso
+  // meccanismo dell'acconto ma al contrario (una spesa, non un incasso).
+  // Crea subito un movimento "spesa_officina" datato al giorno vero
+  // dell'acquisto e lo registra sull'appuntamento come promemoria di cosa
+  // e' stato preso per quel mezzo.
+  const registraRicambioAcquistato = async (importo: number, data: string, descrizione: string) => {
+    if (!officina?.id) return { error: 'Officina non trovata' };
+    const clienteNome = app.clienti?.nome || 'Cliente';
+    const targa = app.veicoli?.targa ? ` — ${app.veicoli.targa}` : '';
+    const { data: movimento, error: movErr } = await supabase
+      .from('movimenti')
+      .insert({
+        officina_id: officina.id,
+        tipo: 'spesa_officina',
+        importo,
+        descrizione: `Ricambi — ${clienteNome}${targa}${descrizione ? ` (${descrizione})` : ''}`,
+        metodo_pagamento: 'contanti',
+        data,
+        dipendente_id: null,
+        created_by: utente?.id || null,
+        note: null,
+        spese_lavorazione: null,
+      })
+      .select()
+      .single();
+    if (movErr || !movimento) return { error: movErr?.message || 'Movimento non salvato' };
+
+    const nuovoRicambio: RicambioAcquistato = { data_acquisto: data, importo, descrizione: descrizione || undefined, movimento_id: movimento.id };
+    const { error: appErr } = await supabase
+      .from('appuntamenti')
+      .update({ ricambi_acquistati: [...(app.ricambi_acquistati || []), nuovoRicambio] })
       .eq('id', app.id);
     if (appErr) return { error: appErr.message };
     return { error: null };
@@ -1231,6 +1357,13 @@ function TabStato({ app }: { app: Appuntamento }) {
         />
       )}
 
+      {showRicambioModal && (
+        <ModalRicambioAcquistato
+          onSalva={registraRicambioAcquistato}
+          onAnnulla={() => setShowRicambioModal(false)}
+        />
+      )}
+
       {/* Promemoria acconti ricevuti prima della consegna finale */}
       {app.acconti && app.acconti.length > 0 && (
         <div className="p-3 rounded-xl bg-amber-50 border-2 border-amber-200 mb-2">
@@ -1248,15 +1381,41 @@ function TabStato({ app }: { app: Appuntamento }) {
         </div>
       )}
 
-      {/* Registra acconto — solo prima della consegna finale */}
+      {/* Promemoria ricambi comprati per questo mezzo prima della consegna finale */}
+      {app.ricambi_acquistati && app.ricambi_acquistati.length > 0 && (
+        <div className="p-3 rounded-xl bg-orange-50 border-2 border-orange-200 mb-2">
+          <div className="text-sm font-bold text-orange-800">
+            🔧 Ricambi acquistati: {fmtEuro(app.ricambi_acquistati.reduce((s, r) => s + Number(r.importo), 0))}
+          </div>
+          <div className="text-xs text-orange-700 mt-0.5 space-y-0.5">
+            {app.ricambi_acquistati.map((r, i) => (
+              <div key={i}>
+                {fmtEuro(r.importo)} il {format(parseISO(r.data_acquisto), 'dd/MM/yyyy', { locale: itLocale })}
+                {r.descrizione ? ` — ${r.descrizione}` : ''}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Registra acconto / ricambi acquistati — solo prima della consegna finale */}
       {app.stato !== 'consegnato' && (
-        <button
-          onClick={() => setShowAccontoModal(true)}
-          disabled={updating}
-          className="w-full py-2.5 rounded-xl border-2 border-amber-300 bg-amber-50 text-amber-800 text-sm font-semibold hover:bg-amber-100 transition-colors cursor-pointer disabled:opacity-50 mb-2"
-        >
-          💛 Registra acconto
-        </button>
+        <div className="flex gap-2 mb-2">
+          <button
+            onClick={() => setShowAccontoModal(true)}
+            disabled={updating}
+            className="flex-1 py-2.5 rounded-xl border-2 border-amber-300 bg-amber-50 text-amber-800 text-sm font-semibold hover:bg-amber-100 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            💛 Registra acconto
+          </button>
+          <button
+            onClick={() => setShowRicambioModal(true)}
+            disabled={updating}
+            className="flex-1 py-2.5 rounded-xl border-2 border-orange-300 bg-orange-50 text-orange-800 text-sm font-semibold hover:bg-orange-100 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            🔧 Ricambi acquistati
+          </button>
+        </div>
       )}
 
       {/* Pagamento info — se già consegnato */}
