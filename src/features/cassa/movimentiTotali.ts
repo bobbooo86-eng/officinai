@@ -48,9 +48,18 @@ export const spesaRicambi = (p?: PagamentoInfo | null): number =>
   p?.ricambi_pagati_subito ? Number(p.costo_ricambi) || 0 : 0;
 
 // Quando il cliente paga il fornitore dei ricambi direttamente (es. Monti),
-// tutto il resto del lavoro (non solo il costo ricambi) finisce a lui, non
-// in cassa: e' quell'importo intero che va contato come "pagato" sul conto
-// di quel fornitore, non il costo ricambi (che resta solo informativo per
-// il margine). Vedi anche incassato()/restoDaIncassare() in IncassiOfficina.
-export const creditoFornitoreDiretto = (p?: PagamentoInfo | null): number =>
-  p?.fornitore_pagato_da_cliente ? Math.max(0, (p.importo_totale || 0) - (p.importo_pagato || 0)) : 0;
+// quell'importo finisce a lui, non in cassa: e' quello che va contato come
+// "pagato" sul conto di quel fornitore, non il costo ricambi (che resta
+// solo informativo per il margine). Quanto, esattamente, dipende da cosa
+// aveva gia' incassato l'officina:
+// - "Pagato completo": importo_pagato e' sempre uguale a importo_totale
+//   (il modulo di consegna lo impone), quindi l'officina non ha incassato
+//   nulla di suo — tutto l'importo e' finito al fornitore.
+// - "Acconto": l'officina ha davvero incassato importo_pagato di suo
+//   (es. un anticipo in contanti), solo il resto e' finito al fornitore.
+// Vedi anche incassato()/restoDaIncassare() in IncassiOfficina, stessa logica.
+export const creditoFornitoreDiretto = (p?: PagamentoInfo | null): number => {
+  if (!p?.fornitore_pagato_da_cliente) return 0;
+  if (p.stato === 'acconto') return Math.max(0, (p.importo_totale || 0) - (p.importo_pagato || 0));
+  return p.importo_totale || 0;
+};

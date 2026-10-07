@@ -17,15 +17,17 @@ interface Props {
  * conta il totale, un acconto conta solo la parte gia' versata. Stessa
  * logica di IncassiOfficina, duplicata qui perche' l'acconto va anche
  * corretto da qui, non solo da Cassa. Se il cliente paga il fornitore dei
- * ricambi direttamente, tutto il resto finisce a lui: l'officina ha
- * incassato solo quello che il cliente le ha dato di persona finora. Gli
- * acconti presi prima della consegna sono gia' stati contati come
- * movimenti a parte: vanno tolti da qui per non ricontarli. */
+ * ricambi direttamente: su "pagato completo" l'officina non ha incassato
+ * nulla di suo (importo_pagato e' sempre uguale a importo_totale per
+ * costruzione), su "acconto" importo_pagato e' un vero anticipo, solo il
+ * resto e' finito al fornitore. Gli acconti presi prima della consegna
+ * sono gia' stati contati come movimenti a parte: vanno tolti da qui per
+ * non ricontarli. */
 function incassato(a: Appuntamento): number {
   const p = a.pagamento;
   if (!p) return 0;
   const accontiPrecedenti = (a.acconti || []).reduce((s, acc) => s + Number(acc.importo), 0);
-  const base = p.fornitore_pagato_da_cliente ? (p.importo_pagato || 0)
+  const base = p.fornitore_pagato_da_cliente ? (p.stato === 'acconto' ? (p.importo_pagato || 0) : 0)
     : p.stato === 'pagato' ? (p.importo_totale || 0)
     : p.stato === 'acconto' ? (p.importo_pagato || 0)
     : 0;

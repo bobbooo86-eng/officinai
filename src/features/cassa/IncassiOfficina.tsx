@@ -231,9 +231,12 @@ export function inPeriodo(d: Date, periodo: Periodo, riferimento: Date): boolean
 /** Quanto e' stato davvero incassato per questo veicolo: pagato completo
  * conta il totale, un acconto conta solo la parte gia' versata, il resto
  * (se c'e') non e' cassa finche' non arriva. Se il cliente ha pagato il
- * fornitore dei ricambi direttamente (es. Monti), tutto il resto del
- * lavoro finisce a lui, non in cassa: l'officina ha incassato solo quello
- * che il cliente le ha dato di persona finora.
+ * fornitore dei ricambi direttamente (es. Monti): su "pagato completo"
+ * l'officina non ha incassato nulla di suo (importo_pagato e' sempre
+ * uguale a importo_totale per costruzione, non e' un vero incasso); su
+ * "acconto" invece importo_pagato e' un vero anticipo preso dall'officina,
+ * solo il resto e' finito al fornitore — stessa logica di
+ * creditoFornitoreDiretto() in movimentiTotali.ts.
  * Gli acconti presi prima della consegna (mentre l'auto era ancora in
  * lavorazione) sono gia' stati contati come movimenti a parte, datati al
  * giorno vero in cui sono arrivati: vanno tolti da qui, altrimenti alla
@@ -242,7 +245,7 @@ export function incassato(a: Appuntamento): number {
   const p = a.pagamento;
   if (!p) return 0;
   const accontiPrecedenti = (a.acconti || []).reduce((s, acc) => s + Number(acc.importo), 0);
-  const base = p.fornitore_pagato_da_cliente ? (p.importo_pagato || 0)
+  const base = p.fornitore_pagato_da_cliente ? (p.stato === 'acconto' ? (p.importo_pagato || 0) : 0)
     : p.stato === 'pagato' ? (p.importo_totale || 0)
     : p.stato === 'acconto' ? (p.importo_pagato || 0)
     : 0;
