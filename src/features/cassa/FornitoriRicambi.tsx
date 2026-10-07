@@ -157,18 +157,15 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
         <div className="text-center py-6 text-xs text-gray-400">Caricamento...</div>
       ) : (
         FORNITORI_RICAMBI.map((f) => {
+          // Il costo ricambi segnato su una consegna non conta piu' niente su
+          // questa pagina (nemmeno come debito): il debito cresce solo con
+          // gli acquisti aggiunti a mano col "+". Le uniche consegne che
+          // contano qui sono quelle dove il cliente ha pagato il fornitore
+          // direttamente (credita "Pagato" per intero, vedi sotto).
           const appsFornitore = appuntamenti
-            .filter((a) => a.pagamento?.fornitore_ricambi === f.id && ((a.pagamento?.costo_ricambi || 0) > 0 || a.pagamento?.fornitore_pagato_da_cliente))
+            .filter((a) => a.pagamento?.fornitore_ricambi === f.id && a.pagamento?.fornitore_pagato_da_cliente)
             .sort((a, b) => new Date(b.pagamento?.data_consegna || b.data_ora).getTime() - new Date(a.pagamento?.data_consegna || a.data_ora).getTime());
           const acquistiFornitore = acquisti.filter((a) => a.fornitore === f.id);
-          // "Pagati subito" (saldato sul momento dall'officina) o
-          // "fornitore pagato dal cliente" (il cliente salda il fornitore
-          // direttamente): in entrambi i casi quel lavoro non resta da
-          // pagare, va escluso dal saldo anche se e' segnato su questo
-          // fornitore.
-          const giaSaldato = (a: Appuntamento) => !!(a.pagamento?.ricambi_pagati_subito || a.pagamento?.fornitore_pagato_da_cliente);
-          const daPagare = appsFornitore.filter((a) => !giaSaldato(a));
-          const totaleNonSaldato = daPagare.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
           const totaleAcquisti = acquistiFornitore.reduce((s, a) => s + Number(a.importo), 0);
           const movimentiFornitore = movimenti.filter((m) => m.tipo === f.tipoMovimento);
           // Quando il cliente paga il fornitore direttamente, l'intero resto
@@ -182,7 +179,7 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
           // sempre il saldo scritto a mano (si riconcilia a parte), non una
           // formula; "pagato" resta solo un riferimento informativo.
           const saldo = f.acquistiManuali
-            ? saldoIniziale + totaleNonSaldato + totaleAcquisti - totalePagato
+            ? saldoIniziale + totaleAcquisti - totalePagato
             : saldoIniziale;
           const aperto = espanso === f.id;
           const inEditSaldo = editandoSaldo === f.id;
@@ -319,9 +316,9 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                     <div className="text-[11px] text-gray-400 text-center py-2">Nessun movimento per questo fornitore</div>
                   ) : (
                     <>
-                      {(acquistiFornitore.length > 0 || appsFornitore.length > 0) && (
+                      {acquistiFornitore.length > 0 && (
                         <div>
-                          <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Acquisti e lavori (debito)</div>
+                          <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Acquisti (debito)</div>
                           <div className="space-y-1">
                             {acquistiFornitore.map((a) => (
                               <div key={a.id} className="flex items-center justify-between text-[11px] py-0.5">
@@ -334,38 +331,34 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                                 </span>
                               </div>
                             ))}
-                            {appsFornitore.map((a) => {
-                              const credito = creditoFornitoreDiretto(a.pagamento);
-                              const importo = credito > 0 ? credito : (a.pagamento?.costo_ricambi || 0);
-                              return (
-                                <div key={a.id} className="flex items-center justify-between text-[11px] py-0.5">
-                                  <span className="text-gray-600 truncate">
-                                    🔧 {a.clienti?.nome || 'Cliente'}{a.veicoli?.targa ? ` — ${a.veicoli.targa}` : ''}
-                                    {a.pagamento?.fornitore_pagato_da_cliente && <span className="text-emerald-600"> · pagato dal cliente</span>}
-                                    {a.pagamento?.ricambi_pagati_subito && <span className="text-emerald-600"> · saldato</span>}
-                                  </span>
-                                  <span className={`font-semibold shrink-0 ml-2 ${giaSaldato(a) ? 'text-gray-400' : 'text-gray-700'}`}>
-                                    {fmtEuro(importo)}
-                                  </span>
-                                </div>
-                              );
-                            })}
                           </div>
                         </div>
                       )}
-                      {movimentiFornitore.length > 0 && (
+                      {(movimentiFornitore.length > 0 || appsFornitore.length > 0) && (
                         <div>
                           <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Pagamenti fatti</div>
                           <div className="space-y-1">
-                            {movimentiFornitore
-                              .slice()
+                            {[
+                              ...movimentiFornitore.map((m) => ({
+                                id: m.id,
+                                data: m.data.length <= 10 ? `${m.data}T00:00:00` : m.data,
+                                label: `💶 ${m.descrizione || 'Pagamento'}`,
+                                importo: Number(m.importo),
+                              })),
+                              ...appsFornitore.map((a) => ({
+                                id: a.id,
+                                data: a.pagamento?.data_consegna || a.data_ora,
+                                label: `🔧 ${a.clienti?.nome || 'Cliente'}${a.veicoli?.targa ? ` — ${a.veicoli.targa}` : ''} · pagato dal cliente`,
+                                importo: creditoFornitoreDiretto(a.pagamento),
+                              })),
+                            ]
                               .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
-                              .map((m) => (
-                                <div key={m.id} className="flex items-center justify-between text-[11px] py-0.5">
+                              .map((riga) => (
+                                <div key={riga.id} className="flex items-center justify-between text-[11px] py-0.5">
                                   <span className="text-gray-600 truncate">
-                                    💶 {m.descrizione || 'Pagamento'} · {new Date(m.data + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                                    {riga.label} · {new Date(riga.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
                                   </span>
-                                  <span className="font-semibold text-emerald-700 shrink-0 ml-2">− {fmtEuro(Number(m.importo))}</span>
+                                  <span className="font-semibold text-emerald-700 shrink-0 ml-2">− {fmtEuro(riga.importo)}</span>
                                 </div>
                               ))}
                           </div>
