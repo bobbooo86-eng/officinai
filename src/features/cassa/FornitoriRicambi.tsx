@@ -169,7 +169,6 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
           const giaSaldato = (a: Appuntamento) => !!(a.pagamento?.ricambi_pagati_subito || a.pagamento?.fornitore_pagato_da_cliente);
           const daPagare = appsFornitore.filter((a) => !giaSaldato(a));
           const totaleNonSaldato = daPagare.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
-          const totaleSegnato = appsFornitore.reduce((s, a) => s + (a.pagamento?.costo_ricambi || 0), 0);
           const totaleAcquisti = acquistiFornitore.reduce((s, a) => s + Number(a.importo), 0);
           const movimentiFornitore = movimenti.filter((m) => m.tipo === f.tipoMovimento);
           // Quando il cliente paga il fornitore direttamente, l'intero resto
@@ -304,8 +303,10 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
               <div className="flex justify-between text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
                 {f.acquistiManuali ? (
                   <>
-                    <span>Saldo: {fmtEuro(saldoIniziale)}</span>
-                    <span>Ricambi: {fmtEuro(totaleSegnato + totaleAcquisti)}</span>
+                    {/* Solo gli acquisti aggiunti a mano col "+": i ricambi
+                        segnati sulle consegne sono gia' nel saldo "da
+                        pagare" sopra, qui sarebbe un doppione. */}
+                    <span>Ricambi: {fmtEuro(totaleAcquisti)}</span>
                     <span>Pagato: {fmtEuro(totalePagato)}</span>
                   </>
                 ) : (
