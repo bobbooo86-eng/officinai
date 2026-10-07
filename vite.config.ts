@@ -46,6 +46,11 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/index.html',
+        // Senza questo, la cache di una versione precedente puo' restare
+        // a meta' invalidata dopo un aggiornamento (alcuni file vecchi
+        // ancora in cache, altri nuovi): con tanti aggiornamenti ravvicinati
+        // e' proprio quella situazione a far caricare l'HTML ma non il CSS.
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,

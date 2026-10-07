@@ -12,7 +12,21 @@ import App from './App.tsx'
 // giorni dopo un aggiornamento. Ricontrollare ogni minuto e aggiornare
 // subito (registerType 'autoUpdate') tiene la versione in uso allineata
 // a quella pubblicata.
+//
+// Il nuovo service worker pero' prende il controllo SENZA ricaricare la
+// pagina: chi la teneva gia' aperta resta a meta' tra il vecchio e il
+// nuovo, e in quella finestra puo' capitare che l'HTML carichi ma il CSS
+// no (pagina senza nessuno stile). "controllerchange" segnala esattamente
+// il momento in cui il nuovo service worker prende il controllo: un
+// ricaricamento a quel punto garantisce che la pagina riparta sempre
+// pulita, invece di restare in questo stato a meta'.
 if ('serviceWorker' in navigator) {
+  let ricaricata = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (ricaricata) return
+    ricaricata = true
+    window.location.reload()
+  })
   registerSW({
     immediate: true,
     onRegisteredSW(_url, registration) {
