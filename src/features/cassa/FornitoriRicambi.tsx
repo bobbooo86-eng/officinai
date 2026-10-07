@@ -13,12 +13,9 @@ export const FORNITORI_RICAMBI: {
   label: string;
   icon: string;
   tipoMovimento: MovimentoTipo;
-  // Autoricambi si gestisce solo col saldo impostato a mano (riconciliato
-  // ogni settimana), senza registrare acquisti singoli uno per uno.
-  acquistiManuali: boolean;
 }[] = [
-  { id: 'autoricambi', label: 'Autoricambi', icon: '🏭', tipoMovimento: 'spesa_autoricambi', acquistiManuali: false },
-  { id: 'monti', label: 'Autodemolizioni Monti', icon: '🚙', tipoMovimento: 'spesa_monti', acquistiManuali: true },
+  { id: 'autoricambi', label: 'Autoricambi', icon: '🏭', tipoMovimento: 'spesa_autoricambi' },
+  { id: 'monti', label: 'Autodemolizioni Monti', icon: '🚙', tipoMovimento: 'spesa_monti' },
 ];
 
 type SaldiFornitori = { autoricambi?: number; monti?: number };
@@ -26,12 +23,12 @@ type SaldiFornitori = { autoricambi?: number; monti?: number };
 /**
  * Conto corrente con ciascun fornitore di ricambi: un saldo di partenza
  * (impostabile a mano, per chi aveva gia' un debito prima di usare questa
- * funzione) piu' quanto e' stato segnato come "ricambi da {fornitore}"
- * sulle consegne piu' gli acquisti aggiunti a mano (es. un pezzo per
- * magazzino, non legato a nessuna consegna) meno quanto e' gia' stato
- * pagato (i movimenti spesa_autoricambi/spesa_monti registrati in Cassa >
- * Movimenti). Non e' legato al periodo selezionato altrove in Cassa: e'
- * un saldo che resta finche' non viene saldato, come il tab "Da incassare".
+ * funzione) piu' gli acquisti aggiunti a mano col "+" (es. quanto si e'
+ * speso quella settimana) meno quanto e' gia' stato pagato (i movimenti
+ * spesa_autoricambi/spesa_monti registrati in Cassa > Movimenti, piu' le
+ * consegne dove il cliente ha pagato il fornitore direttamente). Non e'
+ * legato al periodo selezionato altrove in Cassa: e' un saldo che resta
+ * finche' non viene saldato, come il tab "Da incassare".
  */
 export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
@@ -151,7 +148,7 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
   return (
     <div className="space-y-3">
       <p className="text-[11px] text-gray-400 px-1">
-        Il saldo cresce quando su una consegna segni "da chi" vengono i ricambi o (su Monti) aggiungi un acquisto con "+", e scende quando registri un pagamento a quel fornitore da Movimenti. La matita ✏️ corregge il saldo a mano in qualsiasi momento.
+Il saldo cresce quando aggiungi un acquisto col "+" (es. ogni settimana quanto hai speso di ricambi), e scende quando registri un pagamento a quel fornitore da Movimenti. La matita ✏️ corregge il saldo a mano in qualsiasi momento.
       </p>
       {loading ? (
         <div className="text-center py-6 text-xs text-gray-400">Caricamento...</div>
@@ -175,12 +172,11 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
           const totaleCreditoDiretto = appsFornitore.reduce((s, a) => s + creditoFornitoreDiretto(a.pagamento), 0);
           const totalePagato = movimentiFornitore.reduce((s, m) => s + Number(m.importo), 0) + totaleCreditoDiretto;
           const saldoIniziale = saldiIniziali[f.id] || 0;
-          // Autoricambi si gestisce solo coi due numeri: "da pagare" e'
-          // sempre il saldo scritto a mano (si riconcilia a parte), non una
-          // formula; "pagato" resta solo un riferimento informativo.
-          const saldo = f.acquistiManuali
-            ? saldoIniziale + totaleAcquisti - totalePagato
-            : saldoIniziale;
+          // Un pagamento registrato in Movimenti scala sempre il "da
+          // pagare", non e' solo un riferimento informativo: altrimenti
+          // ogni settimana, pagando il fornitore, il debito resterebbe
+          // lo stesso finche' non lo si corregge a mano con la matita.
+          const saldo = saldoIniziale + totaleAcquisti - totalePagato;
           const aperto = espanso === f.id;
           const inEditSaldo = editandoSaldo === f.id;
           const inAggiungi = aggiungendoAcquisto === f.id;
@@ -199,15 +195,13 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
-                {f.acquistiManuali && (
-                  <button
-                    onClick={() => apriAggiungiAcquisto(f.id)}
-                    className="text-gray-400 hover:text-emerald-600 cursor-pointer px-1.5 shrink-0 text-base font-bold"
-                    title="Aggiungi un acquisto"
-                  >
-                    +
-                  </button>
-                )}
+                <button
+                  onClick={() => apriAggiungiAcquisto(f.id)}
+                  className="text-gray-400 hover:text-emerald-600 cursor-pointer px-1.5 shrink-0 text-base font-bold"
+                  title="Aggiungi un acquisto"
+                >
+                  +
+                </button>
                 {!inEditSaldo && (
                   <button
                     onClick={() => apriEditSaldo(f.id)}
@@ -297,18 +291,11 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
                   </button>
                 </div>
               )}
+              {/* Solo gli acquisti aggiunti a mano col "+": i ricambi
+                  segnati sulle consegne non contano piu' niente qui. */}
               <div className="flex justify-between text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-                {f.acquistiManuali ? (
-                  <>
-                    {/* Solo gli acquisti aggiunti a mano col "+": i ricambi
-                        segnati sulle consegne sono gia' nel saldo "da
-                        pagare" sopra, qui sarebbe un doppione. */}
-                    <span>Ricambi: {fmtEuro(totaleAcquisti)}</span>
-                    <span>Pagato: {fmtEuro(totalePagato)}</span>
-                  </>
-                ) : (
-                  <span>Pagato: {fmtEuro(totalePagato)}</span>
-                )}
+                <span>Ricambi: {fmtEuro(totaleAcquisti)}</span>
+                <span>Pagato: {fmtEuro(totalePagato)}</span>
               </div>
               {aperto && (
                 <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
