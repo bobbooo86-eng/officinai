@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import type { Appuntamento, Movimento, MovimentoTipo, AcquistoFornitoreRicambi } from '@/types/database';
 import { creditoFornitoreDiretto } from './movimentiTotali';
 import { useHistoryState } from '@/lib/useHistoryState';
+import { todayKey, dayKey } from '@/lib/format';
 
 const fmtEuro = (n: number) =>
   new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
@@ -18,17 +19,32 @@ export const FORNITORI_RICAMBI: {
   { id: 'monti', label: 'Autodemolizioni Monti', icon: '🚙', tipoMovimento: 'spesa_monti' },
 ];
 
-type SaldiFornitori = { autoricambi?: number; monti?: number };
+/** Un saldo scritto a mano porta con se' la data in cui e' stato scritto:
+ * serve a non ricontare quello che era gia' successo prima di allora (vedi
+ * sotto). Il valore grezzo puo' anche essere un numero semplice (saldi
+ * salvati prima di questa modifica): si legge come se fosse di sempre
+ * (1970), cosi' per chi non ha ancora ritoccato la matita il conto resta
+ * uguale a prima.
+ */
+type SaldoFornitore = { valore: number; data: string };
+type SaldiFornitori = { autoricambi?: SaldoFornitore | number; monti?: SaldoFornitore | number };
+
+function leggiSaldo(raw: SaldoFornitore | number | undefined): SaldoFornitore {
+  if (raw == null) return { valore: 0, data: '1970-01-01' };
+  if (typeof raw === 'number') return { valore: raw, data: '1970-01-01' };
+  return raw;
+}
 
 /**
- * Conto corrente con ciascun fornitore di ricambi: un saldo di partenza
- * (impostabile a mano, per chi aveva gia' un debito prima di usare questa
- * funzione) piu' gli acquisti aggiunti a mano col "+" (es. quanto si e'
- * speso quella settimana) meno quanto e' gia' stato pagato (i movimenti
- * spesa_autoricambi/spesa_monti registrati in Cassa > Movimenti, piu' le
- * consegne dove il cliente ha pagato il fornitore direttamente). Non e'
- * legato al periodo selezionato altrove in Cassa: e' un saldo che resta
- * finche' non viene saldato, come il tab "Da incassare".
+ * Conto corrente con ciascun fornitore di ricambi: un saldo scritto a mano
+ * (con la matita ✏️, in qualsiasi momento) piu' gli acquisti ("+") e meno i
+ * pagamenti registrati DA QUEL MOMENTO IN AVANTI. Riscrivere il saldo non
+ * ricalcola nulla all'indietro: diventa il nuovo punto di partenza, e solo
+ * quello che succede dopo lo fa muovere — altrimenti ogni acquisto/pagamento
+ * gia' fatto verrebbe ricontato una seconda volta ogni volta che si
+ * corregge il saldo. "Pagato" (sotto, e nella tendina) resta invece la
+ * somma di SEMPRE, solo per riferimento: mostra tutta la storia anche se
+ * non muove piu' il saldo.
  */
 export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
@@ -98,13 +114,16 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
 
   const apriEditSaldo = (fornitoreId: string) => {
     setEditandoSaldo(fornitoreId);
-    setEditValue(String(saldiIniziali[fornitoreId as keyof SaldiFornitori] ?? 0));
+    setEditValue(String(leggiSaldo(saldiIniziali[fornitoreId as keyof SaldiFornitori]).valore));
   };
 
   const salvaSaldoIniziale = async (fornitoreId: 'autoricambi' | 'monti') => {
     if (!officinaId) return;
     setSalvandoSaldo(true);
-    const nuovo = { ...saldiIniziali, [fornitoreId]: parseFloat(editValue) || 0 };
+    // Da oggi in avanti: quello che e' successo fino a ieri resta dentro
+    // questo numero, non va piu' sottratto/aggiunto una seconda volta.
+    const nuovoSaldo: SaldoFornitore = { valore: parseFloat(editValue) || 0, data: todayKey() };
+    const nuovo = { ...saldiIniziali, [fornitoreId]: nuovoSaldo };
     const { error } = await supabase.from('officine').update({ saldi_fornitori_ricambi: nuovo }).eq('id', officinaId);
     setSalvandoSaldo(false);
     if (error) { alert('Saldo non salvato: ' + error.message); return; }
@@ -148,7 +167,7 @@ export function FornitoriRicambi({ officinaId }: { officinaId?: string }) {
   return (
     <div className="space-y-3">
       <p className="text-[11px] text-gray-400 px-1">
-Il saldo cresce quando aggiungi un acquisto col "+" (es. ogni settimana quanto hai speso di ricambi), e scende quando registri un pagamento a quel fornitore da Movimenti. La matita ✏️ corregge il saldo a mano in qualsiasi momento.
+Il saldo cresce quando aggiungi un acquisto col "+" (es. ogni settimana quanto hai speso di ricambi), e scende quando registri un pagamento a quel fornitore da Movimenti. La matita ✏️ corregge il saldo a mano in qualsiasi momento: da quel momento in poi riparte da quel numero, senza ricontare quello che era successo prima.
       </p>
       {loading ? (
         <div className="text-center py-6 text-xs text-gray-400">Caricamento...</div>
@@ -170,13 +189,19 @@ Il saldo cresce quando aggiungi un acquisto col "+" (es. ogni settimana quanto h
           // pagamento vero e proprio al fornitore, solo fatto da un'altra
           // tasca invece che dalla cassa dell'officina.
           const totaleCreditoDiretto = appsFornitore.reduce((s, a) => s + creditoFornitoreDiretto(a.pagamento), 0);
+          // "Pagato" mostrato sotto e nella tendina: SEMPRE la storia
+          // completa, solo per riferimento (vedi commento sopra la funzione).
           const totalePagato = movimentiFornitore.reduce((s, m) => s + Number(m.importo), 0) + totaleCreditoDiretto;
-          const saldoIniziale = saldiIniziali[f.id] || 0;
-          // Un pagamento registrato in Movimenti scala sempre il "da
-          // pagare", non e' solo un riferimento informativo: altrimenti
-          // ogni settimana, pagando il fornitore, il debito resterebbe
-          // lo stesso finche' non lo si corregge a mano con la matita.
-          const saldo = saldoIniziale + totaleAcquisti - totalePagato;
+          const saldoSalvato = leggiSaldo(saldiIniziali[f.id]);
+          // Per il conto "da pagare" invece contano solo acquisti e
+          // pagamenti da quando il saldo e' stato scritto in poi: quelli
+          // precedenti sono gia' dentro al numero scritto a mano.
+          const acquistiDopoSaldo = acquistiFornitore.filter((a) => a.data >= saldoSalvato.data).reduce((s, a) => s + Number(a.importo), 0);
+          const creditoDopoSaldo = appsFornitore
+            .filter((a) => dayKey(a.pagamento?.data_consegna || a.data_ora) >= saldoSalvato.data)
+            .reduce((s, a) => s + creditoFornitoreDiretto(a.pagamento), 0);
+          const pagatoDopoSaldo = movimentiFornitore.filter((m) => m.data >= saldoSalvato.data).reduce((s, m) => s + Number(m.importo), 0) + creditoDopoSaldo;
+          const saldo = saldoSalvato.valore + acquistiDopoSaldo - pagatoDopoSaldo;
           const aperto = espanso === f.id;
           const inEditSaldo = editandoSaldo === f.id;
           const inAggiungi = aggiungendoAcquisto === f.id;
