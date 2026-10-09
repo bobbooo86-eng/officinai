@@ -201,7 +201,13 @@ Il saldo cresce quando aggiungi un acquisto col "+" (es. ogni settimana quanto h
             .filter((a) => dayKey(a.pagamento?.data_consegna || a.data_ora) >= saldoSalvato.data)
             .reduce((s, a) => s + creditoFornitoreDiretto(a.pagamento), 0);
           const pagatoDopoSaldo = movimentiFornitore.filter((m) => m.data >= saldoSalvato.data).reduce((s, m) => s + Number(m.importo), 0) + creditoDopoSaldo;
-          const saldo = saldoSalvato.valore + acquistiDopoSaldo - pagatoDopoSaldo;
+          // Monti si conta diversamente da Autoricambi: "da pagare" e'
+          // sempre la differenza fra Pagato e Ricambi (storia completa di
+          // entrambi), non il saldo scritto a mano + acquisti/pagamenti
+          // successivi.
+          const saldo = f.id === 'monti'
+            ? totalePagato - totaleAcquisti
+            : saldoSalvato.valore + acquistiDopoSaldo - pagatoDopoSaldo;
           const aperto = espanso === f.id;
           const inEditSaldo = editandoSaldo === f.id;
           const inAggiungi = aggiungendoAcquisto === f.id;
