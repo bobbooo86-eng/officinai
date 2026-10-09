@@ -375,6 +375,11 @@ export interface Movimento {
   // genera anche un movimento "spesa_officina" a parte, datato al giorno
   // vero dell'acquisto (stesso meccanismo di appuntamenti.ricambi_acquistati).
   ricambi_acquistati?: RicambioAcquistato[] | null;
+  // Costo ricambi complessivo della lavorazione (solo Revisione Gianni/
+  // Centraline Daniele), con lo stesso quadratino "conta come spesa" di
+  // una consegna auto: resta solo informativo finche' non lo spunti.
+  costo_ricambi?: number | null;
+  ricambi_pagati_subito?: boolean;
   created_at?: string;
   // Relations (joined)
   dipendente?: Utente | null;
