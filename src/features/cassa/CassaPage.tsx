@@ -143,6 +143,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   const [newTipo, setNewTipo] = useState<MovimentoTipo>('incasso_extra');
   const [newImporto, setNewImporto] = useState('');
   const [newDescrizione, setNewDescrizione] = useState('');
+  // Solo Revisione Gianni/Centraline Daniele: di chi e' il pezzo, per
+  // ritrovare facilmente le lavorazioni passate di un cliente.
+  const [newClienteNome, setNewClienteNome] = useState('');
   const [newMetodo, setNewMetodo] = useState<MetodoPagamento>('contanti');
   const [newData, setNewData] = useState<string>(todayISO());
   const [newDipendenteId, setNewDipendenteId] = useState<string>('');
@@ -347,6 +350,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     setNewTipo(m.tipo);
     setNewImporto(m.stato === 'in_lavorazione' ? '' : String(m.importo).replace('.', ','));
     setNewDescrizione(m.descrizione || '');
+    setNewClienteNome(m.cliente_nome || '');
     setNewMetodo((m.metodo_pagamento as MetodoPagamento) || 'contanti');
     setNewData(m.data);
     setNewDipendenteId(m.dipendente_id || '');
@@ -368,6 +372,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     setNewTipo(tipo);
     setNewImporto('');
     setNewDescrizione('');
+    setNewClienteNome('');
     setNewMetodo('contanti');
     setNewData(todayISO());
     setNewDipendenteId('');
@@ -402,6 +407,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
       tipo: newTipo,
       importo,
       descrizione: newDescrizione.trim(),
+      cliente_nome: TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) ? (newClienteNome.trim() || null) : null,
       metodo_pagamento: newMetodo,
       data: newData,
       dipendente_id: newDipendenteId || null,
@@ -615,12 +621,12 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   }, [incassiAuto, periodo, riferimento, mostraIncassiAuto, q, tab]);
 
   // Lista mostrata sotto: rispetta il filtro per tipo selezionato, e la
-  // ricerca (per descrizione o nome dipendente/titolare) quando attiva.
+  // ricerca (per descrizione, cliente o nome dipendente/titolare) quando attiva.
   const monthMovimenti = useMemo(() => {
     if (q) {
       return filteredByTab.filter((m) => {
         const dip = m.dipendente_id ? dipendenti.find((d) => d.id === m.dipendente_id) : null;
-        return m.descrizione?.toLowerCase().includes(q) || dip?.nome?.toLowerCase().includes(q);
+        return m.descrizione?.toLowerCase().includes(q) || m.cliente_nome?.toLowerCase().includes(q) || dip?.nome?.toLowerCase().includes(q);
       });
     }
     return filteredByTab.filter((m) => inPeriodo(dateFromDataStr(m.data), periodo, riferimento));
@@ -874,6 +880,23 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
               <VoiceButton onResult={setNewDescrizione} />
             </div>
           </div>
+
+          {/* Cliente: solo Revisione Gianni/Centraline Daniele, per ritrovare facilmente le lavorazioni passate */}
+          {showStatoLavorazione && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Cliente (opzionale)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newClienteNome}
+                  onChange={(e) => setNewClienteNome(e.target.value)}
+                  placeholder="Es: Mario Rossi"
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <VoiceButton onResult={setNewClienteNome} />
+              </div>
+            </div>
+          )}
 
           {/* A chi si riferisce: dipendente per spesa dipendente, titolare per spesa titolare */}
           {showDipendenteField && (
@@ -1205,7 +1228,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                             {cfg.icon}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold text-gray-900 truncate">{m.descrizione}</div>
+                            <div className="text-sm font-semibold text-gray-900 truncate">
+                              {m.descrizione}{m.cliente_nome && ` — ${m.cliente_nome}`}
+                            </div>
                             <div className="text-[11px] text-gray-500 truncate">
                               {cfg.short}
                               {dip && ` · ${dip.nome}`}

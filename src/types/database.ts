@@ -361,6 +361,10 @@ export interface Movimento {
   dipendente_id?: string | null;
   created_by?: string | null;
   note?: string | null;
+  // Nome del cliente a cui appartiene il pezzo (solo Revisione Gianni/
+  // Centraline Daniele): la descrizione e' il pezzo (es. "Scatola sterzo"),
+  // questo e' di chi e', per ritrovare facilmente le lavorazioni passate.
+  cliente_nome?: string | null;
   // Spese sostenute dall'officina per la lavorazione, distinte da "importo"
   // (quanto pagato al collaboratore esterno): solo per Revisione (Gianni)
   // e Centraline (Daniele). Come il costo ricambi su una consegna auto, ha
