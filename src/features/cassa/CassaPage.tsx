@@ -157,6 +157,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   const [aggiungendoRicambioA, setAggiungendoRicambioA] = useState<string | null>(null);
   const [ricLavDesc, setRicLavDesc] = useState('');
   const [ricLavImporto, setRicLavImporto] = useState('');
+  // Come "conta come spesa" sul costo ricambi di una consegna auto: non
+  // sempre un ricambio comprato per la lavorazione e' davvero un costo per
+  // l'officina (es. lo paga di tasca sua il collaboratore esterno).
+  const [ricLavContaSpesa, setRicLavContaSpesa] = useState(true);
   const [salvandoRicLav, setSalvandoRicLav] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -475,6 +479,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     setAggiungendoRicambioA(m.id);
     setRicLavDesc('');
     setRicLavImporto('');
+    setRicLavContaSpesa(true);
   };
 
   // Ricambio comprato per una lavorazione ancora in corso (Revisione
@@ -482,6 +487,8 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   // un appuntamento ancora in lavorazione — crea un movimento "spesa
   // officina" a parte, datato a oggi (conta subito nel resoconto del
   // giorno giusto), e lo registra anche sulla lavorazione come promemoria.
+  // Se non conta come spesa (es. lo paga il collaboratore di tasca sua),
+  // resta solo il promemoria, senza nessun movimento di cassa.
   const salvaRicambioLavorazione = async (m: Movimento) => {
     if (!officinaId || !ricLavImporto) return;
     const importo = parseFloat((ricLavImporto || '').replace(',', '.'));
@@ -489,26 +496,40 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     setSalvandoRicLav(true);
     const cfg = findTipo(m.tipo);
     const data = todayISO();
-    const { data: movimento, error: movErr } = await supabase
-      .from('movimenti')
-      .insert({
-        officina_id: officinaId,
-        tipo: 'spesa_officina',
-        importo,
-        descrizione: `Ricambi — ${cfg.label}: ${m.descrizione}${ricLavDesc.trim() ? ` (${ricLavDesc.trim()})` : ''}`,
-        metodo_pagamento: 'contanti',
-        data,
-        dipendente_id: null,
-        created_by: utente?.id || null,
-        note: null,
-        spese_lavorazione: null,
-      })
-      .select()
-      .single();
+    let movimentoId: string | undefined;
+    if (ricLavContaSpesa) {
+      const { data: movimento, error: movErr } = await supabase
+        .from('movimenti')
+        .insert({
+          officina_id: officinaId,
+          tipo: 'spesa_officina',
+          importo,
+          descrizione: `Ricambi — ${cfg.label}: ${m.descrizione}${ricLavDesc.trim() ? ` (${ricLavDesc.trim()})` : ''}`,
+          metodo_pagamento: 'contanti',
+          data,
+          dipendente_id: null,
+          created_by: utente?.id || null,
+          note: null,
+          spese_lavorazione: null,
+        })
+        .select()
+        .single();
+      if (movErr || !movimento) {
+        setSalvandoRicLav(false);
+        alert('Ricambi non salvati: ' + (movErr?.message || 'errore sconosciuto'));
+        return;
+      }
+      movimentoId = movimento.id;
+    }
     setSalvandoRicLav(false);
-    if (movErr || !movimento) { alert('Ricambi non salvati: ' + (movErr?.message || 'errore sconosciuto')); return; }
 
-    const nuovoRicambio = { data_acquisto: data, importo, descrizione: ricLavDesc.trim() || undefined, movimento_id: movimento.id };
+    const nuovoRicambio = {
+      data_acquisto: data,
+      importo,
+      descrizione: ricLavDesc.trim() || undefined,
+      movimento_id: movimentoId,
+      conta_come_spesa: ricLavContaSpesa,
+    };
     const nuoviRicambi = [...(m.ricambi_acquistati || []), nuovoRicambio];
     const { error: updErr } = await supabase.from('movimenti').update({ ricambi_acquistati: nuoviRicambi }).eq('id', m.id);
     if (updErr) { alert('Promemoria non salvato: ' + updErr.message); }
@@ -1150,7 +1171,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                     const isIncasso = cfg.sign === 1 || TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo);
                     const inLavorazione = m.stato === 'in_lavorazione';
                     const ricambiLavorazione = m.ricambi_acquistati || [];
-                    const totaleRicambiLavorazione = ricambiLavorazione.reduce((s, r) => s + Number(r.importo), 0);
+                    const totaleRicambiLavorazione = ricambiLavorazione.filter((r) => r.conta_come_spesa !== false).reduce((s, r) => s + Number(r.importo), 0);
                     const aggiungendoQui = aggiungendoRicambioA === m.id;
                     return (
                       <div key={m.id} className="py-2 px-1 group space-y-1.5">
@@ -1210,37 +1231,48 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                           </button>
                         </div>
                         {aggiungendoQui && (
-                          <div className="pl-12 flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={ricLavDesc}
-                              onChange={(e) => setRicLavDesc(e.target.value)}
-                              placeholder="es. boccole"
-                              className="flex-[2] text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                              autoFocus
-                            />
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={ricLavImporto}
-                              onChange={(e) => setRicLavImporto(e.target.value)}
-                              placeholder="€"
-                              className="flex-1 text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                            />
-                            <button
-                              onClick={() => salvaRicambioLavorazione(m)}
-                              disabled={salvandoRicLav || !ricLavImporto}
-                              className="py-1.5 px-3 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors shrink-0"
-                            >
-                              {salvandoRicLav ? '...' : 'Salva'}
-                            </button>
-                            <button
-                              onClick={() => setAggiungendoRicambioA(null)}
-                              disabled={salvandoRicLav}
-                              className="py-1.5 px-2 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors shrink-0"
-                            >
-                              ✕
-                            </button>
+                          <div className="pl-12 space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={ricLavDesc}
+                                onChange={(e) => setRicLavDesc(e.target.value)}
+                                placeholder="es. boccole"
+                                className="flex-[2] text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                autoFocus
+                              />
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={ricLavImporto}
+                                onChange={(e) => setRicLavImporto(e.target.value)}
+                                placeholder="€"
+                                className="flex-1 text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              />
+                              <button
+                                onClick={() => salvaRicambioLavorazione(m)}
+                                disabled={salvandoRicLav || !ricLavImporto}
+                                className="py-1.5 px-3 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors shrink-0"
+                              >
+                                {salvandoRicLav ? '...' : 'Salva'}
+                              </button>
+                              <button
+                                onClick={() => setAggiungendoRicambioA(null)}
+                                disabled={salvandoRicLav}
+                                className="py-1.5 px-2 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors shrink-0"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={ricLavContaSpesa}
+                                onChange={(e) => setRicLavContaSpesa(e.target.checked)}
+                                className="rounded"
+                              />
+                              Conta come spesa (altrimenti resta solo un promemoria, senza movimento in Cassa)
+                            </label>
                           </div>
                         )}
                       </div>

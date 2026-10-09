@@ -138,6 +138,11 @@ export interface RicambioAcquistato {
   importo: number;
   descrizione?: string;
   movimento_id?: string;
+  // Se non vale la pena di conti come spesa (es. il costo e' gia' incluso
+  // altrove, o lo paga di tasca sua il collaboratore esterno): assente o
+  // true per tutte le voci salvate prima di questo campo, che contavano
+  // sempre come spesa.
+  conta_come_spesa?: boolean;
 }
 
 export interface Appuntamento {
