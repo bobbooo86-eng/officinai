@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button, Card, Badge, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG, STATI_ORDINE, GRAVITA_CONFIG } from '@/lib/constants';
@@ -11,6 +11,7 @@ import { PhotoGallery } from '@/features/photos/PhotoGallery';
 import { WhatsAppPanel } from '@/features/notifications/WhatsAppPanel';
 import { AIDiagnostics } from '@/features/ai/AIDiagnostics';
 import { PDFExport, buildPreventivoPdfBlob } from '@/features/estimates/PDFExport';
+import { type VoceTariffario, PREZZO_ORA, getSegmentoLabel, getSegmentoVeicolo, buildTariffario } from '@/features/estimates/tariffario';
 import { sendStatusUpdate, sendAppointmentConfirmation, sendProposalChange } from '@/lib/email';
 import { format, parseISO } from 'date-fns';
 import { it as itLocale } from 'date-fns/locale';
@@ -1519,6 +1520,22 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [inviandoPdf, setInviandoPdf] = useState(false);
+  // Tariffario: stesso catalogo di voci preimpostate (tagliando, freni...)
+  // del builder preventivi standalone, cosi' anche qui non si parte sempre
+  // da zero. Il veicolo e' gia' noto (quello dell'appuntamento), quindi la
+  // tariffa oraria si calcola da subito, senza dover cercare una targa.
+  const [categoriaAperta, setCategoriaAperta] = useState<string | null>(null);
+  const segmento = appuntamento.veicoli ? getSegmentoVeicolo(appuntamento.veicoli) : 'media';
+  const prezzoOra = PREZZO_ORA[segmento] || 45;
+  const tariffario = useMemo(() => buildTariffario(prezzoOra), [prezzoOra]);
+  const tariffarioPerCategoria = useMemo(() => {
+    const map: Record<string, VoceTariffario[]> = {};
+    tariffario.forEach((v) => {
+      if (!map[v.categoria]) map[v.categoria] = [];
+      map[v.categoria].push(v);
+    });
+    return map;
+  }, [tariffario]);
 
   useEffect(() => {
     const fetch = async () => {
@@ -1541,6 +1558,19 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
 
   const addRiga = (tipo: 'manodopera' | 'ricambio') => {
     setRighe([...righe, { tipo, desc: '', qta: 1, prezzo: 0 }]);
+  };
+
+  // Aggiunge una voce del tariffario (manodopera + i suoi ricambi, prezzo
+  // medio tra min e max): stessa logica del builder preventivi standalone.
+  const addVoce = (voce: VoceTariffario) => {
+    const nuoveRighe: PreventivoRiga[] = [];
+    const costoMano = Math.round(voce.manodopera.ore * voce.manodopera.prezzoOra * 100) / 100;
+    nuoveRighe.push({ tipo: 'manodopera', desc: voce.nome, qta: 1, prezzo: costoMano });
+    voce.ricambi.forEach((r) => {
+      const prezzoMedio = Math.round(((r.prezzoMin + r.prezzoMax) / 2) * 100) / 100;
+      nuoveRighe.push({ tipo: 'ricambio', desc: r.nome, qta: 1, prezzo: prezzoMedio });
+    });
+    setRighe((prev) => [...prev, ...nuoveRighe]);
   };
 
   const updateRiga = (i: number, field: string, value: any) => {
@@ -1657,6 +1687,59 @@ function TabPreventivo({ appuntamentoId, appuntamento }: { appuntamentoId: strin
           Preventivo: {preventivo.stato.toUpperCase()}
         </Badge>
       )}
+
+      {/* Tariffario: voci preimpostate (tagliando, freni...), tocca per aggiungere */}
+      <div>
+        <h3 className="text-sm font-bold text-gray-800 mb-1">Tariffario lavorazioni</h3>
+        <p className="text-[10px] text-gray-400 mb-2">
+          Prezzi calcolati per {appuntamento.veicoli?.marca} {appuntamento.veicoli?.modello} (segmento {getSegmentoLabel(segmento).toLowerCase()}). Tocca una voce per aggiungerla, poi modifica/aggiungi a mano quello che serve.
+        </p>
+        <div className="space-y-1">
+          {Object.entries(tariffarioPerCategoria).map(([cat, voci]) => (
+            <div key={cat}>
+              <button
+                onClick={() => setCategoriaAperta(categoriaAperta === cat ? null : cat)}
+                className="w-full flex items-center justify-between p-2.5 bg-white rounded-xl border border-gray-200 hover:border-gray-300 transition-colors cursor-pointer"
+              >
+                <span className="text-sm font-semibold text-gray-800">{cat}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-400">{voci.length} voci</span>
+                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${categoriaAperta === cat ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </button>
+              {categoriaAperta === cat && (
+                <div className="mt-1 space-y-1 pl-2">
+                  {voci.map((voce) => {
+                    const costoMano = voce.manodopera.ore * voce.manodopera.prezzoOra;
+                    const costoRicambi = voce.ricambi.reduce((s, r) => s + (r.prezzoMin + r.prezzoMax) / 2, 0);
+                    const costoTotale = costoMano + costoRicambi;
+                    return (
+                      <button
+                        key={voce.id}
+                        onClick={() => addVoce(voce)}
+                        className="w-full text-left p-2.5 bg-gray-50 hover:bg-blue-50 rounded-xl border border-gray-100 hover:border-blue-200 transition-all cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-800">{voce.nome}</div>
+                            <div className="text-[10px] text-gray-400 mt-0.5">{voce.descrizione}</div>
+                          </div>
+                          <div className="text-right ml-3 shrink-0">
+                            <div className="text-sm font-bold text-emerald-700">{fmtEuro(costoTotale)}</div>
+                            <div className="text-[10px] text-gray-400">+ IVA</div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Rows */}
       {righe.map((riga, i) => (

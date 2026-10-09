@@ -147,7 +147,17 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   const [newData, setNewData] = useState<string>(todayISO());
   const [newDipendenteId, setNewDipendenteId] = useState<string>('');
   const [newSpeseLavorazione, setNewSpeseLavorazione] = useState('');
+  // Solo per Revisione (Gianni)/Centraline (Daniele): si puo' registrare la
+  // lavorazione appena iniziata, senza ancora importo/spese lavorazione
+  // (si conoscono solo a fine lavoro), e completarla dopo.
+  const [newStatoLavorazione, setNewStatoLavorazione] = useState<'completato' | 'in_lavorazione'>('completato');
   const [newNote, setNewNote] = useState('');
+  // Form per aggiungere un ricambio comprato su una lavorazione ancora in
+  // corso (Revisione Gianni/Centraline Daniele): id del movimento aperto.
+  const [aggiungendoRicambioA, setAggiungendoRicambioA] = useState<string | null>(null);
+  const [ricLavDesc, setRicLavDesc] = useState('');
+  const [ricLavImporto, setRicLavImporto] = useState('');
+  const [salvandoRicLav, setSalvandoRicLav] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -328,12 +338,13 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   const iniziaModifica = (m: Movimento) => {
     setEditId(m.id);
     setNewTipo(m.tipo);
-    setNewImporto(String(m.importo).replace('.', ','));
+    setNewImporto(m.stato === 'in_lavorazione' ? '' : String(m.importo).replace('.', ','));
     setNewDescrizione(m.descrizione || '');
     setNewMetodo((m.metodo_pagamento as MetodoPagamento) || 'contanti');
     setNewData(m.data);
     setNewDipendenteId(m.dipendente_id || '');
     setNewSpeseLavorazione(m.spese_lavorazione != null ? String(m.spese_lavorazione).replace('.', ',') : '');
+    setNewStatoLavorazione(m.stato === 'in_lavorazione' ? 'in_lavorazione' : 'completato');
     setNewNote(m.note || '');
     setError('');
     setShowForm(true);
@@ -353,6 +364,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     setNewData(todayISO());
     setNewDipendenteId('');
     setNewSpeseLavorazione('');
+    setNewStatoLavorazione('completato');
     setNewNote('');
     setError('');
     setEditId(null);
@@ -360,8 +372,12 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
 
   const salvaMovimento = async () => {
     if (!officinaId) return;
-    const importo = parseFloat((newImporto || '').replace(',', '.'));
-    if (!Number.isFinite(importo) || importo <= 0) { setError('Inserisci un importo valido'); return; }
+    // Una Revisione (Gianni)/Centraline (Daniele) "in lavorazione" non ha
+    // ancora importo/spese lavorazione: si conoscono solo a fine lavoro,
+    // basta la descrizione per segnare che il lavoro e' iniziato.
+    const inLavorazione = TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) && newStatoLavorazione === 'in_lavorazione';
+    const importo = inLavorazione ? 0 : parseFloat((newImporto || '').replace(',', '.'));
+    if (!inLavorazione && (!Number.isFinite(importo) || importo <= 0)) { setError('Inserisci un importo valido'); return; }
     if (!newDescrizione.trim()) { setError('Inserisci una descrizione'); return; }
     if (newTipo === 'spesa_dipendente' && !newDipendenteId) {
       setError('Seleziona il dipendente'); return;
@@ -382,9 +398,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
       dipendente_id: newDipendenteId || null,
       created_by: utente?.id || null,
       note: newNote.trim() || null,
-      spese_lavorazione: TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo)
+      spese_lavorazione: TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) && !inLavorazione
         ? (parseFloat((newSpeseLavorazione || '').replace(',', '.')) || null)
         : null,
+      stato: TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) ? newStatoLavorazione : null,
     };
 
     // --- Modifica di un movimento esistente ---
@@ -451,6 +468,52 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
         ? `Movimento registrato (campi non supportati dal database: ${skipped.join(', ')})`
         : 'Movimento registrato'
     );
+    loadMovimenti();
+  };
+
+  const apriAggiungiRicambioLavorazione = (m: Movimento) => {
+    setAggiungendoRicambioA(m.id);
+    setRicLavDesc('');
+    setRicLavImporto('');
+  };
+
+  // Ricambio comprato per una lavorazione ancora in corso (Revisione
+  // Gianni/Centraline Daniele): stesso meccanismo dei ricambi comprati per
+  // un appuntamento ancora in lavorazione — crea un movimento "spesa
+  // officina" a parte, datato a oggi (conta subito nel resoconto del
+  // giorno giusto), e lo registra anche sulla lavorazione come promemoria.
+  const salvaRicambioLavorazione = async (m: Movimento) => {
+    if (!officinaId || !ricLavImporto) return;
+    const importo = parseFloat((ricLavImporto || '').replace(',', '.'));
+    if (!Number.isFinite(importo) || importo <= 0) return;
+    setSalvandoRicLav(true);
+    const cfg = findTipo(m.tipo);
+    const data = todayISO();
+    const { data: movimento, error: movErr } = await supabase
+      .from('movimenti')
+      .insert({
+        officina_id: officinaId,
+        tipo: 'spesa_officina',
+        importo,
+        descrizione: `Ricambi — ${cfg.label}: ${m.descrizione}${ricLavDesc.trim() ? ` (${ricLavDesc.trim()})` : ''}`,
+        metodo_pagamento: 'contanti',
+        data,
+        dipendente_id: null,
+        created_by: utente?.id || null,
+        note: null,
+        spese_lavorazione: null,
+      })
+      .select()
+      .single();
+    setSalvandoRicLav(false);
+    if (movErr || !movimento) { alert('Ricambi non salvati: ' + (movErr?.message || 'errore sconosciuto')); return; }
+
+    const nuovoRicambio = { data_acquisto: data, importo, descrizione: ricLavDesc.trim() || undefined, movimento_id: movimento.id };
+    const nuoviRicambi = [...(m.ricambi_acquistati || []), nuovoRicambio];
+    const { error: updErr } = await supabase.from('movimenti').update({ ricambi_acquistati: nuoviRicambi }).eq('id', m.id);
+    if (updErr) { alert('Promemoria non salvato: ' + updErr.message); }
+    setMovimenti((prev) => prev.map((mm) => (mm.id === m.id ? { ...mm, ricambi_acquistati: nuoviRicambi } : mm)));
+    setAggiungendoRicambioA(null);
     loadMovimenti();
   };
 
@@ -592,6 +655,8 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
 
   const showDipendenteField = newTipo === 'spesa_dipendente' || newTipo === 'spesa_titolare';
   const dipendenteFieldLabel = newTipo === 'spesa_titolare' ? 'Titolare *' : 'Dipendente *';
+  const showStatoLavorazione = TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo);
+  const formInLavorazione = showStatoLavorazione && newStatoLavorazione === 'in_lavorazione';
 
   return (
     <div className="p-4 space-y-4">
@@ -674,20 +739,54 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
             </div>
           </div>
 
+          {/* Stato: solo per Revisione (Gianni) e Centraline (Daniele) */}
+          {showStatoLavorazione && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Stato</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewStatoLavorazione('in_lavorazione')}
+                  className={`p-2 rounded-lg border-2 text-xs font-semibold cursor-pointer transition-colors ${
+                    newStatoLavorazione === 'in_lavorazione' ? 'border-amber-500 bg-amber-50 text-amber-800' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  🔧 In lavorazione
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewStatoLavorazione('completato')}
+                  className={`p-2 rounded-lg border-2 text-xs font-semibold cursor-pointer transition-colors ${
+                    newStatoLavorazione === 'completato' ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  ✅ Completata
+                </button>
+              </div>
+              {formInLavorazione && (
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Solo descrizione e data per ora: importo e spese lavorazione li inserisci quando la completi. Nel frattempo puoi già segnare i ricambi comprati per questo lavoro.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Importo + Data */}
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Importo (€) *</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={newImporto}
-                onChange={(e) => setNewImporto(e.target.value)}
-                placeholder="0.00"
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            {!formInLavorazione && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Importo (€) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={newImporto}
+                  onChange={(e) => setNewImporto(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Data</label>
               <input
@@ -699,8 +798,8 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
             </div>
           </div>
 
-          {/* Spese lavorazione: solo per Revisione Gianni e Centraline Daniele */}
-          {TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) && (
+          {/* Spese lavorazione: solo per Revisione Gianni e Centraline Daniele, e solo a lavoro completato */}
+          {showStatoLavorazione && !formInLavorazione && (
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Spese lavorazione (€)</label>
               <input
@@ -1049,41 +1148,101 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                     // (pagato dal cliente), non una spesa: solo le "spese lavorazione"
                     // sono la spesa vera e propria pagata al collaboratore esterno.
                     const isIncasso = cfg.sign === 1 || TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo);
+                    const inLavorazione = m.stato === 'in_lavorazione';
+                    const ricambiLavorazione = m.ricambi_acquistati || [];
+                    const totaleRicambiLavorazione = ricambiLavorazione.reduce((s, r) => s + Number(r.importo), 0);
+                    const aggiungendoQui = aggiungendoRicambioA === m.id;
                     return (
-                      <div key={m.id} className="flex items-center gap-3 py-2 px-1 group">
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-base ${cfg.bg}`}>
-                          {cfg.icon}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-semibold text-gray-900 truncate">{m.descrizione}</div>
-                          <div className="text-[11px] text-gray-500 truncate">
-                            {cfg.short}
-                            {dip && ` · ${dip.nome}`}
-                            {m.metodo_pagamento && ` · ${m.metodo_pagamento}`}
+                      <div key={m.id} className="py-2 px-1 group space-y-1.5">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-base ${cfg.bg}`}>
+                            {cfg.icon}
                           </div>
-                          {m.spese_lavorazione != null && (
-                            <div className="text-[11px] text-red-500 truncate">
-                              − Spese lavorazione: {fmtEuro(m.spese_lavorazione)}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-gray-900 truncate">{m.descrizione}</div>
+                            <div className="text-[11px] text-gray-500 truncate">
+                              {cfg.short}
+                              {dip && ` · ${dip.nome}`}
+                              {m.metodo_pagamento && !inLavorazione && ` · ${m.metodo_pagamento}`}
+                            </div>
+                            {m.spese_lavorazione != null && (
+                              <div className="text-[11px] text-red-500 truncate">
+                                − Spese lavorazione: {fmtEuro(m.spese_lavorazione)}
+                              </div>
+                            )}
+                            {inLavorazione && totaleRicambiLavorazione > 0 && (
+                              <div className="text-[11px] text-red-500 truncate">
+                                − Ricambi comprati: {fmtEuro(totaleRicambiLavorazione)}
+                              </div>
+                            )}
+                          </div>
+                          {inLavorazione ? (
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-full shrink-0">
+                              🔧 IN LAVORAZIONE
+                            </span>
+                          ) : (
+                            <div className={`text-sm font-bold ${isIncasso ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {isIncasso ? '+' : '−'}{fmtEuro(Number(m.importo))}
                             </div>
                           )}
+                          {inLavorazione && (
+                            <button
+                              onClick={() => apriAggiungiRicambioLavorazione(m)}
+                              className="text-gray-400 hover:text-emerald-600 cursor-pointer text-base font-bold px-1"
+                              title="Aggiungi ricambi comprati"
+                            >
+                              +
+                            </button>
+                          )}
+                          <button
+                            onClick={() => iniziaModifica(m)}
+                            className="text-gray-400 hover:text-blue-600 cursor-pointer text-xs px-1"
+                            title={inLavorazione ? 'Completa la lavorazione' : 'Modifica'}
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => eliminaMovimento(m.id)}
+                            className="text-gray-400 hover:text-red-600 cursor-pointer text-xs px-1"
+                            title="Elimina"
+                          >
+                            🗑️
+                          </button>
                         </div>
-                        <div className={`text-sm font-bold ${isIncasso ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {isIncasso ? '+' : '−'}{fmtEuro(Number(m.importo))}
-                        </div>
-                        <button
-                          onClick={() => iniziaModifica(m)}
-                          className="text-gray-400 hover:text-blue-600 cursor-pointer text-xs px-1"
-                          title="Modifica"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => eliminaMovimento(m.id)}
-                          className="text-gray-400 hover:text-red-600 cursor-pointer text-xs px-1"
-                          title="Elimina"
-                        >
-                          🗑️
-                        </button>
+                        {aggiungendoQui && (
+                          <div className="pl-12 flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={ricLavDesc}
+                              onChange={(e) => setRicLavDesc(e.target.value)}
+                              placeholder="es. boccole"
+                              className="flex-[2] text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              autoFocus
+                            />
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={ricLavImporto}
+                              onChange={(e) => setRicLavImporto(e.target.value)}
+                              placeholder="€"
+                              className="flex-1 text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            />
+                            <button
+                              onClick={() => salvaRicambioLavorazione(m)}
+                              disabled={salvandoRicLav || !ricLavImporto}
+                              className="py-1.5 px-3 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors shrink-0"
+                            >
+                              {salvandoRicLav ? '...' : 'Salva'}
+                            </button>
+                            <button
+                              onClick={() => setAggiungendoRicambioA(null)}
+                              disabled={salvandoRicLav}
+                              className="py-1.5 px-2 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors shrink-0"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

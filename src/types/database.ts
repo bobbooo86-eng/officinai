@@ -360,6 +360,16 @@ export interface Movimento {
   // (quanto pagato al collaboratore esterno): solo per Revisione (Gianni)
   // e Centraline (Daniele).
   spese_lavorazione?: number | null;
+  // Una Revisione (Gianni) / Centraline (Daniele) puo' iniziare "in
+  // lavorazione" (solo la descrizione, es. "scatola sterzo", importo e
+  // spese_lavorazione non ancora noti) e completarsi dopo, quando si
+  // conoscono i numeri finali. Null/assente per tutti gli altri tipi di
+  // movimento, che non hanno mai questo stato intermedio.
+  stato?: 'in_lavorazione' | 'completato' | null;
+  // Ricambi comprati mentre la lavorazione e' ancora in corso: ognuno
+  // genera anche un movimento "spesa_officina" a parte, datato al giorno
+  // vero dell'acquisto (stesso meccanismo di appuntamenti.ricambi_acquistati).
+  ricambi_acquistati?: RicambioAcquistato[] | null;
   created_at?: string;
   // Relations (joined)
   dipendente?: Utente | null;

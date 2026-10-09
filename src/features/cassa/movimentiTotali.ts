@@ -26,15 +26,23 @@ export const SEGNO: Record<MovimentoTipo, 1 | -1> = {
 // paga al collaboratore esterno (una spesa) — non e' un'unica spesa.
 export const TIPI_CON_SPESE_LAVORAZIONE: MovimentoTipo[] = ['spesa_revisione_gianni', 'spesa_centraline_daniele'];
 
-export const incassoMovimento = (m: Movimento): number =>
-  TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo)
+// Una Revisione (Gianni)/Centraline (Daniele) ancora "in lavorazione" non
+// ha importi finali (si conoscono solo a fine lavoro): non conta ancora
+// niente come incasso o spesa, solo i ricambi comprati nel frattempo
+// contano (come movimenti "spesa_officina" a parte, gia' inclusi qui).
+export const incassoMovimento = (m: Movimento): number => {
+  if (m.stato === 'in_lavorazione') return 0;
+  return TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo)
     ? Number(m.importo)
     : SEGNO[m.tipo] === 1 ? Number(m.importo) : 0;
+};
 
-export const spesaMovimento = (m: Movimento): number =>
-  TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo)
+export const spesaMovimento = (m: Movimento): number => {
+  if (m.stato === 'in_lavorazione') return 0;
+  return TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo)
     ? Number(m.spese_lavorazione) || 0
     : SEGNO[m.tipo] === -1 ? Number(m.importo) : 0;
+};
 
 // Il costo ricambi su un appuntamento e' spesso solo informativo: i
 // ricambisti vengono pagati a blocchi (es. 800€ tutti insieme), non pezzo
