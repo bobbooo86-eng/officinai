@@ -40,8 +40,10 @@ export const incassoMovimento = (m: Movimento): number => {
 export const spesaMovimento = (m: Movimento): number => {
   if (m.stato === 'in_lavorazione') return 0;
   if (TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo)) {
-    const ricambi = m.ricambi_pagati_subito ? Number(m.costo_ricambi) || 0 : 0;
-    return (Number(m.spese_lavorazione) || 0) + ricambi;
+    // Default true: tutte le righe salvate prima di questo quadratino
+    // contavano sempre come spesa, il comportamento resta lo stesso finche'
+    // non lo si spunta via.
+    return m.spese_lavorazione_conta !== false ? (Number(m.spese_lavorazione) || 0) : 0;
   }
   return SEGNO[m.tipo] === -1 ? Number(m.importo) : 0;
 };
