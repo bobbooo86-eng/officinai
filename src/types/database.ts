@@ -400,3 +400,13 @@ export interface AcquistoFornitoreRicambi {
   data: string;
   created_at?: string;
 }
+
+// Nota libera scritta dal titolare sulla Home, non legata a nessun
+// appuntamento/cliente (es. "chiamare il fornitore lunedi'").
+export interface PromemoriaPersonale {
+  id: string;
+  officina_id: string;
+  testo: string;
+  fatto: boolean;
+  created_at?: string;
+}

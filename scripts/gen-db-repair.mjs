@@ -31,6 +31,7 @@ const SOURCES = [
   'supabase/migrations/035_movimenti_costo_ricambi.sql',
   'supabase/migrations/036_movimenti_spese_lavorazione_conta.sql',
   'supabase/migrations/037_movimenti_cliente_nome.sql',
+  'supabase/migrations/038_promemoria_personali.sql',
 ];
 const TARGET = 'src/lib/dbRepairSql.ts';
 

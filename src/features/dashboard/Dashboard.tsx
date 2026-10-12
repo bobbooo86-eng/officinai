@@ -6,9 +6,9 @@ import { fmtData, fmtOra, dayKey, todayKey } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { VehicleAlerts } from './VehicleAlerts';
 import { leggiPromemoriaNascosti, nascondiPromemoria } from '@/lib/promemoriaNascosti';
-import { PERIODI, inPeriodo, dataIncasso, incassato, type Periodo } from '@/features/cassa/IncassiOfficina';
+import { PERIODI, inPeriodo, dataIncasso, incassato, restoDaIncassare, type Periodo } from '@/features/cassa/IncassiOfficina';
 import { incassoMovimento, spesaMovimento, spesaRicambi } from '@/features/cassa/movimentiTotali';
-import type { Appuntamento, Magazzino, Movimento } from '@/types/database';
+import type { Appuntamento, Magazzino, Movimento, PromemoriaPersonale } from '@/types/database';
 
 interface DashboardProps {
   onSelectAppuntamento: (a: Appuntamento) => void;
@@ -32,6 +32,10 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
   // Stesso selettore periodo di Cassa > Incassi officina, per leggere gli
   // incassi/spese con lo stesso criterio ovunque nell'app.
   const [periodo, setPeriodo] = useState<Periodo>('settimana');
+  // Note personali del titolare, non legate a nessun appuntamento/cliente.
+  const [promemoriaPersonali, setPromemoriaPersonali] = useState<PromemoriaPersonale[]>([]);
+  const [nuovoPromemoria, setNuovoPromemoria] = useState('');
+  const [salvandoPromemoria, setSalvandoPromemoria] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!officina) return;
@@ -48,7 +52,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
       // azzerando il fatturato per 5 mesi l'anno.
       const inizioMeseProssimo = dayKey(new Date(oggiDate.getFullYear(), oggiDate.getMonth() + 1, 1));
 
-      const [appsResult, magazzinoResult, obdResult, prevResult, fattureResult, tutteFattureResult, nascosti, movimentiResult] = await Promise.all([
+      const [appsResult, magazzinoResult, obdResult, prevResult, fattureResult, tutteFattureResult, nascosti, movimentiResult, promemoriaResult] = await Promise.all([
         supabase
           .from('appuntamenti')
           .select('*, clienti(nome,tel,email), veicoli(marca,modello,targa,km)')
@@ -87,12 +91,18 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
           .from('movimenti')
           .select('tipo, importo, spese_lavorazione, data')
           .eq('officina_id', officina.id),
+        supabase
+          .from('promemoria_personali')
+          .select('*')
+          .eq('officina_id', officina.id)
+          .order('created_at', { ascending: false }),
       ]);
 
       if (appsResult.error) throw appsResult.error;
       if (fattureResult.error) throw fattureResult.error;
       setCreditiNascosti(nascosti);
       setMovimenti((movimentiResult.data as Movimento[]) || []);
+      setPromemoriaPersonali((promemoriaResult.data as PromemoriaPersonale[]) || []);
 
       const apps = appsResult.data || [];
       setAppuntamenti(apps);
@@ -136,6 +146,9 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scansioni_obd' }, () => {
         fetchData();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'promemoria_personali' }, () => {
+        fetchData();
+      })
       .subscribe();
 
     return () => {
@@ -174,15 +187,14 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
   const adesso = Date.now();
   const recenti = appuntamenti.filter((a) => new Date(a.data_ora).getTime() <= adesso).slice(0, 8);
 
+  // restoDaIncassare() tiene conto anche di "pagato dal cliente al
+  // fornitore direttamente" (es. Monti): un controllo diretto su
+  // pagamento.stato lo ignorerebbe e mostrerebbe "da incassare" anche per
+  // lavori gia' saldati per vie traverse, non solo incassati dall'officina.
   const crediti = appuntamenti.filter((a) =>
-    a.stato === 'consegnato' && a.pagamento && a.pagamento.stato !== 'pagato' && !creditiNascosti.has(`credito:${a.id}`)
+    a.stato === 'consegnato' && a.pagamento && restoDaIncassare(a) > 0 && !creditiNascosti.has(`credito:${a.id}`)
   );
-  const totaleCrediti = crediti.reduce((sum, a) => {
-    const p = a.pagamento!;
-    if (p.stato === 'non_pagato') return sum + (p.importo_totale || 0);
-    if (p.stato === 'acconto') return sum + ((p.importo_totale || 0) - (p.importo_pagato || 0));
-    return sum;
-  }, 0);
+  const totaleCrediti = crediti.reduce((sum, a) => sum + restoDaIncassare(a), 0);
 
   const isNuovoUtente = appuntamenti.length === 0;
 
@@ -212,6 +224,34 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
     const chiave = `credito:${a.id}`;
     setCreditiNascosti((prev) => new Set(prev).add(chiave));
     await nascondiPromemoria(officina.id, chiave);
+  };
+
+  const aggiungiPromemoriaPersonale = async () => {
+    if (!officina || !nuovoPromemoria.trim()) return;
+    setSalvandoPromemoria(true);
+    const { data, error } = await supabase
+      .from('promemoria_personali')
+      .insert({ officina_id: officina.id, testo: nuovoPromemoria.trim() })
+      .select()
+      .single();
+    setSalvandoPromemoria(false);
+    if (error || !data) { alert('Promemoria non salvato: ' + (error?.message || 'errore sconosciuto')); return; }
+    // Aggiorna subito la lista: non aspetta il giro del realtime, che non
+    // sempre arriva in tempo (o per niente, se non e' attivo sul progetto).
+    setPromemoriaPersonali((prev) => [data as PromemoriaPersonale, ...prev]);
+    setNuovoPromemoria('');
+  };
+
+  const toggleFattoPromemoria = async (p: PromemoriaPersonale) => {
+    const nuovoValore = !p.fatto;
+    setPromemoriaPersonali((prev) => prev.map((pp) => (pp.id === p.id ? { ...pp, fatto: nuovoValore } : pp)));
+    await supabase.from('promemoria_personali').update({ fatto: nuovoValore }).eq('id', p.id);
+  };
+
+  const eliminaPromemoriaPersonale = async (id: string) => {
+    setPromemoriaPersonali((prev) => prev.filter((p) => p.id !== id));
+    const { error } = await supabase.from('promemoria_personali').delete().eq('id', id);
+    if (error) { alert('Eliminazione non riuscita: ' + error.message); fetchData(); }
   };
 
   return (
@@ -282,6 +322,55 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
           </button>
         </div>
       </div>
+
+      {/* Promemoria personali: note libere del titolare, non legate a nessun cliente/appuntamento */}
+      <Card className="!p-4 animate-fade-in">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-lg">📌</span>
+          <span className="text-sm font-bold text-gray-800 dark:text-white">Promemoria personali</span>
+        </div>
+        <div className="flex items-center gap-2 mb-2">
+          <input
+            type="text"
+            value={nuovoPromemoria}
+            onChange={(e) => setNuovoPromemoria(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') aggiungiPromemoriaPersonale(); }}
+            placeholder="Es: chiamare il fornitore lunedì"
+            className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={aggiungiPromemoriaPersonale}
+            disabled={salvandoPromemoria || !nuovoPromemoria.trim()}
+            className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors shrink-0"
+          >
+            +
+          </button>
+        </div>
+        {promemoriaPersonali.length > 0 && (
+          <div className="space-y-1">
+            {promemoriaPersonali.map((p) => (
+              <div key={p.id} className="flex items-center gap-2 py-1">
+                <input
+                  type="checkbox"
+                  checked={p.fatto}
+                  onChange={() => toggleFattoPromemoria(p)}
+                  className="rounded shrink-0 cursor-pointer"
+                />
+                <span className={`flex-1 text-sm ${p.fatto ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}>
+                  {p.testo}
+                </span>
+                <button
+                  onClick={() => eliminaPromemoriaPersonale(p.id)}
+                  className="text-gray-400 hover:text-red-600 cursor-pointer text-xs px-1 shrink-0"
+                  title="Elimina"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {richieste.length > 0 && (
         <Card className="!p-4 bg-purple-50 dark:bg-purple-900/20 !border-purple-200 dark:!border-purple-700 animate-fade-in">
@@ -410,9 +499,7 @@ export function Dashboard({ onSelectAppuntamento, onNavigateToAgenda, onNavigate
           <div className="space-y-2">
             {crediti.map((a) => {
               const p = a.pagamento!;
-              const resto = p.stato === 'non_pagato'
-                ? p.importo_totale
-                : p.stato === 'acconto' ? (p.importo_totale || 0) - (p.importo_pagato || 0) : 0;
+              const resto = restoDaIncassare(a);
               return (
                 <div
                   key={a.id}
