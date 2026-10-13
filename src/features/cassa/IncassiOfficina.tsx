@@ -191,6 +191,131 @@ export function PagamentoEditFields({ editor, appuntamento }: { editor: Pagament
   );
 }
 
+/** Stato e azioni per modificare una Revisione (Gianni)/Centraline (Daniele)
+ * direttamente da qui, senza dover passare da Movimenti (CassaPage): solo i
+ * campi utili per una correzione veloce (descrizione, cliente, importo,
+ * spese lavorazione, data), non lo stato in_lavorazione/completato — quello
+ * resta un passaggio da fare in Movimenti. */
+export function useMovimentoLavorazioneEditor(onSalvato?: (id: string) => void) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDescrizione, setEditDescrizione] = useState('');
+  const [editClienteNome, setEditClienteNome] = useState('');
+  const [editImporto, setEditImporto] = useState('');
+  const [editSpeseLavorazione, setEditSpeseLavorazione] = useState('');
+  const [editData, setEditData] = useState('');
+  const [salvando, setSalvando] = useState<string | null>(null);
+
+  const apri = (m: Movimento) => {
+    setEditingId(m.id);
+    setEditDescrizione(m.descrizione || '');
+    setEditClienteNome(m.cliente_nome || '');
+    setEditImporto(String(m.importo ?? 0));
+    setEditSpeseLavorazione(m.spese_lavorazione != null ? String(m.spese_lavorazione) : '');
+    setEditData(m.data);
+  };
+
+  const annulla = () => setEditingId(null);
+
+  const salva = async (m: Movimento) => {
+    const dati = {
+      descrizione: editDescrizione.trim() || m.descrizione,
+      cliente_nome: editClienteNome.trim() || null,
+      importo: parseFloat(editImporto) || 0,
+      spese_lavorazione: editSpeseLavorazione ? (parseFloat(editSpeseLavorazione) || 0) : null,
+      data: editData || m.data,
+    };
+    setSalvando(m.id);
+    const { error } = await supabase.from('movimenti').update(dati).eq('id', m.id);
+    setSalvando(null);
+    if (error) { alert('Modifica non salvata: ' + error.message); return; }
+    setEditingId(null);
+    onSalvato?.(m.id);
+  };
+
+  return {
+    editingId, editDescrizione, setEditDescrizione, editClienteNome, setEditClienteNome,
+    editImporto, setEditImporto, editSpeseLavorazione, setEditSpeseLavorazione,
+    editData, setEditData, salvando, apri, annulla, salva,
+  };
+}
+export type MovimentoLavorazioneEditor = ReturnType<typeof useMovimentoLavorazioneEditor>;
+
+/** Campi del pannello di modifica di una Revisione (Gianni)/Centraline
+ * (Daniele), riusabile ovunque serva (Incassi officina e, in futuro, altrove). */
+export function MovimentoLavorazioneEditFields({ editor, movimento }: { editor: MovimentoLavorazioneEditor; movimento: Movimento }) {
+  return (
+    <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
+      <div>
+        <label className="text-[10px] text-gray-400 block">Descrizione</label>
+        <input
+          type="text"
+          value={editor.editDescrizione}
+          onChange={(e) => editor.setEditDescrizione(e.target.value)}
+          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+      <div>
+        <label className="text-[10px] text-gray-400 block">Cliente (opzionale)</label>
+        <input
+          type="text"
+          value={editor.editClienteNome}
+          onChange={(e) => editor.setEditClienteNome(e.target.value)}
+          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400 block">Incassato €</label>
+          <input
+            type="number"
+            step="0.01"
+            min={0}
+            value={editor.editImporto}
+            onChange={(e) => editor.setEditImporto(e.target.value)}
+            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400 block">Spese lavorazione €</label>
+          <input
+            type="number"
+            step="0.01"
+            min={0}
+            value={editor.editSpeseLavorazione}
+            onChange={(e) => editor.setEditSpeseLavorazione(e.target.value)}
+            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400 block">Data</label>
+          <input
+            type="date"
+            value={editor.editData}
+            onChange={(e) => editor.setEditData(e.target.value)}
+            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => editor.salva(movimento)}
+          disabled={editor.salvando === movimento.id}
+          className="flex-1 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
+        >
+          {editor.salvando === movimento.id ? 'Salvataggio...' : 'Salva'}
+        </button>
+        <button
+          onClick={editor.annulla}
+          disabled={editor.salvando === movimento.id}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
+        >
+          Annulla
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const fmtEuro = (n: number) =>
   new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
 
@@ -485,6 +610,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   // La modifica salva su appuntamenti.pagamento: la sottoscrizione realtime
   // sopra ricarica da sola la lista, non serve aggiornare lo stato a mano.
   const editor = usePagamentoEditor();
+  const editorLavorazione = useMovimentoLavorazioneEditor();
 
   if (!officinaId) return null;
 
@@ -605,6 +731,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
               const m = voce.movimento;
               const lbl = LABEL_LAVORAZIONE[m.tipo] || { label: m.tipo, icon: '🔧' };
               const inLavorazione = m.stato === 'in_lavorazione';
+              const inEditLavorazione = editorLavorazione.editingId === m.id;
               return (
                 <Card key={`mov-${m.id}`} className="!p-3">
                   <div className="flex items-start justify-between gap-2">
@@ -626,13 +753,23 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                         <div className="text-sm font-bold text-gray-900">{fmtEuro(incassoMovimento(m))}</div>
                       )}
                     </div>
+                    {!inEditLavorazione && (
+                      <button
+                        onClick={() => editorLavorazione.apri(m)}
+                        className="text-gray-400 hover:text-emerald-600 cursor-pointer shrink-0 px-1"
+                        title="Modifica"
+                      >
+                        ✏️
+                      </button>
+                    )}
                   </div>
-                  {!inLavorazione && (
+                  {!inLavorazione && !inEditLavorazione && (
                     <div className="mt-2 pt-2 border-t border-gray-100 text-[11px] text-gray-500">
                       Costo lavorazione: <span className="font-semibold text-gray-700">{fmtEuro(Number(m.spese_lavorazione) || 0)}</span>
                       {' · '}netto <span className="font-semibold text-emerald-700">{fmtEuro(incassoMovimento(m) - (Number(m.spese_lavorazione) || 0))}</span>
                     </div>
                   )}
+                  {inEditLavorazione && <MovimentoLavorazioneEditFields editor={editorLavorazione} movimento={m} />}
                 </Card>
               );
             }
