@@ -651,10 +651,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     return riferimento.getFullYear().toString();
   }, [periodo, riferimento, rangeCustom]);
 
-  // Gli incassi auto sono incassi: compaiono solo nei tab dove un incasso
-  // avrebbe senso (Tutti / Incassi / Da incassare / Consegna auto-moto), non
-  // dentro Officina/Titolare/Dipendenti.
-  const mostraIncassiAuto = tab === 'tutti' || tab === 'incasso_extra' || tab === 'da_incassare' || tab === 'consegna_auto';
+  // Le consegne auto hanno ora un tab dedicato ("Consegna auto/moto"): non
+  // compaiono piu' anche dentro "Incassi" (che resta solo gli incasso_extra
+  // manuali), solo in Tutti / Da incassare / Consegna auto-moto.
+  const mostraIncassiAuto = tab === 'tutti' || tab === 'da_incassare' || tab === 'consegna_auto';
 
   // Con una ricerca attiva si cerca su tutto lo storico (per targa/nome),
   // non solo nel periodo selezionato: altrimenti un veicolo fuori dal
