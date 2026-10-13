@@ -427,7 +427,11 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
       spese_lavorazione: TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) && !inLavorazione
         ? (parseFloat((newSpeseLavorazione || '').replace(',', '.')) || null)
         : null,
-      spese_lavorazione_conta: TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) && !inLavorazione ? newSpeseLavorazioneConta : null,
+      // La colonna non accetta null (NOT NULL DEFAULT true): per i tipi
+      // diversi da Revisione Gianni/Centraline Daniele il valore e' comunque
+      // ignorato ovunque (spesaMovimento lo guarda solo per quei due tipi),
+      // quindi true va bene sempre quando il quadratino non si applica.
+      spese_lavorazione_conta: TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) && !inLavorazione ? newSpeseLavorazioneConta : true,
       stato: TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) ? newStatoLavorazione : null,
     };
 
