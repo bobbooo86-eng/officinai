@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
-import { spesaRicambi, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento } from './movimentiTotali';
+import { TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento } from './movimentiTotali';
 import { DateField } from '@/components/DateField';
 import { dayKey } from '@/lib/format';
 import type { Appuntamento, Movimento } from '@/types/database';
@@ -686,9 +686,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                           onChange={() => toggleRicambiSubito(a)}
                           className="rounded shrink-0"
                         />
-                        {p.ricambi_pagati_subito
-                          ? `conta come spesa · netto ${fmtEuro(valoreLavoro(a) - spesaRicambi(p))}`
-                          : 'non conta come spesa'}
+                        {p.ricambi_pagati_subito ? 'conta come spesa' : 'non conta come spesa'}
                       </label>
                     )}
                     {/* Ha senso solo se c'e' un fornitore selezionato per questo lavoro. */}

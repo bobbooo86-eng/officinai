@@ -17,6 +17,7 @@ import { format, parseISO } from 'date-fns';
 import { it as itLocale } from 'date-fns/locale';
 import { AccettazioneVeicolo } from './AccettazioneVeicolo';
 import { StoricoVeicolo } from './StoricoVeicolo';
+import { restoDaIncassare } from '@/features/cassa/IncassiOfficina';
 import { VoiceButton } from '@/components/VoiceInput';
 import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, Difetto, PagamentoInfo, PagamentoStato, Acconto, RicambioAcquistato } from '@/types/database';
 
@@ -1442,7 +1443,11 @@ function TabStato({ app }: { app: Appuntamento }) {
                 <div className="text-xs text-gray-600">
                   Totale: €{app.pagamento.importo_totale.toFixed(2)}
                   {app.pagamento.stato === 'acconto' && app.pagamento.importo_pagato != null && (
-                    <> — Acconto: €{app.pagamento.importo_pagato.toFixed(2)} — <span className="font-semibold text-red-600">Resto: €{(app.pagamento.importo_totale - app.pagamento.importo_pagato).toFixed(2)}</span></>
+                    <> — Acconto: €{app.pagamento.importo_pagato.toFixed(2)}
+                      {restoDaIncassare(app) > 0 && (
+                        <> — <span className="font-semibold text-red-600">Resto: €{restoDaIncassare(app).toFixed(2)}</span></>
+                      )}
+                    </>
                   )}
                 </div>
               )}

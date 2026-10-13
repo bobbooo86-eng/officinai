@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, Loader, Badge } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG } from '@/lib/constants';
 import { fmtData, fmtOra, fmtEuro } from '@/lib/format';
+import { incassato, restoDaIncassare, usePagamentoEditor, PagamentoEditFields } from '../cassa/IncassiOfficina';
 import type { Veicolo, Appuntamento, Preventivo } from '@/types/database';
 
 interface Props {
@@ -13,116 +14,46 @@ interface Props {
   embedded?: boolean;
 }
 
-/** Quanto e' stato davvero incassato per questo veicolo: pagato completo
- * conta il totale, un acconto conta solo la parte gia' versata. Stessa
- * logica di IncassiOfficina, duplicata qui perche' l'acconto va anche
- * corretto da qui, non solo da Cassa. Se il cliente paga il fornitore dei
- * ricambi direttamente: su "pagato completo" l'officina non ha incassato
- * nulla di suo (importo_pagato e' sempre uguale a importo_totale per
- * costruzione), su "acconto" importo_pagato e' un vero anticipo, solo il
- * resto e' finito al fornitore. Gli acconti presi prima della consegna
- * sono gia' stati contati come movimenti a parte: vanno tolti da qui per
- * non ricontarli. */
-function incassato(a: Appuntamento): number {
-  const p = a.pagamento;
-  if (!p) return 0;
-  const accontiPrecedenti = (a.acconti || []).reduce((s, acc) => s + Number(acc.importo), 0);
-  const base = p.fornitore_pagato_da_cliente ? (p.stato === 'acconto' ? (p.importo_pagato || 0) : 0)
-    : p.stato === 'pagato' ? (p.importo_totale || 0)
-    : p.stato === 'acconto' ? (p.importo_pagato || 0)
-    : 0;
-  return Math.max(0, base - accontiPrecedenti);
-}
-
 export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props) {
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
   const [preventivi, setPreventivi] = useState<Record<string, Preventivo>>({});
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [editingPagamentoId, setEditingPagamentoId] = useState<string | null>(null);
-  const [editPagato, setEditPagato] = useState('');
-  const [editTotale, setEditTotale] = useState('');
-  const [editRicambi, setEditRicambi] = useState('');
-  const [editRicambiSubito, setEditRicambiSubito] = useState(false);
-  const [editFornitorePagatoDaCliente, setEditFornitorePagatoDaCliente] = useState(false);
-  const [editFornitoreRicambi, setEditFornitoreRicambi] = useState<'' | 'autoricambi' | 'monti'>('');
-  const [salvandoPagamento, setSalvandoPagamento] = useState<string | null>(null);
 
-  const apriModificaPagamento = (a: Appuntamento, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditingPagamentoId(a.id);
-    // "Pagato completo" aveva salvato solo il totale, senza mai valorizzare
-    // l'incassato: qui lo ricostruisce (incassato = totale) per i pagamenti
-    // vecchi, cosi' non va reinserito a mano ogni volta che si apre la matita.
-    const pagatoDefault = a.pagamento?.stato === 'pagato'
-      ? (a.pagamento?.importo_pagato ?? a.pagamento?.importo_totale ?? 0)
-      : (a.pagamento?.importo_pagato ?? 0);
-    setEditPagato(String(pagatoDefault));
-    setEditTotale(String(a.pagamento?.importo_totale ?? 0));
-    setEditRicambi(String(a.pagamento?.costo_ricambi ?? 0));
-    setEditRicambiSubito(!!a.pagamento?.ricambi_pagati_subito);
-    setEditFornitorePagatoDaCliente(!!a.pagamento?.fornitore_pagato_da_cliente);
-    setEditFornitoreRicambi(a.pagamento?.fornitore_ricambi || '');
-  };
+  const fetch = useCallback(async () => {
+    // Fetch all appointments for this vehicle
+    const { data: apps } = await supabase
+      .from('appuntamenti')
+      .select('*, clienti(nome), veicoli(marca,modello,targa)')
+      .eq('veicolo_id', veicolo.id)
+      .order('data_ora', { ascending: false });
 
-  // Stessa logica di Incassi officina: incassato finora, totale da pagare
-  // e costo ricambi si correggono insieme, e se l'incassato raggiunge il
-  // totale il pagamento passa da solo a "pagato".
-  const salvaModificaPagamento = async (a: Appuntamento, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!a.pagamento) return;
-    const nuovoPagato = parseFloat(editPagato) || 0;
-    const nuovoTotale = parseFloat(editTotale) || 0;
-    const nuovoRicambi = parseFloat(editRicambi) || 0;
-    const saldato = nuovoTotale > 0 && nuovoPagato >= nuovoTotale;
-    const nuovoPagamento = {
-      ...a.pagamento,
-      importo_pagato: nuovoPagato,
-      importo_totale: nuovoTotale,
-      costo_ricambi: nuovoRicambi,
-      ricambi_pagati_subito: editRicambiSubito,
-      fornitore_pagato_da_cliente: editFornitorePagatoDaCliente,
-      fornitore_ricambi: editFornitoreRicambi || null,
-      stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
-    };
-    setSalvandoPagamento(a.id);
-    const { error } = await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
-    setSalvandoPagamento(null);
-    if (error) { alert('Modifica non salvata: ' + error.message); return; }
-    setAppuntamenti((prev) => prev.map((x) => (x.id === a.id ? { ...x, pagamento: nuovoPagamento } : x)));
-    setEditingPagamentoId(null);
-  };
+    setAppuntamenti(apps || []);
 
-  useEffect(() => {
-    const fetch = async () => {
-      // Fetch all appointments for this vehicle
-      const { data: apps } = await supabase
-        .from('appuntamenti')
-        .select('*, clienti(nome), veicoli(marca,modello,targa)')
-        .eq('veicolo_id', veicolo.id)
-        .order('data_ora', { ascending: false });
+    // Fetch preventivi for all appointments
+    if (apps && apps.length > 0) {
+      const ids = apps.map(a => a.id);
+      const { data: prevs } = await supabase
+        .from('preventivi')
+        .select('*')
+        .in('appuntamento_id', ids);
 
-      setAppuntamenti(apps || []);
-
-      // Fetch preventivi for all appointments
-      if (apps && apps.length > 0) {
-        const ids = apps.map(a => a.id);
-        const { data: prevs } = await supabase
-          .from('preventivi')
-          .select('*')
-          .in('appuntamento_id', ids);
-
-        if (prevs) {
-          const map: Record<string, Preventivo> = {};
-          prevs.forEach(p => { map[p.appuntamento_id] = p; });
-          setPreventivi(map);
-        }
+      if (prevs) {
+        const map: Record<string, Preventivo> = {};
+        prevs.forEach(p => { map[p.appuntamento_id] = p; });
+        setPreventivi(map);
       }
+    }
 
-      setLoading(false);
-    };
-    fetch();
+    setLoading(false);
   }, [veicolo.id]);
+
+  // Stesso editor di Cassa > Incassi officina: niente sottoscrizione realtime
+  // qui, quindi dopo il salvataggio si ricarica lo storico a mano per
+  // mostrare subito il nuovo pagamento.
+  const editor = usePagamentoEditor(() => fetch());
+
+  useEffect(() => { fetch(); }, [fetch]);
 
   const totaleLavorazioni = appuntamenti.filter(a => a.stato === 'pronto').length;
   const totaleSpeso = Object.values(preventivi).reduce((sum, p) => sum + (p.totale || 0), 0);
@@ -268,13 +199,13 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
                         <div className="flex items-center justify-between">
                           <div className="text-xs text-gray-700">
                             Incassato: <span className="font-semibold">{fmtEuro(incassato(app))}</span>
-                            {app.pagamento.stato === 'acconto' && app.pagamento.importo_totale != null && (
-                              <span className="text-amber-600"> · Resto: {fmtEuro(Math.max(0, (app.pagamento.importo_totale || 0) - (app.pagamento.importo_pagato || 0)))}</span>
+                            {restoDaIncassare(app) > 0 && (
+                              <span className="text-amber-600"> · Resto: {fmtEuro(restoDaIncassare(app))}</span>
                             )}
                           </div>
-                          {editingPagamentoId !== app.id && (
+                          {editor.editingId !== app.id && (
                             <button
-                              onClick={(e) => apriModificaPagamento(app, e)}
+                              onClick={(e) => { e.stopPropagation(); editor.apri(app); }}
                               className="text-gray-400 hover:text-emerald-600 cursor-pointer shrink-0 px-1"
                               title="Modifica acconto e costo ricambi"
                             >
@@ -289,95 +220,9 @@ export function StoricoVeicolo({ veicolo, clienteNome, onBack, embedded }: Props
                           )}
                         </div>
 
-                        {editingPagamentoId === app.id && (
-                          <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1">
-                                <label className="text-[10px] text-gray-400 block">Incassato finora €</label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min={0}
-                                  value={editPagato}
-                                  onChange={(e) => setEditPagato(e.target.value)}
-                                  className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                              </div>
-                              <div className="flex-1">
-                                <label className="text-[10px] text-gray-400 block">Totale da pagare €</label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min={0}
-                                  value={editTotale}
-                                  onChange={(e) => setEditTotale(e.target.value)}
-                                  className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                              </div>
-                              <div className="flex-1">
-                                <label className="text-[10px] text-gray-400 block">Costo ricambi €</label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min={0}
-                                  value={editRicambi}
-                                  onChange={(e) => setEditRicambi(e.target.value)}
-                                  className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                              </div>
-                            </div>
-                            <div>
-                              <label className="text-[10px] text-gray-400 block">Fornitore ricambi</label>
-                              <select
-                                value={editFornitoreRicambi}
-                                onChange={(e) => {
-                                  const v = e.target.value as '' | 'autoricambi' | 'monti';
-                                  setEditFornitoreRicambi(v);
-                                  if (!v) setEditFornitorePagatoDaCliente(false);
-                                }}
-                                className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                              >
-                                <option value="">Non segnato</option>
-                                <option value="autoricambi">Autoricambi</option>
-                                <option value="monti">Autodemolizioni Monti</option>
-                              </select>
-                            </div>
-                            <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={editRicambiSubito}
-                                onChange={(e) => { setEditRicambiSubito(e.target.checked); if (e.target.checked) setEditFornitorePagatoDaCliente(false); }}
-                                className="rounded"
-                              />
-                              Pagati subito da me (es. sfascio in contanti) — conta come spesa
-                            </label>
-                            {editFornitoreRicambi && (
-                              <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={editFornitorePagatoDaCliente}
-                                  onChange={(e) => { setEditFornitorePagatoDaCliente(e.target.checked); if (e.target.checked) setEditRicambiSubito(false); }}
-                                  className="rounded"
-                                />
-                                Il cliente paga {editFornitoreRicambi === 'monti' ? 'Monti' : 'Autoricambi'} direttamente — non lo incasso io
-                              </label>
-                            )}
-                            <div className="flex gap-2">
-                              <button
-                                onClick={(e) => salvaModificaPagamento(app, e)}
-                                disabled={salvandoPagamento === app.id}
-                                className="flex-1 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
-                              >
-                                {salvandoPagamento === app.id ? 'Salvataggio...' : 'Salva'}
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setEditingPagamentoId(null); }}
-                                disabled={salvandoPagamento === app.id}
-                                className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 disabled:opacity-50 cursor-pointer transition-colors"
-                              >
-                                Annulla
-                              </button>
-                            </div>
+                        {editor.editingId === app.id && (
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <PagamentoEditFields editor={editor} appuntamento={app} />
                           </div>
                         )}
                       </div>
