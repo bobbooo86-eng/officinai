@@ -367,9 +367,13 @@ export interface Movimento {
   cliente_nome?: string | null;
   // Spese sostenute dall'officina per la lavorazione, distinte da "importo"
   // (quanto pagato al collaboratore esterno): solo per Revisione (Gianni)
-  // e Centraline (Daniele). Sempre un costo vero per l'officina, conta
-  // sempre come spesa (a differenza del costo ricambi di una consegna).
+  // e Centraline (Daniele).
   spese_lavorazione?: number | null;
+  // Se spese_lavorazione conta davvero come costo per l'officina: non
+  // sempre, a volte la paga di tasca sua il collaboratore esterno. Assente
+  // (movimenti salvati prima di questo campo) equivale a true, per non
+  // azzerare di colpo il costo di lavorazioni gia' registrate.
+  spese_lavorazione_conta?: boolean;
   // Una Revisione (Gianni) / Centraline (Daniele) puo' iniziare "in
   // lavorazione" (solo la descrizione, es. "scatola sterzo", importo e
   // spese_lavorazione non ancora noti) e completarsi dopo, quando si

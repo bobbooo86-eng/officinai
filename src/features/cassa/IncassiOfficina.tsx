@@ -357,6 +357,14 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
     await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
   };
 
+  // Spunta rapida sulla riga, come toggleRicambiSubito ma per le spese
+  // lavorazione di Revisione Gianni/Centraline Daniele.
+  const toggleSpeseLavorazioneConta = async (m: Movimento) => {
+    const nuovoValore = m.spese_lavorazione_conta === false;
+    setMovimenti((prev) => prev.map((mm) => (mm.id === m.id ? { ...mm, spese_lavorazione_conta: nuovoValore } : mm)));
+    await supabase.from('movimenti').update({ spese_lavorazione_conta: nuovoValore }).eq('id', m.id);
+  };
+
   useEffect(() => {
     load();
     if (!officinaId) return;
@@ -626,8 +634,24 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                   </div>
                   {!inLavorazione && (
                     <div className="mt-2 pt-2 border-t border-gray-100 text-[11px] text-gray-500">
-                      Costo lavorazione: <span className="font-semibold text-gray-700">{fmtEuro(Number(m.spese_lavorazione) || 0)}</span>
-                      {' · '}netto <span className="font-semibold text-emerald-700">{fmtEuro(incassoMovimento(m) - spesaMovimento(m))}</span>
+                      <div>
+                        Costo lavorazione: <span className="font-semibold text-gray-700">{fmtEuro(Number(m.spese_lavorazione) || 0)}</span>
+                        {' · '}netto <span className="font-semibold text-emerald-700">{fmtEuro(incassoMovimento(m) - spesaMovimento(m))}</span>
+                      </div>
+                      {(m.spese_lavorazione || 0) > 0 && (
+                        <label
+                          onClick={(e) => e.stopPropagation()}
+                          className={`flex items-center gap-1.5 mt-0.5 cursor-pointer ${m.spese_lavorazione_conta !== false ? 'text-red-500' : 'text-gray-400'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={m.spese_lavorazione_conta !== false}
+                            onChange={() => toggleSpeseLavorazioneConta(m)}
+                            className="rounded shrink-0"
+                          />
+                          {m.spese_lavorazione_conta !== false ? 'conta come spesa' : 'non conta come spesa'}
+                        </label>
+                      )}
                     </div>
                   )}
                 </Card>

@@ -37,15 +37,15 @@ export const incassoMovimento = (m: Movimento): number => {
     : SEGNO[m.tipo] === 1 ? Number(m.importo) : 0;
 };
 
-// Le spese lavorazione (quanto si paga al collaboratore esterno) sono
-// sempre un costo vero per l'officina, su Revisione Gianni come su
-// Centraline Daniele: a differenza del costo ricambi di una consegna
-// (che a volte lo paga qualcun altro), qui non c'e' un caso in cui non
-// sia davvero uscito denaro dalla cassa.
+// Le spese lavorazione (quanto si paga al collaboratore esterno) non sono
+// sempre un costo vero per l'officina: a volte le paga di tasca sua il
+// collaboratore stesso. Conta come spesa solo se segnato (il flag assente,
+// su movimenti salvati prima che esistesse, equivale a true: altrimenti
+// il costo di lavorazioni gia' registrate sparirebbe di colpo).
 export const spesaMovimento = (m: Movimento): number => {
   if (m.stato === 'in_lavorazione') return 0;
   if (TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo)) {
-    return Number(m.spese_lavorazione) || 0;
+    return m.spese_lavorazione_conta === false ? 0 : Number(m.spese_lavorazione) || 0;
   }
   return SEGNO[m.tipo] === -1 ? Number(m.importo) : 0;
 };
