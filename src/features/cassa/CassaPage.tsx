@@ -8,7 +8,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { VoiceButton } from '@/components/VoiceInput';
-import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncassare, valoreLavoro, usePagamentoEditor, PagamentoEditFields, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
+import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncassare, usePagamentoEditor, PagamentoEditFields, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
 import { FornitoriRicambi } from './FornitoriRicambi';
 import { DateField } from '@/components/DateField';
 import { dayKey } from '@/lib/format';
@@ -694,21 +694,6 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
       incassiAutoTotaliInRange.reduce((a, app) => a + spesaRicambi(app.pagamento), 0),
     [monthTutti, incassiAutoTotaliInRange]
   );
-  // Guadagno netto delle lavorazioni (non il saldo di cassa): per ogni
-  // consegna auto e ogni Revisione Gianni/Centraline Daniele del periodo,
-  // quanto fatturato meno il costo ricambi/spese lavorazione — il margine
-  // vero del lavoro svolto, a prescindere da quando viene davvero incassato
-  // o pagato (stesso principio di "Guadagno per collaboratore" in Analytics).
-  const guadagnoNettoLavorazioni = useMemo(() => {
-    const daAuto = incassiAutoTotaliInRange.reduce(
-      (s, a) => s + (valoreLavoro(a) - (Number(a.pagamento?.costo_ricambi) || 0)),
-      0
-    );
-    const daLavorazioni = monthTutti
-      .filter((m) => TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo))
-      .reduce((s, m) => s + (incassoMovimento(m) - spesaMovimento(m)), 0);
-    return daAuto + daLavorazioni;
-  }, [incassiAutoTotaliInRange, monthTutti]);
   // Le spese del titolare sono prelievi personali, non costi dell'officina:
   // tenute fuori dal riquadro "Spese" (che mostra solo i costi operativi) e
   // mostrate a parte, ma restano sottratte dal saldo cassa perche' quei
@@ -1172,10 +1157,6 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
             <div className="text-[10px] text-amber-700 font-semibold">Da incassare</div>
             <div className="text-sm font-bold text-amber-900">{fmtEuro(totalDaIncassare)}</div>
           </div>
-          <div className="bg-teal-50 border border-teal-200 rounded-xl p-2.5 text-center">
-            <div className="text-[10px] text-teal-700 font-semibold">Guadagno netto lavorazioni</div>
-            <div className="text-sm font-bold text-teal-900">{fmtEuro(guadagnoNettoLavorazioni)}</div>
-          </div>
         </div>
       </Card>
 
@@ -1235,27 +1216,14 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
               items.movimenti.reduce((a, m) => a + spesaMovimento(m), 0) +
               items.auto.reduce((a, app) => a + spesaRicambi(app.pagamento), 0);
             const daySaldo = dayIncassi - daySpese;
-            // Guadagno netto delle sole lavorazioni di quel giorno (consegne
-            // auto + Revisione Gianni/Centraline Daniele), stesso criterio
-            // del riquadro "Guadagno netto lavorazioni" in cima alla pagina.
-            const dayGuadagnoNetto =
-              items.auto.reduce((a, app) => a + (valoreLavoro(app) - (Number(app.pagamento?.costo_ricambi) || 0)), 0) +
-              items.movimenti
-                .filter((m) => TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo))
-                .reduce((a, m) => a + (incassoMovimento(m) - spesaMovimento(m)), 0);
             const dt = new Date(giorno + 'T00:00');
             const label = dt.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
             return (
               <div key={giorno}>
                 <div className="flex items-center justify-between px-1 mb-1.5">
                   <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{label}</div>
-                  <div className="flex items-center gap-2">
-                    <div className={`text-[11px] font-semibold ${daySaldo >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {daySaldo >= 0 ? '+' : ''}{fmtEuro(daySaldo)}
-                    </div>
-                    <div className="text-[11px] font-semibold text-teal-700">
-                      netto {fmtEuro(dayGuadagnoNetto)}
-                    </div>
+                  <div className={`text-[11px] font-semibold ${daySaldo >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {daySaldo >= 0 ? '+' : ''}{fmtEuro(daySaldo)}
                   </div>
                 </div>
                 <Card className="!p-2 divide-y divide-gray-100">
@@ -1321,9 +1289,6 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                           )}
                         </div>
                         <div className="text-right shrink-0">
-                          {ricambi > 0 && (
-                            <div className="text-[10px] text-gray-400">netto {fmtEuro(valoreLavoro(app) - ricambi)}</div>
-                          )}
                           <div className="text-sm font-bold text-emerald-600">
                             +{fmtEuro(incassatoAuto(app))}
                           </div>
@@ -1385,9 +1350,6 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                             </span>
                           ) : (
                             <div className="text-right shrink-0">
-                              {TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo) && m.spese_lavorazione != null && (
-                                <div className="text-[10px] text-gray-400">netto {fmtEuro(incassoMovimento(m) - spesaMovimento(m))}</div>
-                              )}
                               <div className={`text-sm font-bold ${isIncasso ? 'text-emerald-600' : 'text-red-600'}`}>
                                 {isIncasso ? '+' : '−'}{fmtEuro(Number(m.importo))}
                               </div>

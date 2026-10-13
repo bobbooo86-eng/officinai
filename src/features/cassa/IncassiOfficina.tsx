@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
-import { spesaRicambi } from './movimentiTotali';
-import type { Appuntamento } from '@/types/database';
+import { spesaRicambi, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento } from './movimentiTotali';
+import { DateField } from '@/components/DateField';
+import { dayKey } from '@/lib/format';
+import type { Appuntamento, Movimento } from '@/types/database';
 
 // Formato "YYYY-MM-DD" in ora locale per l'input date: con toISOString()
 // diretto la data mostrata potrebbe slittare di un giorno vicino alla
@@ -281,8 +283,24 @@ export const PERIODI: { id: Periodo; label: string }[] = [
   { id: 'anno', label: 'Anno' },
 ];
 
+// movimenti.data e' una stringa "YYYY-MM-DD": va riletta come data locale
+// (non UTC) o un giorno vicino alla mezzanotte finirebbe nel giorno sbagliato.
+const dateFromDataStr = (s: string) => new Date(s + 'T00:00:00');
+
+const LABEL_LAVORAZIONE: Record<string, { label: string; icon: string }> = {
+  spesa_revisione_gianni: { label: 'Revisione (Gianni)', icon: '🔧' },
+  spesa_centraline_daniele: { label: 'Centraline (Daniele)', icon: '💻' },
+};
+
+type VoceLista =
+  | { kind: 'auto'; data: Date; appuntamento: Appuntamento }
+  | { kind: 'lavorazione'; data: Date; movimento: Movimento };
+
 export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[]>([]);
+  // Revisione (Gianni) e Centraline (Daniele): statistiche d'incasso delle
+  // lavorazioni di officina, non solo delle consegne auto.
+  const [movimenti, setMovimenti] = useState<Movimento[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<Periodo>('settimana');
   const [search, setSearch] = useState('');
@@ -290,15 +308,25 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   const load = useCallback(async () => {
     if (!officinaId) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('appuntamenti')
-      .select('*, clienti(nome), veicoli(marca,modello,targa)')
-      .eq('officina_id', officinaId)
-      .eq('stato', 'consegnato')
-      .not('pagamento', 'is', null)
-      .order('data_ora', { ascending: false })
-      .limit(500);
+    const [{ data }, { data: dataMov }] = await Promise.all([
+      supabase
+        .from('appuntamenti')
+        .select('*, clienti(nome), veicoli(marca,modello,targa)')
+        .eq('officina_id', officinaId)
+        .eq('stato', 'consegnato')
+        .not('pagamento', 'is', null)
+        .order('data_ora', { ascending: false })
+        .limit(500),
+      supabase
+        .from('movimenti')
+        .select('*')
+        .eq('officina_id', officinaId)
+        .in('tipo', TIPI_CON_SPESE_LAVORAZIONE)
+        .order('data', { ascending: false })
+        .limit(500),
+    ]);
     setAppuntamenti((data as Appuntamento[]) || []);
+    setMovimenti((dataMov as Movimento[]) || []);
     setLoading(false);
   }, [officinaId]);
 
@@ -335,15 +363,74 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
     const ch = supabase
       .channel('incassi-officina-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'appuntamenti', filter: `officina_id=eq.${officinaId}` }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'movimenti', filter: `officina_id=eq.${officinaId}` }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [officinaId, load]);
 
-  const oggi = useMemo(() => new Date(), []);
+  // Data di riferimento per il periodo selezionato: di base "adesso", ma
+  // navigabile avanti/indietro (es. la settimana di due mesi fa), o
+  // sostituita del tutto da un intervallo di date scelto a mano — stesso
+  // meccanismo di Movimenti (CassaPage), cosi' si puo' rivedere lo storico
+  // delle statistiche d'incasso officina per qualsiasi periodo passato.
+  const [riferimento, setRiferimento] = useState(() => new Date());
+  const [rangeCustom, setRangeCustom] = useState<{ inizio: string; fine: string } | null>(null);
+  const [mostraRangeForm, setMostraRangeForm] = useState(false);
+  const [rangeInizio, setRangeInizio] = useState('');
+  const [rangeFine, setRangeFine] = useState('');
+
+  const inRangeSelezionato = useCallback(
+    (d: Date) => {
+      if (rangeCustom) {
+        const k = dayKey(d);
+        return k >= rangeCustom.inizio && k <= rangeCustom.fine;
+      }
+      return inPeriodo(d, periodo, riferimento);
+    },
+    [rangeCustom, periodo, riferimento]
+  );
+
+  const navigaPeriodo = (offset: number) => {
+    setRangeCustom(null);
+    setRiferimento((prev) => {
+      const d = new Date(prev);
+      if (periodo === 'giorno') d.setDate(d.getDate() + offset);
+      else if (periodo === 'settimana') d.setDate(d.getDate() + offset * 7);
+      else if (periodo === 'mese') d.setMonth(d.getMonth() + offset);
+      else d.setFullYear(d.getFullYear() + offset);
+      return d;
+    });
+  };
+
+  const applicaRangeCustom = () => {
+    if (!rangeInizio || !rangeFine) return;
+    setRangeCustom(rangeInizio <= rangeFine ? { inizio: rangeInizio, fine: rangeFine } : { inizio: rangeFine, fine: rangeInizio });
+    setMostraRangeForm(false);
+  };
+
+  const periodoLabel = useMemo(() => {
+    const fmtG = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
+    if (rangeCustom) return `${fmtG(rangeCustom.inizio)} – ${fmtG(rangeCustom.fine)}`;
+    if (periodo === 'giorno') return riferimento.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (periodo === 'settimana') {
+      const inizio = new Date(riferimento);
+      const g = (inizio.getDay() + 6) % 7;
+      inizio.setDate(inizio.getDate() - g);
+      const fine = new Date(inizio);
+      fine.setDate(fine.getDate() + 6);
+      return `${inizio.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} – ${fine.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    }
+    if (periodo === 'mese') return riferimento.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+    return riferimento.getFullYear().toString();
+  }, [periodo, riferimento, rangeCustom]);
 
   const inRange = useMemo(
-    () => appuntamenti.filter((a) => inPeriodo(dataIncasso(a), periodo, oggi)),
-    [appuntamenti, periodo, oggi]
+    () => appuntamenti.filter((a) => inRangeSelezionato(dataIncasso(a))),
+    [appuntamenti, inRangeSelezionato]
+  );
+  const movimentiInRange = useMemo(
+    () => movimenti.filter((m) => inRangeSelezionato(dateFromDataStr(m.data))),
+    [movimenti, inRangeSelezionato]
   );
 
   // Con una ricerca attiva si cerca su tutto lo storico, non solo nel
@@ -361,10 +448,36 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
     );
   }, [appuntamenti, inRange, search]);
 
-  const totaleIncassato = inRange.reduce((s, a) => s + incassato(a), 0);
-  const totaleRicambi = inRange.reduce((s, a) => s + spesaRicambi(a.pagamento), 0);
-  const margineNetto = inRange.reduce((s, a) => s + valoreLavoro(a), 0) - totaleRicambi;
+  const risultatiMovimenti = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const base = q ? movimenti : movimentiInRange;
+    if (!q) return base;
+    return base.filter((m) =>
+      m.descrizione?.toLowerCase().includes(q) ||
+      m.cliente_nome?.toLowerCase().includes(q)
+    );
+  }, [movimenti, movimentiInRange, search]);
+
+  // Elenco unico, consegne auto e lavorazioni di officina insieme, ordinato
+  // per data: cosi' si vede tutta l'attivita' del periodo in un colpo solo.
+  const voci: VoceLista[] = useMemo(() => {
+    const a: VoceLista[] = risultati.map((appuntamento) => ({ kind: 'auto', data: dataIncasso(appuntamento), appuntamento }));
+    const m: VoceLista[] = risultatiMovimenti.map((movimento) => ({ kind: 'lavorazione', data: dateFromDataStr(movimento.data), movimento }));
+    return [...a, ...m].sort((x, y) => y.data.getTime() - x.data.getTime());
+  }, [risultati, risultatiMovimenti]);
+
+  // "Guadagno netto" qui e' il margine vero del lavoro svolto (fatturato
+  // meno costo ricambi/spese lavorazione), a prescindere da quando viene
+  // incassato o dalla spunta "pagati subito" (che serve solo al flusso di
+  // cassa, non alla statistica del margine) — stesso principio di "Guadagno
+  // per collaboratore" in Analytics.
+  const movimentiCompletati = movimentiInRange.filter((m) => m.stato !== 'in_lavorazione');
+  const totaleLordo = inRange.reduce((s, a) => s + valoreLavoro(a), 0) + movimentiCompletati.reduce((s, m) => s + incassoMovimento(m), 0);
+  const totaleCosto = inRange.reduce((s, a) => s + (Number(a.pagamento?.costo_ricambi) || 0), 0) + movimentiCompletati.reduce((s, m) => s + spesaMovimento(m), 0);
+  const margineNetto = totaleLordo - totaleCosto;
+  const totaleIncassato = inRange.reduce((s, a) => s + incassato(a), 0) + movimentiCompletati.reduce((s, m) => s + incassoMovimento(m), 0);
   const totaleResto = inRange.reduce((s, a) => s + restoDaIncassare(a), 0);
+  const numVoci = inRange.length + movimentiCompletati.length;
 
   // La modifica salva su appuntamenti.pagamento: la sottoscrizione realtime
   // sopra ricarica da sola la lista, non serve aggiornare lo stato a mano.
@@ -379,15 +492,69 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
         {PERIODI.map((p) => (
           <button
             key={p.id}
-            onClick={() => setPeriodo(p.id)}
+            onClick={() => { setPeriodo(p.id); setRangeCustom(null); setMostraRangeForm(false); }}
             className={`py-2 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
-              periodo === p.id ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              periodo === p.id && !rangeCustom ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
             {p.label}
           </button>
         ))}
       </div>
+
+      {/* Naviga avanti/indietro nel periodo scelto (es. la settimana di due mesi fa) */}
+      {!rangeCustom && (
+        <div className="flex items-center justify-between">
+          <button onClick={() => navigaPeriodo(-1)} className="p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer text-gray-500" aria-label="Periodo precedente">
+            ‹
+          </button>
+          <div className="text-center">
+            <div className="text-[11px] font-semibold text-gray-700 capitalize">{periodoLabel}</div>
+            <button onClick={() => setRiferimento(new Date())} className="text-[10px] text-emerald-600 hover:underline cursor-pointer">
+              Torna a oggi
+            </button>
+          </div>
+          <button onClick={() => navigaPeriodo(1)} className="p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer text-gray-500" aria-label="Periodo successivo">
+            ›
+          </button>
+        </div>
+      )}
+
+      {/* Intervallo di date scelto a mano, al posto di giorno/settimana/mese/anno */}
+      {rangeCustom ? (
+        <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
+          <span className="text-[11px] font-semibold text-emerald-800">📅 {periodoLabel}</span>
+          <button onClick={() => setRangeCustom(null)} className="text-[11px] text-emerald-600 hover:underline cursor-pointer shrink-0">
+            Annulla intervallo
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setMostraRangeForm((v) => !v)}
+          className="w-full text-center text-[11px] text-emerald-600 hover:underline cursor-pointer"
+        >
+          {mostraRangeForm ? 'Chiudi' : '📅 Scegli un intervallo di date personalizzato'}
+        </button>
+      )}
+      {mostraRangeForm && !rangeCustom && (
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <label className="text-[10px] text-gray-400 block mb-0.5">Da</label>
+            <DateField value={rangeInizio} onChange={setRangeInizio} className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div className="flex-1">
+            <label className="text-[10px] text-gray-400 block mb-0.5">A</label>
+            <DateField value={rangeFine} onChange={setRangeFine} className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <button
+            onClick={applicaRangeCustom}
+            disabled={!rangeInizio || !rangeFine}
+            className="py-1.5 px-3 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors shrink-0"
+          >
+            Applica
+          </button>
+        </div>
+      )}
 
       {/* Ricerca per targa o nome cliente */}
       <input
@@ -405,8 +572,8 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
           <span className="text-xl font-black text-emerald-700">{fmtEuro(totaleIncassato)}</span>
         </div>
         <div className="flex justify-between items-baseline">
-          <span className="text-xs text-gray-600">Costo ricambi pagati subito</span>
-          <span className="text-sm font-semibold text-red-600">− {fmtEuro(totaleRicambi)}</span>
+          <span className="text-xs text-gray-600">Costo ricambi/lavorazione</span>
+          <span className="text-sm font-semibold text-red-600">− {fmtEuro(totaleCosto)}</span>
         </div>
         <div className="flex justify-between items-baseline pt-2 border-t border-emerald-200">
           <span className="text-xs font-bold text-gray-700">Guadagno netto</span>
@@ -418,19 +585,55 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
             <span className="text-xs font-bold text-amber-700">{fmtEuro(totaleResto)}</span>
           </div>
         )}
-        <div className="text-[11px] text-gray-400 pt-1">{inRange.length} veicol{inRange.length === 1 ? 'o' : 'i'} consegnat{inRange.length === 1 ? 'o' : 'i'}</div>
+        <div className="text-[11px] text-gray-400 pt-1">{numVoci} lavorazion{numVoci === 1 ? 'e' : 'i'} nel periodo</div>
       </Card>
 
-      {/* Elenco veicoli consegnati nel periodo (o risultati della ricerca) */}
+      {/* Elenco consegne auto e lavorazioni di officina nel periodo (o risultati della ricerca) */}
       {loading ? (
         <div className="text-center py-6 text-sm text-gray-400">Caricamento...</div>
-      ) : risultati.length === 0 ? (
+      ) : voci.length === 0 ? (
         <div className="text-center py-6 text-sm text-gray-400">
-          {search.trim() ? 'Nessun risultato per la ricerca' : 'Nessuna consegna in questo periodo'}
+          {search.trim() ? 'Nessun risultato per la ricerca' : 'Nessuna lavorazione in questo periodo'}
         </div>
       ) : (
         <div className="space-y-2">
-          {risultati.map((a) => {
+          {voci.map((voce) => {
+            if (voce.kind === 'lavorazione') {
+              const m = voce.movimento;
+              const lbl = LABEL_LAVORAZIONE[m.tipo] || { label: m.tipo, icon: '🔧' };
+              const inLavorazione = m.stato === 'in_lavorazione';
+              return (
+                <Card key={`mov-${m.id}`} className="!p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 truncate">
+                        {m.descrizione}{m.cliente_nome ? ` — ${m.cliente_nome}` : ''}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">{lbl.icon} {lbl.label}</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">
+                        {dateFromDataStr(m.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {inLavorazione ? (
+                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>
+                          🔧 In lavorazione
+                        </span>
+                      ) : (
+                        <div className="text-sm font-bold text-gray-900">{fmtEuro(incassoMovimento(m))}</div>
+                      )}
+                    </div>
+                  </div>
+                  {!inLavorazione && (
+                    <div className="mt-2 pt-2 border-t border-gray-100 text-[11px] text-gray-500">
+                      Costo lavorazione: <span className="font-semibold text-gray-700">{fmtEuro(Number(m.spese_lavorazione) || 0)}</span>
+                      {' · '}netto <span className="font-semibold text-emerald-700">{fmtEuro(incassoMovimento(m) - spesaMovimento(m))}</span>
+                    </div>
+                  )}
+                </Card>
+              );
+            }
+            const a = voce.appuntamento;
             const p = a.pagamento!;
             const cfg = p.stato === 'pagato'
               ? { label: 'Pagato', color: '#065f46', bg: '#d1fae5' }
@@ -469,6 +672,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                   <div className="text-[11px] text-gray-500">
                     <div>
                       Costo ricambi: <span className="font-semibold text-gray-700">{fmtEuro(p.costo_ricambi || 0)}</span>
+                      {' · '}netto <span className="font-semibold text-emerald-700">{fmtEuro(valoreLavoro(a) - (Number(p.costo_ricambi) || 0))}</span>
                       {p.operaio && <span className="text-gray-400"> · 🔧 {p.operaio}</span>}
                     </div>
                     {(p.costo_ricambi || 0) > 0 && (
