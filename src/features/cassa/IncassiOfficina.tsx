@@ -598,6 +598,11 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<Periodo>('settimana');
   const [search, setSearch] = useState('');
+  // Filtro per stato pagamento: una Revisione Gianni/Centraline Daniele
+  // completata conta come "Pagato" (non ha un concetto di acconto, l'intero
+  // importo si considera incassato appena finita), "In lavorazione" non
+  // compare mai sotto Acconto/Non pagato (non ha ancora numeri definitivi).
+  const [filtroStato, setFiltroStato] = useState<'tutti' | 'pagato' | 'acconto' | 'non_pagato'>('tutti');
 
   const load = useCallback(async () => {
     if (!officinaId) return;
@@ -755,10 +760,17 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   // Elenco unico, consegne auto e lavorazioni di officina insieme, ordinato
   // per data: cosi' si vede tutta l'attivita' del periodo in un colpo solo.
   const voci: VoceLista[] = useMemo(() => {
-    const a: VoceLista[] = risultati.map((appuntamento) => ({ kind: 'auto', data: dataIncasso(appuntamento), appuntamento }));
-    const m: VoceLista[] = risultatiMovimenti.map((movimento) => ({ kind: 'lavorazione', data: dateFromDataStr(movimento.data), movimento }));
+    const a: VoceLista[] = risultati
+      .filter((appuntamento) => filtroStato === 'tutti' || appuntamento.pagamento?.stato === filtroStato)
+      .map((appuntamento) => ({ kind: 'auto', data: dataIncasso(appuntamento), appuntamento }));
+    const m: VoceLista[] = risultatiMovimenti
+      // Una lavorazione completata non ha acconti: conta come "Pagato".
+      // "In lavorazione" non ha ancora numeri definitivi, non compare mai
+      // sotto Acconto/Non pagato.
+      .filter((movimento) => filtroStato === 'tutti' || (filtroStato === 'pagato' && movimento.stato !== 'in_lavorazione'))
+      .map((movimento) => ({ kind: 'lavorazione', data: dateFromDataStr(movimento.data), movimento }));
     return [...a, ...m].sort((x, y) => y.data.getTime() - x.data.getTime());
-  }, [risultati, risultatiMovimenti]);
+  }, [risultati, risultatiMovimenti, filtroStato]);
 
   // "Guadagno netto" qui e' il margine vero del lavoro svolto (fatturato
   // meno costo ricambi/spese lavorazione), a prescindere da quando viene
@@ -862,6 +874,27 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
         className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
       />
 
+      {/* Filtro per stato pagamento: solo l'elenco sotto, il riepilogo resta
+          sempre sul periodo intero (come i tab di Movimenti). */}
+      <div className="grid grid-cols-4 gap-1.5">
+        {([
+          { id: 'tutti', label: 'Tutti' },
+          { id: 'pagato', label: 'Pagato' },
+          { id: 'acconto', label: 'Acconto' },
+          { id: 'non_pagato', label: 'Non pagato' },
+        ] as const).map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFiltroStato(f.id)}
+            className={`py-1.5 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+              filtroStato === f.id ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {/* Riepilogo: statistica pura, sempre come se tutto fosse stato pagato
           per intero (vedi commento su totaleLordo) — per i soldi davvero
           incassati/da incassare vedi Movimenti. */}
@@ -892,7 +925,11 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
         <div className="text-center py-6 text-sm text-gray-400">Caricamento...</div>
       ) : voci.length === 0 ? (
         <div className="text-center py-6 text-sm text-gray-400">
-          {search.trim() ? 'Nessun risultato per la ricerca' : 'Nessuna lavorazione in questo periodo'}
+          {search.trim()
+            ? 'Nessun risultato per la ricerca'
+            : filtroStato !== 'tutti'
+            ? 'Nessuna lavorazione con questo stato nel periodo'
+            : 'Nessuna lavorazione in questo periodo'}
         </div>
       ) : (
         <div className="space-y-2">
