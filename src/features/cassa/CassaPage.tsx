@@ -8,8 +8,10 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { VoiceButton } from '@/components/VoiceInput';
-import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncassare, usePagamentoEditor, PagamentoEditFields, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
+import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncassare, valoreLavoro, usePagamentoEditor, PagamentoEditFields, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
 import { FornitoriRicambi } from './FornitoriRicambi';
+import { DateField } from '@/components/DateField';
+import { dayKey } from '@/lib/format';
 import { SEGNO, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento, spesaRicambi } from './movimentiTotali';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente, Appuntamento } from '@/types/database';
 
@@ -590,9 +592,61 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     return movimenti.filter((m) => m.tipo === tab);
   }, [movimenti, tab]);
 
-  // Data di riferimento per il periodo selezionato: sempre "adesso", come
-  // in Incassi officina (nessuna navigazione a periodi passati arbitrari).
-  const riferimento = useMemo(() => new Date(), []);
+  // Data di riferimento per il periodo selezionato: di base "adesso", ma
+  // navigabile avanti/indietro (es. la settimana di due mesi fa), o
+  // sostituita del tutto da un intervallo di date scelto a mano.
+  const [riferimento, setRiferimento] = useState(() => new Date());
+  const [rangeCustom, setRangeCustom] = useState<{ inizio: string; fine: string } | null>(null);
+  const [mostraRangeForm, setMostraRangeForm] = useState(false);
+  const [rangeInizio, setRangeInizio] = useState('');
+  const [rangeFine, setRangeFine] = useState('');
+
+  // Sostituisce inPeriodo() ovunque in questa pagina: se c'e' un intervallo
+  // scelto a mano usa quello, altrimenti il periodo+riferimento normali.
+  const inRangeSelezionato = useCallback(
+    (d: Date) => {
+      if (rangeCustom) {
+        const k = dayKey(d);
+        return k >= rangeCustom.inizio && k <= rangeCustom.fine;
+      }
+      return inPeriodo(d, periodo, riferimento);
+    },
+    [rangeCustom, periodo, riferimento]
+  );
+
+  const navigaPeriodo = (offset: number) => {
+    setRangeCustom(null);
+    setRiferimento((prev) => {
+      const d = new Date(prev);
+      if (periodo === 'giorno') d.setDate(d.getDate() + offset);
+      else if (periodo === 'settimana') d.setDate(d.getDate() + offset * 7);
+      else if (periodo === 'mese') d.setMonth(d.getMonth() + offset);
+      else d.setFullYear(d.getFullYear() + offset);
+      return d;
+    });
+  };
+
+  const applicaRangeCustom = () => {
+    if (!rangeInizio || !rangeFine) return;
+    setRangeCustom(rangeInizio <= rangeFine ? { inizio: rangeInizio, fine: rangeFine } : { inizio: rangeFine, fine: rangeInizio });
+    setMostraRangeForm(false);
+  };
+
+  const periodoLabel = useMemo(() => {
+    const fmtG = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
+    if (rangeCustom) return `${fmtG(rangeCustom.inizio)} – ${fmtG(rangeCustom.fine)}`;
+    if (periodo === 'giorno') return riferimento.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (periodo === 'settimana') {
+      const inizio = new Date(riferimento);
+      const g = (inizio.getDay() + 6) % 7;
+      inizio.setDate(inizio.getDate() - g);
+      const fine = new Date(inizio);
+      fine.setDate(fine.getDate() + 6);
+      return `${inizio.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} – ${fine.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    }
+    if (periodo === 'mese') return riferimento.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+    return riferimento.getFullYear().toString();
+  }, [periodo, riferimento, rangeCustom]);
 
   // Gli incassi auto sono incassi: compaiono solo nei tab dove un incasso
   // avrebbe senso (Tutti / Incassi / Da incassare), non dentro Officina/
@@ -613,12 +667,12 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
           a.veicoli?.marca?.toLowerCase().includes(q) ||
           a.veicoli?.modello?.toLowerCase().includes(q)
         )
-      : incassiAuto.filter((a) => inPeriodo(dataIncasso(a), periodo, riferimento));
+      : incassiAuto.filter((a) => inRangeSelezionato(dataIncasso(a)));
     // "Da incassare" mostra solo le consegne con un resto ancora da pagare,
     // a prescindere dal periodo: un acconto vecchio non ancora saldato va
     // visto finche' non viene chiuso, non solo finche' dura il periodo.
     return tab === 'da_incassare' ? base.filter((a) => restoDaIncassare(a) > 0) : base;
-  }, [incassiAuto, periodo, riferimento, mostraIncassiAuto, q, tab]);
+  }, [incassiAuto, inRangeSelezionato, mostraIncassiAuto, q, tab]);
 
   // Lista mostrata sotto: rispetta il filtro per tipo selezionato, e la
   // ricerca (per descrizione, cliente o nome dipendente/titolare) quando attiva.
@@ -629,19 +683,19 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
         return m.descrizione?.toLowerCase().includes(q) || m.cliente_nome?.toLowerCase().includes(q) || dip?.nome?.toLowerCase().includes(q);
       });
     }
-    return filteredByTab.filter((m) => inPeriodo(dateFromDataStr(m.data), periodo, riferimento));
-  }, [filteredByTab, periodo, riferimento, q, dipendenti]);
+    return filteredByTab.filter((m) => inRangeSelezionato(dateFromDataStr(m.data)));
+  }, [filteredByTab, inRangeSelezionato, q, dipendenti]);
 
   // Il riepilogo in cima rappresenta la cassa del periodo nel suo complesso:
   // se seguisse il filtro per tipo mostrerebbe incassi o spese sempre a zero.
   const monthTutti = useMemo(
-    () => movimenti.filter((m) => inPeriodo(dateFromDataStr(m.data), periodo, riferimento)),
-    [movimenti, periodo, riferimento]
+    () => movimenti.filter((m) => inRangeSelezionato(dateFromDataStr(m.data))),
+    [movimenti, inRangeSelezionato]
   );
 
   const incassiAutoTotaliInRange = useMemo(
-    () => incassiAuto.filter((a) => inPeriodo(dataIncasso(a), periodo, riferimento)),
-    [incassiAuto, periodo, riferimento]
+    () => incassiAuto.filter((a) => inRangeSelezionato(dataIncasso(a))),
+    [incassiAuto, inRangeSelezionato]
   );
 
   const totalIncassi = useMemo(
@@ -656,6 +710,21 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
       incassiAutoTotaliInRange.reduce((a, app) => a + spesaRicambi(app.pagamento), 0),
     [monthTutti, incassiAutoTotaliInRange]
   );
+  // Guadagno netto delle lavorazioni (non il saldo di cassa): per ogni
+  // consegna auto e ogni Revisione Gianni/Centraline Daniele del periodo,
+  // quanto fatturato meno il costo ricambi/spese lavorazione — il margine
+  // vero del lavoro svolto, a prescindere da quando viene davvero incassato
+  // o pagato (stesso principio di "Guadagno per collaboratore" in Analytics).
+  const guadagnoNettoLavorazioni = useMemo(() => {
+    const daAuto = incassiAutoTotaliInRange.reduce(
+      (s, a) => s + (valoreLavoro(a) - (Number(a.pagamento?.costo_ricambi) || 0)),
+      0
+    );
+    const daLavorazioni = monthTutti
+      .filter((m) => TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo))
+      .reduce((s, m) => s + (incassoMovimento(m) - spesaMovimento(m)), 0);
+    return daAuto + daLavorazioni;
+  }, [incassiAutoTotaliInRange, monthTutti]);
   // Le spese del titolare sono prelievi personali, non costi dell'officina:
   // tenute fuori dal riquadro "Spese" (che mostra solo i costi operativi) e
   // mostrate a parte, ma restano sottratte dal saldo cassa perche' quei
@@ -1016,19 +1085,85 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
       {/* Selettore periodo + Totali */}
       <Card className="!p-4">
         <div className="text-xs font-semibold text-gray-500 mb-2">Riepilogo</div>
-        <div className="grid grid-cols-4 gap-1.5 mb-3">
+        <div className="grid grid-cols-4 gap-1.5 mb-2">
           {PERIODI.map((p) => (
             <button
               key={p.id}
-              onClick={() => setPeriodo(p.id)}
+              onClick={() => { setPeriodo(p.id); setRangeCustom(null); setMostraRangeForm(false); }}
               className={`py-2 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
-                periodo === p.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                periodo === p.id && !rangeCustom ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               {p.label}
             </button>
           ))}
         </div>
+
+        {/* Naviga avanti/indietro nel periodo scelto (es. la settimana di due mesi fa) */}
+        {!rangeCustom && (
+          <div className="flex items-center justify-between mb-2">
+            <button
+              onClick={() => navigaPeriodo(-1)}
+              className="p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer text-gray-500"
+              aria-label="Periodo precedente"
+            >
+              ‹
+            </button>
+            <div className="text-center">
+              <div className="text-[11px] font-semibold text-gray-700 capitalize">{periodoLabel}</div>
+              <button
+                onClick={() => setRiferimento(new Date())}
+                className="text-[10px] text-blue-600 hover:underline cursor-pointer"
+              >
+                Torna a oggi
+              </button>
+            </div>
+            <button
+              onClick={() => navigaPeriodo(1)}
+              className="p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer text-gray-500"
+              aria-label="Periodo successivo"
+            >
+              ›
+            </button>
+          </div>
+        )}
+
+        {/* Intervallo di date scelto a mano, al posto di giorno/settimana/mese/anno */}
+        {rangeCustom ? (
+          <div className="flex items-center justify-between mb-3 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5">
+            <span className="text-[11px] font-semibold text-blue-800">📅 {periodoLabel}</span>
+            <button onClick={() => setRangeCustom(null)} className="text-[11px] text-blue-600 hover:underline cursor-pointer shrink-0">
+              Annulla intervallo
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setMostraRangeForm((v) => !v)}
+            className="w-full text-center text-[11px] text-blue-600 hover:underline cursor-pointer mb-3"
+          >
+            {mostraRangeForm ? 'Chiudi' : '📅 Scegli un intervallo di date personalizzato'}
+          </button>
+        )}
+        {mostraRangeForm && !rangeCustom && (
+          <div className="flex items-end gap-2 mb-3">
+            <div className="flex-1">
+              <label className="text-[10px] text-gray-400 block mb-0.5">Da</label>
+              <DateField value={rangeInizio} onChange={setRangeInizio} className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="flex-1">
+              <label className="text-[10px] text-gray-400 block mb-0.5">A</label>
+              <DateField value={rangeFine} onChange={setRangeFine} className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <button
+              onClick={applicaRangeCustom}
+              disabled={!rangeInizio || !rangeFine}
+              className="py-1.5 px-3 rounded-lg bg-blue-600 text-white text-[11px] font-semibold hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors shrink-0"
+            >
+              Applica
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center">
             <div className="text-[10px] text-emerald-700 font-semibold">Incassi</div>
@@ -1061,6 +1196,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-center">
             <div className="text-[10px] text-amber-700 font-semibold">Da incassare</div>
             <div className="text-sm font-bold text-amber-900">{fmtEuro(totalDaIncassare)}</div>
+          </div>
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-2.5 text-center">
+            <div className="text-[10px] text-teal-700 font-semibold">Guadagno netto lavorazioni</div>
+            <div className="text-sm font-bold text-teal-900">{fmtEuro(guadagnoNettoLavorazioni)}</div>
           </div>
         </div>
       </Card>
@@ -1193,8 +1332,13 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                             <div className="text-[11px] text-amber-600 truncate">Ancora da incassare: {fmtEuro(resto)}</div>
                           )}
                         </div>
-                        <div className="text-sm font-bold text-emerald-600">
-                          +{fmtEuro(incassatoAuto(app))}
+                        <div className="text-right shrink-0">
+                          {ricambi > 0 && (
+                            <div className="text-[10px] text-gray-400">netto {fmtEuro(valoreLavoro(app) - ricambi)}</div>
+                          )}
+                          <div className="text-sm font-bold text-emerald-600">
+                            +{fmtEuro(incassatoAuto(app))}
+                          </div>
                         </div>
                         {!inEdit && (
                           <button
@@ -1263,8 +1407,13 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                               🔧 IN LAVORAZIONE
                             </span>
                           ) : (
-                            <div className={`text-sm font-bold ${isIncasso ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {isIncasso ? '+' : '−'}{fmtEuro(Number(m.importo))}
+                            <div className="text-right shrink-0">
+                              {TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo) && m.spese_lavorazione != null && (
+                                <div className="text-[10px] text-gray-400">netto {fmtEuro(incassoMovimento(m) - spesaMovimento(m))}</div>
+                              )}
+                              <div className={`text-sm font-bold ${isIncasso ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {isIncasso ? '+' : '−'}{fmtEuro(Number(m.importo))}
+                              </div>
                             </div>
                           )}
                           {inLavorazione && (
