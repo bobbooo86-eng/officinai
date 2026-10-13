@@ -152,9 +152,6 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   const [newData, setNewData] = useState<string>(todayISO());
   const [newDipendenteId, setNewDipendenteId] = useState<string>('');
   const [newSpeseLavorazione, setNewSpeseLavorazione] = useState('');
-  // Come il costo ricambi su una consegna auto: un quadratino che decide se
-  // "spese lavorazione" conta davvero come spesa o resta solo informativo.
-  const [newSpeseLavorazioneConta, setNewSpeseLavorazioneConta] = useState(true);
   // Solo per Revisione (Gianni)/Centraline (Daniele): si puo' registrare la
   // lavorazione appena iniziata, senza ancora importo/spese lavorazione
   // (si conoscono solo a fine lavoro), e completarla dopo.
@@ -357,7 +354,6 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     setNewData(m.data);
     setNewDipendenteId(m.dipendente_id || '');
     setNewSpeseLavorazione(m.spese_lavorazione != null ? String(m.spese_lavorazione).replace('.', ',') : '');
-    setNewSpeseLavorazioneConta(m.spese_lavorazione_conta !== false);
     setNewStatoLavorazione(m.stato === 'in_lavorazione' ? 'in_lavorazione' : 'completato');
     setNewNote(m.note || '');
     setError('');
@@ -379,7 +375,6 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
     setNewData(todayISO());
     setNewDipendenteId('');
     setNewSpeseLavorazione('');
-    setNewSpeseLavorazioneConta(true);
     setNewStatoLavorazione('completato');
     setNewNote('');
     setError('');
@@ -418,7 +413,6 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
       spese_lavorazione: TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) && !inLavorazione
         ? (parseFloat((newSpeseLavorazione || '').replace(',', '.')) || null)
         : null,
-      spese_lavorazione_conta: TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) ? newSpeseLavorazioneConta : true,
       stato: TIPI_CON_SPESE_LAVORAZIONE.includes(newTipo) ? newStatoLavorazione : null,
     };
 
@@ -487,16 +481,6 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
         : 'Movimento registrato'
     );
     loadMovimenti();
-  };
-
-  // Stesso quadratino "conta come spesa" del costo ricambi su una consegna
-  // auto, qui su "spese lavorazione" di Revisione Gianni/Centraline
-  // Daniele: non crea un movimento a parte, aggiunge/toglie direttamente
-  // quell'importo dalla spesa di questo stesso movimento.
-  const toggleSpeseLavorazioneConta = async (m: Movimento) => {
-    const nuovoValore = !(m.spese_lavorazione_conta !== false);
-    setMovimenti((prev) => prev.map((mm) => (mm.id === m.id ? { ...mm, spese_lavorazione_conta: nuovoValore } : mm)));
-    await supabase.from('movimenti').update({ spese_lavorazione_conta: nuovoValore }).eq('id', m.id);
   };
 
   const apriAggiungiRicambioLavorazione = (m: Movimento) => {
@@ -923,15 +907,6 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                 placeholder="0.00"
                 className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <label className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-500 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={newSpeseLavorazioneConta}
-                  onChange={(e) => setNewSpeseLavorazioneConta(e.target.checked)}
-                  className="rounded"
-                />
-                Conta come spesa
-              </label>
             </div>
           )}
 
@@ -1394,20 +1369,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                               {m.metodo_pagamento && !inLavorazione && ` · ${m.metodo_pagamento}`}
                             </div>
                             {m.spese_lavorazione != null && (
-                              <label
-                                onClick={(e) => e.stopPropagation()}
-                                className={`flex items-center gap-1.5 text-[11px] truncate cursor-pointer ${m.spese_lavorazione_conta !== false ? 'text-red-500' : 'text-gray-400'}`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={m.spese_lavorazione_conta !== false}
-                                  onChange={() => toggleSpeseLavorazioneConta(m)}
-                                  className="rounded shrink-0"
-                                />
-                                {m.spese_lavorazione_conta !== false
-                                  ? `− Spese lavorazione: ${fmtEuro(m.spese_lavorazione)} (conta come spesa)`
-                                  : `Spese lavorazione: ${fmtEuro(m.spese_lavorazione)} (non conta come spesa)`}
-                              </label>
+                              <div className="text-[11px] text-red-500 truncate">
+                                − Spese lavorazione: {fmtEuro(m.spese_lavorazione)}
+                              </div>
                             )}
                             {inLavorazione && totaleRicambiLavorazione > 0 && (
                               <div className="text-[11px] text-red-500 truncate">
