@@ -582,8 +582,10 @@ function ModalPagamento({ acconti, onConferma, onAnnulla }: {
   // Il totale serve sempre, anche su "Non pagato": e' il valore del lavoro
   // svolto, da cui dipende il guadagno netto mostrato in Incassi officina —
   // un lavoro consegnato senza incasso resta comunque un lavoro fatto, e
-  // senza questo numero il suo margine sparirebbe dalle statistiche.
-  const totaleValido = parseFloat(importoTotale) > 0;
+  // senza questo numero il suo margine sparirebbe dalle statistiche. Blocca
+  // solo il campo lasciato vuoto per sbaglio: 0 e' un valore legittimo (es.
+  // lavoro in garanzia/gratuito), non va impedito.
+  const totaleValido = importoTotale.trim() !== '' && !Number.isNaN(parseFloat(importoTotale)) && parseFloat(importoTotale) >= 0;
 
   const conferma = () => {
     if (!totaleValido) return;
