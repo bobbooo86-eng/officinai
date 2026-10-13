@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
-import { TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento } from './movimentiTotali';
+import { TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento } from './movimentiTotali';
 import { DateField } from '@/components/DateField';
 import { dayKey } from '@/lib/format';
 import type { Appuntamento, Movimento } from '@/types/database';
@@ -481,7 +481,10 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   // per collaboratore" in Analytics.
   const movimentiCompletati = movimentiInRange.filter((m) => m.stato !== 'in_lavorazione');
   const totaleLordo = inRange.reduce((s, a) => s + valoreLavoro(a), 0) + movimentiCompletati.reduce((s, m) => s + incassoMovimento(m), 0);
-  const totaleCosto = inRange.reduce((s, a) => s + (Number(a.pagamento?.costo_ricambi) || 0), 0) + movimentiCompletati.reduce((s, m) => s + spesaMovimento(m), 0);
+  // Costo per intero, a prescindere dal quadratino "conta come spesa" (che
+  // serve solo ai conti reali di Cassa/Movimenti): qui e' una statistica, il
+  // margine vero del lavoro svolto non cambia a seconda di chi paga chi.
+  const totaleCosto = inRange.reduce((s, a) => s + (Number(a.pagamento?.costo_ricambi) || 0), 0) + movimentiCompletati.reduce((s, m) => s + (Number(m.spese_lavorazione) || 0), 0);
   const margineNetto = totaleLordo - totaleCosto;
   const totaleIncassato = inRange.reduce((s, a) => s + incassato(a), 0) + movimentiCompletati.reduce((s, m) => s + incassoMovimento(m), 0);
   const totaleResto = inRange.reduce((s, a) => s + restoDaIncassare(a), 0);
@@ -636,7 +639,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                     <div className="mt-2 pt-2 border-t border-gray-100 text-[11px] text-gray-500">
                       <div>
                         Costo lavorazione: <span className="font-semibold text-gray-700">{fmtEuro(Number(m.spese_lavorazione) || 0)}</span>
-                        {' · '}netto <span className="font-semibold text-emerald-700">{fmtEuro(incassoMovimento(m) - spesaMovimento(m))}</span>
+                        {' · '}netto <span className="font-semibold text-emerald-700">{fmtEuro(incassoMovimento(m) - (Number(m.spese_lavorazione) || 0))}</span>
                       </div>
                       {(m.spese_lavorazione || 0) > 0 && (
                         <label
