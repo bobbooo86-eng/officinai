@@ -1260,14 +1260,27 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
               items.movimenti.reduce((a, m) => a + spesaMovimento(m), 0) +
               items.auto.reduce((a, app) => a + spesaRicambi(app.pagamento), 0);
             const daySaldo = dayIncassi - daySpese;
+            // Guadagno netto delle sole lavorazioni di quel giorno (consegne
+            // auto + Revisione Gianni/Centraline Daniele), stesso criterio
+            // del riquadro "Guadagno netto lavorazioni" in cima alla pagina.
+            const dayGuadagnoNetto =
+              items.auto.reduce((a, app) => a + (valoreLavoro(app) - (Number(app.pagamento?.costo_ricambi) || 0)), 0) +
+              items.movimenti
+                .filter((m) => TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo))
+                .reduce((a, m) => a + (incassoMovimento(m) - spesaMovimento(m)), 0);
             const dt = new Date(giorno + 'T00:00');
             const label = dt.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
             return (
               <div key={giorno}>
                 <div className="flex items-center justify-between px-1 mb-1.5">
                   <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{label}</div>
-                  <div className={`text-[11px] font-semibold ${daySaldo >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {daySaldo >= 0 ? '+' : ''}{fmtEuro(daySaldo)}
+                  <div className="flex items-center gap-2">
+                    <div className={`text-[11px] font-semibold ${daySaldo >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {daySaldo >= 0 ? '+' : ''}{fmtEuro(daySaldo)}
+                    </div>
+                    <div className="text-[11px] font-semibold text-teal-700">
+                      netto {fmtEuro(dayGuadagnoNetto)}
+                    </div>
                   </div>
                 </div>
                 <Card className="!p-2 divide-y divide-gray-100">
