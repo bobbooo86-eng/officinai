@@ -772,7 +772,6 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
   // margine vero del lavoro svolto non cambia a seconda di chi paga chi.
   const totaleCosto = inRange.reduce((s, a) => s + (Number(a.pagamento?.costo_ricambi) || 0), 0) + movimentiCompletati.reduce((s, m) => s + (Number(m.spese_lavorazione) || 0), 0);
   const margineNetto = totaleLordo - totaleCosto;
-  const totaleIncassato = inRange.reduce((s, a) => s + incassato(a), 0) + movimentiCompletati.reduce((s, m) => s + incassoMovimento(m), 0);
   const totaleResto = inRange.reduce((s, a) => s + restoDaIncassare(a), 0);
   const numVoci = inRange.length + movimentiCompletati.length;
 
@@ -863,11 +862,13 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
         className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
       />
 
-      {/* Riepilogo */}
+      {/* Riepilogo: statistica pura, sempre come se tutto fosse stato pagato
+          per intero (vedi commento su totaleLordo) — per i soldi davvero
+          incassati/da incassare vedi Movimenti. */}
       <Card className="!p-4 space-y-2 !bg-emerald-50/50 !border-emerald-200">
         <div className="flex justify-between items-baseline">
-          <span className="text-xs text-gray-600">Incassato</span>
-          <span className="text-xl font-black text-emerald-700">{fmtEuro(totaleIncassato)}</span>
+          <span className="text-xs text-gray-600">Lordo lavorazioni</span>
+          <span className="text-xl font-black text-emerald-700">{fmtEuro(totaleLordo)}</span>
         </div>
         <div className="flex justify-between items-baseline">
           <span className="text-xs text-gray-600">Costo ricambi/lavorazione</span>
@@ -879,7 +880,7 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
         </div>
         {totaleResto > 0 && (
           <div className="flex justify-between items-baseline pt-1">
-            <span className="text-[11px] text-amber-700">Ancora da incassare (acconti/non pagati)</span>
+            <span className="text-[11px] text-amber-700">Di cui ancora da incassare (acconti/non pagati)</span>
             <span className="text-xs font-bold text-amber-700">{fmtEuro(totaleResto)}</span>
           </div>
         )}
@@ -968,10 +969,10 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                     <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mb-1" style={{ backgroundColor: cfg.bg, color: cfg.color }}>
                       {cfg.label}
                     </span>
-                    <div className="text-sm font-bold text-gray-900">{fmtEuro(incassato(a))}</div>
-                    {p.stato === 'acconto' && p.importo_totale != null && (
+                    <div className="text-sm font-bold text-gray-900">{fmtEuro(valoreLavoro(a))}</div>
+                    {restoDaIncassare(a) > 0 && (
                       <div className="text-[10px] text-amber-600">
-                        Resto: {fmtEuro(restoDaIncassare(a))}
+                        Da incassare: {fmtEuro(restoDaIncassare(a))}
                       </div>
                     )}
                   </div>
