@@ -5,8 +5,16 @@ import { fmtEuro, dayKey } from '@/lib/format';
 import { STATO_CONFIG } from '@/lib/constants';
 import { useAuthStore } from '@/stores/authStore';
 import { dataIncasso, valoreLavoro, usePeriodoNavigabile, SelettorePeriodoNavigabile } from '@/features/cassa/IncassiOfficina';
-import { incassoMovimento, spesaMovimento } from '@/features/cassa/movimentiTotali';
+import { incassoMovimento, spesaMovimento, TIPI_CON_SPESE_LAVORAZIONE } from '@/features/cassa/movimentiTotali';
 import type { Appuntamento, Preventivo, Recensione, Movimento, Utente } from '@/types/database';
+
+// Solo i campi che servono per "Fatturato vs non fatturato": la tabella
+// fatture ha anche righe/IVA/cliente, non utili qui.
+interface FatturaMinima {
+  id: string;
+  data_emissione: string;
+  subtotale: number;
+}
 
 // Nomi da cercare ovunque compaiano — nel campo "operaio" della consegna,
 // nella descrizione/nota di un movimento, o gia' attribuiti dal tipo
@@ -26,6 +34,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
   const [recensioni, setRecensioni] = useState<Recensione[]>([]);
   const [movimenti, setMovimenti] = useState<Movimento[]>([]);
   const [dipendenti, setDipendenti] = useState<Utente[]>([]);
+  const [fatture, setFatture] = useState<FatturaMinima[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<'7d' | '30d' | '90d' | 'anno'>('30d');
   // Periodo del report per collaboratore: giorno/settimana/mese/anno,
@@ -35,6 +44,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
   // di una settimana e le spese di un'altra senza che si influenzino.
   const navCollab = usePeriodoNavigabile('settimana');
   const navSpese = usePeriodoNavigabile('settimana');
+  const navFatturato = usePeriodoNavigabile('mese');
   // Collaboratore i cui lavori/spese sono espansi (un solo elenco alla volta per finestra).
   const [collabEspanso, setCollabEspanso] = useState<string | null>(null);
   const [speseEspanse, setSpeseEspanse] = useState<string | null>(null);
@@ -42,7 +52,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
   useEffect(() => {
     if (!officina) return;
     const fetch = async () => {
-      const [{ data: apps }, { data: prev }, { data: rec }, { data: mov }, { data: dip }] = await Promise.all([
+      const [{ data: apps }, { data: prev }, { data: rec }, { data: mov }, { data: dip }, { data: fat }] = await Promise.all([
         supabase
           .from('appuntamenti')
           .select('*')
@@ -67,12 +77,17 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
           .from('utenti')
           .select('*')
           .eq('officina_id', officina.id),
+        supabase
+          .from('fatture')
+          .select('id, data_emissione, subtotale')
+          .eq('officina_id', officina.id),
       ]);
       setAppuntamenti(apps || []);
       setPreventivi(prev || []);
       setRecensioni(rec || []);
       setMovimenti(mov || []);
       setDipendenti(dip || []);
+      setFatture((fat as FatturaMinima[]) || []);
       setLoading(false);
     };
     fetch();
@@ -260,6 +275,38 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
     });
   }, [movimenti, persone, navSpese.inRangeSelezionato]);
 
+  // Quanto delle lavorazioni svolte (consegne auto + Revisione Gianni/
+  // Centraline Daniele, stesso criterio di Incassi officina: sempre il
+  // valore pieno, pagato o no) e' finito davvero in una fattura emessa nello
+  // stesso periodo. E' una stima per confronto fra i due totali del
+  // periodo, non un collegamento diretto lavoro-per-fattura (una fattura
+  // puo' raggruppare piu' lavori, o un lavoro puo' non avercene mai una).
+  const fatturatoStats = useMemo(() => {
+    const consegneInPeriodo = appuntamenti.filter(
+      (a) => a.stato === 'consegnato' && a.pagamento && navFatturato.inRangeSelezionato(dataIncasso(a))
+    );
+    const movimentiInPeriodo = movimenti.filter(
+      (m) => TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo) && m.stato !== 'in_lavorazione' && navFatturato.inRangeSelezionato(dataMovimento(m))
+    );
+    const totaleLavorazioni =
+      consegneInPeriodo.reduce((s, a) => s + valoreLavoro(a), 0) +
+      movimentiInPeriodo.reduce((s, m) => s + incassoMovimento(m), 0);
+
+    const fattureInPeriodo = fatture.filter((f) => navFatturato.inRangeSelezionato(new Date(f.data_emissione)));
+    // Confrontato con il subtotale (IVA esclusa), non il totale: il valore
+    // delle lavorazioni qui sopra e' sempre IVA esclusa.
+    const totaleFatturato = fattureInPeriodo.reduce((s, f) => s + (f.subtotale || 0), 0);
+    const nonFatturato = Math.max(0, totaleLavorazioni - totaleFatturato);
+
+    return {
+      totaleLavorazioni,
+      totaleFatturato: Math.min(totaleFatturato, totaleLavorazioni),
+      nonFatturato,
+      numFatture: fattureInPeriodo.length,
+      numLavorazioni: consegneInPeriodo.length + movimentiInPeriodo.length,
+    };
+  }, [appuntamenti, movimenti, fatture, navFatturato.inRangeSelezionato]);
+
   const exportCSV = () => {
     const days = periodo === '7d' ? 7 : periodo === '30d' ? 30 : periodo === '90d' ? 90 : 365;
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
@@ -348,6 +395,44 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
         <div className="flex justify-between text-[10px] text-gray-400 mt-1">
           <span>Tot. emesso: {fmtEuro(stats.totalePreventivi)}</span>
           <span>Tot. accettato: {fmtEuro(stats.totaleAccettati)}</span>
+        </div>
+      </Card>
+
+      {/* Fatturato vs non fatturato */}
+      <Card className="!p-4">
+        <h3 className="text-xs font-semibold text-gray-500 mb-3">FATTURATO VS NON FATTURATO</h3>
+        <SelettorePeriodoNavigabile nav={navFatturato} />
+        <div className="text-center mb-3">
+          <div className="text-lg font-bold text-gray-900">{fmtEuro(fatturatoStats.totaleLavorazioni)}</div>
+          <div className="text-[10px] text-gray-400">
+            Totale lavorazioni nel periodo ({fatturatoStats.numLavorazioni}) · {fatturatoStats.numFatture} fattur{fatturatoStats.numFatture === 1 ? 'a' : 'e'} emess{fatturatoStats.numFatture === 1 ? 'a' : 'e'}
+          </div>
+        </div>
+        {fatturatoStats.totaleLavorazioni === 0 ? (
+          <div className="text-center text-xs text-gray-400 py-2">Nessuna lavorazione in questo periodo</div>
+        ) : (
+          <div className="space-y-2">
+            {([
+              { label: '🧾 Fatturato', valore: fatturatoStats.totaleFatturato, colore: '#3b82f6' },
+              { label: '📋 Non fatturato', valore: fatturatoStats.nonFatturato, colore: '#f59e0b' },
+            ] as const).map(({ label, valore, colore }) => {
+              const pct = (valore / fatturatoStats.totaleLavorazioni) * 100;
+              return (
+                <div key={label}>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-xs text-gray-700">{label}</span>
+                    <span className="text-xs font-semibold text-gray-900">{fmtEuro(valore)} ({pct.toFixed(0)}%)</span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: colore }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="text-[10px] text-gray-400 mt-2">
+          Lavorazioni svolte (consegne auto + Revisione Gianni/Centraline Daniele) nel periodo, a confronto con quanto e' stato messo in fattura nello stesso periodo. E' una stima per il confronto fra i due totali, non un collegamento diretto lavoro per lavoro.
         </div>
       </Card>
 
