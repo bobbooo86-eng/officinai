@@ -412,6 +412,175 @@ export const PERIODI: { id: Periodo; label: string }[] = [
 // (non UTC) o un giorno vicino alla mezzanotte finirebbe nel giorno sbagliato.
 const dateFromDataStr = (s: string) => new Date(s + 'T00:00:00');
 
+export interface PeriodoNavigabile {
+  periodo: Periodo;
+  riferimento: Date;
+  rangeCustom: { inizio: string; fine: string } | null;
+  mostraRangeForm: boolean;
+  setMostraRangeForm: (value: boolean | ((prev: boolean) => boolean)) => void;
+  rangeInizio: string;
+  setRangeInizio: (s: string) => void;
+  rangeFine: string;
+  setRangeFine: (s: string) => void;
+  inRangeSelezionato: (d: Date) => boolean;
+  navigaPeriodo: (offset: number) => void;
+  applicaRangeCustom: () => void;
+  annullaRangeCustom: () => void;
+  selezionaPeriodo: (p: Periodo) => void;
+  tornaOggi: () => void;
+  periodoLabel: string;
+}
+
+/** Periodo giorno/settimana/mese/anno navigabile avanti/indietro, o
+ * sostituito da un intervallo di date scelto a mano — stesso meccanismo
+ * gia' in uso su Movimenti e Incassi officina (CassaPage), estratto qui
+ * cosi' un terzo/quarto punto (es. Analytics) non debba riscrivere la
+ * stessa logica di sana pianta un'altra volta. */
+export function usePeriodoNavigabile(periodoIniziale: Periodo = 'settimana'): PeriodoNavigabile {
+  const [periodo, setPeriodo] = useState<Periodo>(periodoIniziale);
+  const [riferimento, setRiferimento] = useState(() => new Date());
+  const [rangeCustom, setRangeCustom] = useState<{ inizio: string; fine: string } | null>(null);
+  const [mostraRangeForm, setMostraRangeForm] = useState(false);
+  const [rangeInizio, setRangeInizio] = useState('');
+  const [rangeFine, setRangeFine] = useState('');
+
+  const inRangeSelezionato = useCallback(
+    (d: Date) => {
+      if (rangeCustom) {
+        const k = dayKey(d);
+        return k >= rangeCustom.inizio && k <= rangeCustom.fine;
+      }
+      return inPeriodo(d, periodo, riferimento);
+    },
+    [rangeCustom, periodo, riferimento]
+  );
+
+  const navigaPeriodo = (offset: number) => {
+    setRangeCustom(null);
+    setRiferimento((prev) => {
+      const d = new Date(prev);
+      if (periodo === 'giorno') d.setDate(d.getDate() + offset);
+      else if (periodo === 'settimana') d.setDate(d.getDate() + offset * 7);
+      else if (periodo === 'mese') d.setMonth(d.getMonth() + offset);
+      else d.setFullYear(d.getFullYear() + offset);
+      return d;
+    });
+  };
+
+  const applicaRangeCustom = () => {
+    if (!rangeInizio || !rangeFine) return;
+    setRangeCustom(rangeInizio <= rangeFine ? { inizio: rangeInizio, fine: rangeFine } : { inizio: rangeFine, fine: rangeInizio });
+    setMostraRangeForm(false);
+  };
+
+  const selezionaPeriodo = (p: Periodo) => {
+    setPeriodo(p);
+    setRangeCustom(null);
+    setMostraRangeForm(false);
+  };
+
+  const periodoLabel = useMemo(() => {
+    const fmtG = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
+    if (rangeCustom) return `${fmtG(rangeCustom.inizio)} – ${fmtG(rangeCustom.fine)}`;
+    if (periodo === 'giorno') return riferimento.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (periodo === 'settimana') {
+      const inizio = new Date(riferimento);
+      const g = (inizio.getDay() + 6) % 7;
+      inizio.setDate(inizio.getDate() - g);
+      const fine = new Date(inizio);
+      fine.setDate(fine.getDate() + 6);
+      return `${inizio.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} – ${fine.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    }
+    if (periodo === 'mese') return riferimento.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+    return riferimento.getFullYear().toString();
+  }, [periodo, riferimento, rangeCustom]);
+
+  return {
+    periodo, riferimento, rangeCustom, mostraRangeForm, setMostraRangeForm,
+    rangeInizio, setRangeInizio, rangeFine, setRangeFine,
+    inRangeSelezionato, navigaPeriodo, applicaRangeCustom,
+    annullaRangeCustom: () => setRangeCustom(null),
+    selezionaPeriodo,
+    tornaOggi: () => setRiferimento(new Date()),
+    periodoLabel,
+  };
+}
+
+/** Selettore periodo (giorno/settimana/mese/anno) con frecce avanti/indietro
+ * e intervallo di date personalizzato, pronto per essere agganciato a un
+ * usePeriodoNavigabile(): stesso aspetto ovunque venga usato. */
+export function SelettorePeriodoNavigabile({ nav }: { nav: PeriodoNavigabile }) {
+  return (
+    <div className="space-y-2 mb-3">
+      <div className="grid grid-cols-4 gap-1.5">
+        {PERIODI.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => nav.selezionaPeriodo(p.id)}
+            className={`py-2 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+              nav.periodo === p.id && !nav.rangeCustom ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {!nav.rangeCustom && (
+        <div className="flex items-center justify-between">
+          <button onClick={() => nav.navigaPeriodo(-1)} className="p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer text-gray-500" aria-label="Periodo precedente">
+            ‹
+          </button>
+          <div className="text-center">
+            <div className="text-[11px] font-semibold text-gray-700 capitalize">{nav.periodoLabel}</div>
+            <button onClick={nav.tornaOggi} className="text-[10px] text-blue-600 hover:underline cursor-pointer">
+              Torna a oggi
+            </button>
+          </div>
+          <button onClick={() => nav.navigaPeriodo(1)} className="p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer text-gray-500" aria-label="Periodo successivo">
+            ›
+          </button>
+        </div>
+      )}
+
+      {nav.rangeCustom ? (
+        <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5">
+          <span className="text-[11px] font-semibold text-blue-800">📅 {nav.periodoLabel}</span>
+          <button onClick={nav.annullaRangeCustom} className="text-[11px] text-blue-600 hover:underline cursor-pointer shrink-0">
+            Annulla intervallo
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => nav.setMostraRangeForm((v) => !v)}
+          className="w-full text-center text-[11px] text-blue-600 hover:underline cursor-pointer"
+        >
+          {nav.mostraRangeForm ? 'Chiudi' : '📅 Scegli un intervallo di date personalizzato'}
+        </button>
+      )}
+      {nav.mostraRangeForm && !nav.rangeCustom && (
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <label className="text-[10px] text-gray-400 block mb-0.5">Da</label>
+            <DateField value={nav.rangeInizio} onChange={nav.setRangeInizio} className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex-1">
+            <label className="text-[10px] text-gray-400 block mb-0.5">A</label>
+            <DateField value={nav.rangeFine} onChange={nav.setRangeFine} className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <button
+            onClick={nav.applicaRangeCustom}
+            disabled={!nav.rangeInizio || !nav.rangeFine}
+            className="py-1.5 px-3 rounded-lg bg-blue-600 text-white text-[11px] font-semibold hover:bg-blue-700 disabled:opacity-50 cursor-pointer transition-colors shrink-0"
+          >
+            Applica
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const LABEL_LAVORAZIONE: Record<string, { label: string; icon: string }> = {
   spesa_revisione_gianni: { label: 'Revisione (Gianni)', icon: '🔧' },
   spesa_centraline_daniele: { label: 'Centraline (Daniele)', icon: '💻' },

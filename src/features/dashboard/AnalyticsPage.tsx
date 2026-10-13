@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { fmtEuro, dayKey } from '@/lib/format';
 import { STATO_CONFIG } from '@/lib/constants';
 import { useAuthStore } from '@/stores/authStore';
-import { dataIncasso, inPeriodo, valoreLavoro, PERIODI, type Periodo } from '@/features/cassa/IncassiOfficina';
+import { dataIncasso, valoreLavoro, usePeriodoNavigabile, SelettorePeriodoNavigabile } from '@/features/cassa/IncassiOfficina';
 import { incassoMovimento, spesaMovimento } from '@/features/cassa/movimentiTotali';
 import type { Appuntamento, Preventivo, Recensione, Movimento, Utente } from '@/types/database';
 
@@ -28,10 +28,13 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
   const [dipendenti, setDipendenti] = useState<Utente[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<'7d' | '30d' | '90d' | 'anno'>('30d');
-  // Periodo del report per collaboratore: giorno/settimana/mese/anno, come
-  // in Cassa > Incassi officina, non i 7/30/90 giorni del resto della pagina.
-  const [periodoCollab, setPeriodoCollab] = useState<Periodo>('settimana');
-  const [periodoSpese, setPeriodoSpese] = useState<Periodo>('settimana');
+  // Periodo del report per collaboratore: giorno/settimana/mese/anno,
+  // navigabile avanti/indietro o con un intervallo di date a scelta — come
+  // in Cassa > Movimenti/Incassi officina, non i 7/30/90 giorni del resto
+  // della pagina. Due selettori indipendenti: si puo' guardare il guadagno
+  // di una settimana e le spese di un'altra senza che si influenzino.
+  const navCollab = usePeriodoNavigabile('settimana');
+  const navSpese = usePeriodoNavigabile('settimana');
   // Collaboratore i cui lavori/spese sono espansi (un solo elenco alla volta per finestra).
   const [collabEspanso, setCollabEspanso] = useState<string | null>(null);
   const [speseEspanse, setSpeseEspanse] = useState<string | null>(null);
@@ -138,11 +141,10 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
   // quando paga il fornitore — a differenza di "spesa" in Cassa, che
   // conta solo i ricambi pagati subito dall'officina.
   const collaboratori = useMemo(() => {
-    const riferimento = new Date();
     const consegnati = appuntamenti.filter(
-      (a) => a.stato === 'consegnato' && a.pagamento && inPeriodo(dataIncasso(a), periodoCollab, riferimento)
+      (a) => a.stato === 'consegnato' && a.pagamento && navCollab.inRangeSelezionato(dataIncasso(a))
     );
-    const movimentiInPeriodo = movimenti.filter((m) => inPeriodo(dataMovimento(m), periodoCollab, riferimento));
+    const movimentiInPeriodo = movimenti.filter((m) => navCollab.inRangeSelezionato(dataMovimento(m)));
 
     return COLLABORATORI.map((nome) => {
       let incassi = 0;
@@ -206,7 +208,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
       dettagli.sort((x, y) => y.data.getTime() - x.data.getTime());
       return { nome, incassi, spese, netto: incassi - spese, lavori: dettagli.length, dettagli };
     });
-  }, [appuntamenti, movimenti, periodoCollab]);
+  }, [appuntamenti, movimenti, navCollab.inRangeSelezionato]);
 
   // Spese per collaboratore: qui invece il contrario — tutte le spese
   // (titolare, dipendente, anticipi...) prese dalla cassa e assegnate a
@@ -227,11 +229,10 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
   }, [dipendenti]);
 
   const spesePerCollaboratore = useMemo(() => {
-    const riferimento = new Date();
     const movimentiInPeriodo = movimenti.filter(
       (m) =>
         m.tipo !== 'spesa_revisione_gianni' && m.tipo !== 'spesa_centraline_daniele' &&
-        inPeriodo(dataMovimento(m), periodoSpese, riferimento)
+        navSpese.inRangeSelezionato(dataMovimento(m))
     );
 
     return persone.map(({ key, nome, utenteId }) => {
@@ -257,7 +258,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
       dettagli.sort((x, y) => y.data.getTime() - x.data.getTime());
       return { id: key, nome, spese, voci: dettagli.length, dettagli };
     });
-  }, [movimenti, persone, periodoSpese]);
+  }, [movimenti, persone, navSpese.inRangeSelezionato]);
 
   const exportCSV = () => {
     const days = periodo === '7d' ? 7 : periodo === '30d' ? 30 : periodo === '90d' ? 90 : 365;
@@ -371,19 +372,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
       {/* Guadagno per collaboratore */}
       <Card className="!p-4">
         <h3 className="text-xs font-semibold text-gray-500 mb-3">GUADAGNO PER COLLABORATORE</h3>
-        <div className="grid grid-cols-4 gap-1.5 mb-3">
-          {PERIODI.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setPeriodoCollab(p.id)}
-              className={`py-2 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
-                periodoCollab === p.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <SelettorePeriodoNavigabile nav={navCollab} />
         <div className="space-y-2">
           {collaboratori.map((c) => {
             const espanso = collabEspanso === c.nome;
@@ -467,19 +456,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
       {/* Spese per collaboratore */}
       <Card className="!p-4">
         <h3 className="text-xs font-semibold text-gray-500 mb-3">SPESE PER COLLABORATORE</h3>
-        <div className="grid grid-cols-4 gap-1.5 mb-3">
-          {PERIODI.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setPeriodoSpese(p.id)}
-              className={`py-2 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
-                periodoSpese === p.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <SelettorePeriodoNavigabile nav={navSpese} />
         <div className="space-y-2">
           {spesePerCollaboratore.map((c) => {
             const espanso = speseEspanse === c.id;
