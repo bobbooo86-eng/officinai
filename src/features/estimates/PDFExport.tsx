@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Card } from '@/components/ui';
-import { fmtEuro } from '@/lib/format';
+import { fmtEuro, escapeHtml } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import type { Appuntamento, Officina, Preventivo } from '@/types/database';
 
@@ -89,7 +89,7 @@ export function buildPreventivoHtml(
   const accent = accentColor || '#1a56db';
   const accentDark = darkenColor(accent, 0.15);
   const logoBlock = officina?.logo_url
-    ? `<img src="${officina.logo_url}" alt="Logo" style="width:48px;height:48px;border-radius:10px;object-fit:cover;margin-right:12px;" />`
+    ? `<img src="${escapeHtml(officina.logo_url)}" alt="Logo" style="width:48px;height:48px;border-radius:10px;object-fit:cover;margin-right:12px;" />`
     : '';
   // La fattura e' un preventivo accettato con un'intestazione diversa: la
   // grafica resta identica, cosi' il cliente riconosce lo stesso documento
@@ -102,7 +102,7 @@ export function buildPreventivoHtml(
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>${titoloDoc} — ${officina?.nome || 'OfficinAI'}</title>
+  <title>${titoloDoc} — ${escapeHtml(officina?.nome || 'OfficinAI')}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #333; font-size: 13px; }
@@ -140,17 +140,17 @@ export function buildPreventivoHtml(
     <div class="header-left">
       ${logoBlock}
       <div>
-        <h1>${officina?.nome || 'OfficinAI'}</h1>
-        <p>${officina?.indirizzo || ''}</p>
-        <p>Tel: ${officina?.tel || ''} • Email: ${officina?.email || ''}</p>
-        <p>P.IVA: ${officina?.p_iva || ''}</p>
+        <h1>${escapeHtml(officina?.nome || 'OfficinAI')}</h1>
+        <p>${escapeHtml(officina?.indirizzo || '')}</p>
+        <p>Tel: ${escapeHtml(officina?.tel || '')} • Email: ${escapeHtml(officina?.email || '')}</p>
+        <p>P.IVA: ${escapeHtml(officina?.p_iva || '')}</p>
       </div>
     </div>
     <div class="header-right">
-      ${isFattura && opts?.numero ? `<div style="font-size:18px;font-weight:700;color:${accent};">${opts.numero}</div>` : ''}
+      ${isFattura && opts?.numero ? `<div style="font-size:18px;font-weight:700;color:${accent};">${escapeHtml(opts.numero)}</div>` : ''}
       <strong>${titoloDoc.toUpperCase()}</strong><br>
       Data: ${new Date().toLocaleDateString('it-IT')}<br>
-      Stato: ${preventivo.stato.toUpperCase()}
+      Stato: ${escapeHtml(preventivo.stato.toUpperCase())}
     </div>
   </div>
 
@@ -159,21 +159,21 @@ export function buildPreventivoHtml(
     <div class="info-grid">
       <div class="info-box">
         <label>Cliente</label>
-        <p>${appuntamento.clienti?.nome || '-'}</p>
+        <p>${escapeHtml(appuntamento.clienti?.nome || '-')}</p>
       </div>
       <div class="info-box">
         <label>Veicolo</label>
-        <p>${appuntamento.veicoli?.marca} ${appuntamento.veicoli?.modello} — ${appuntamento.veicoli?.targa}</p>
+        <p>${escapeHtml(appuntamento.veicoli?.marca)} ${escapeHtml(appuntamento.veicoli?.modello)} — ${escapeHtml(appuntamento.veicoli?.targa)}</p>
       </div>
       ${isFattura ? `
       <div class="info-box">
         <label>Codice Fiscale / P.IVA</label>
-        <p>${opts?.clienteCf || '—'}</p>
+        <p>${escapeHtml(opts?.clienteCf || '—')}</p>
       </div>
       ` : `
       <div class="info-box">
         <label>Problema segnalato</label>
-        <p>${appuntamento.problema}</p>
+        <p>${escapeHtml(appuntamento.problema)}</p>
       </div>
       `}
       <div class="info-box">
@@ -199,7 +199,7 @@ export function buildPreventivoHtml(
         ${(preventivo.righe || []).map((r) => `
           <tr>
             <td><span class="badge ${r.tipo === 'manodopera' ? 'badge-mano' : 'badge-ric'}">${r.tipo === 'manodopera' ? 'Manodopera' : 'Ricambio'}</span></td>
-            <td>${r.desc}</td>
+            <td>${escapeHtml(r.desc)}</td>
             <td>${r.qta}</td>
             <td>${fmtEuro(r.prezzo)}</td>
             <td>${fmtEuro(r.qta * r.prezzo)}</td>
@@ -219,7 +219,7 @@ export function buildPreventivoHtml(
   ${preventivo.fermo_macchina ? `
   <div class="section">
     <h2>Fermo macchina</h2>
-    <p style="font-size: 12px; color: #333;">Il veicolo dovrà rimanere in officina per: <strong>${preventivo.fermo_macchina}</strong></p>
+    <p style="font-size: 12px; color: #333;">Il veicolo dovrà rimanere in officina per: <strong>${escapeHtml(preventivo.fermo_macchina)}</strong></p>
   </div>
   ` : ''}
 
@@ -233,7 +233,7 @@ export function buildPreventivoHtml(
   </div>
 
   <div class="footer">
-    <p>${officina?.nome || 'OfficinAI'} • ${officina?.indirizzo || ''} • P.IVA ${officina?.p_iva || ''}</p>
+    <p>${escapeHtml(officina?.nome || 'OfficinAI')} • ${escapeHtml(officina?.indirizzo || '')} • P.IVA ${escapeHtml(officina?.p_iva || '')}</p>
     <p style="margin-top: 4px;">Documento generato con OfficinAI — officinai.app</p>
   </div>
 </body>
@@ -269,6 +269,10 @@ export async function htmlToPdfBlob(html: string): Promise<Blob> {
   iframe.style.top = '0';
   iframe.style.width = `${larghezza}px`;
   iframe.style.border = '0';
+  // Nessuno script deve mai girare qui dentro: l'HTML e' gia' passato da
+  // escapeHtml() per ogni testo che arriva da un cliente, ma questa e' una
+  // seconda rete di sicurezza nel caso sfugga qualcosa.
+  iframe.setAttribute('sandbox', 'allow-same-origin');
   document.body.appendChild(iframe);
 
   try {

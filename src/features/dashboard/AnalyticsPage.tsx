@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Card, Badge, Loader } from '@/components/ui';
+import { Card, Loader } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { fmtEuro, dayKey } from '@/lib/format';
 import { STATO_CONFIG } from '@/lib/constants';

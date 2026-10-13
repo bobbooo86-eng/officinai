@@ -5,7 +5,7 @@ import { fmtEuro, fmtData } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { ShareDocument } from '@/components/ShareDocument';
 import { buildPreventivoHtml, extractLogoColor } from '@/features/estimates/PDFExport';
-import type { Preventivo, PreventivoRiga, Appuntamento } from '@/types/database';
+import type { Preventivo, Appuntamento } from '@/types/database';
 
 // ============================================
 // Types

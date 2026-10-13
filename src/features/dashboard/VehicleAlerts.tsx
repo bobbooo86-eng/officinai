@@ -54,7 +54,11 @@ export function VehicleAlerts() {
 
           checks.forEach(({ tipo, data }) => {
             if (!data) return;
-            const scadDate = new Date(data);
+            // "data" e' una stringa "YYYY-MM-DD": letta senza T00:00:00
+            // verrebbe interpretata come UTC, spostando il conteggio di ore
+            // (in Italia, UTC+1/+2) e potendo far apparire una scadenza
+            // scaduta/in arrivo un giorno prima o dopo quello vero.
+            const scadDate = new Date(data + 'T00:00:00');
             const diffMs = scadDate.getTime() - oggi.getTime();
             const giorniRimanenti = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 

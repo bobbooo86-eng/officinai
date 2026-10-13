@@ -1,13 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
-import { Card, Loader, Button, Input, Badge } from '@/components/ui';
+import { Card, Loader, Button, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { insertTolerant } from '@/lib/resilientDb';
-import { STATO_CONFIG } from '@/lib/constants';
-import { fmtData, fmtOra, fmtEuro } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { StoricoVeicolo } from './StoricoVeicolo';
 import { VoiceButton } from '@/components/VoiceInput';
-import type { Cliente, Veicolo, Appuntamento, Preventivo } from '@/types/database';
+import type { Cliente, Veicolo } from '@/types/database';
 
 type View = 'list' | 'add' | 'detail' | 'addVeicolo' | 'editVeicolo' | 'storicoVeicolo';
 

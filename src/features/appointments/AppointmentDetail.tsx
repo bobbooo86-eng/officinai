@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Button, Card, Badge, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { STATO_CONFIG, STATI_ORDINE, GRAVITA_CONFIG } from '@/lib/constants';
-import { fmtEuro, fmtDataOra } from '@/lib/format';
+import { fmtEuro, fmtDataOra, escapeHtml } from '@/lib/format';
 import { DateField } from '@/components/DateField';
 import { toWhatsAppNumber } from '@/lib/whatsapp';
 import { useAuthStore } from '@/stores/authStore';
@@ -2063,7 +2063,7 @@ function TabFoglioLavoro({ appuntamentoId, statoAppuntamento, veicolo, veicoloKm
 
   const stampaScheda = () => {
     if (!foglio) return;
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Scheda di lavoro — ${officina?.nome || 'OfficinAI'}</title>
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Scheda di lavoro — ${escapeHtml(officina?.nome || 'OfficinAI')}</title>
 <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;padding:30px;color:#333;font-size:13px}
 .header{display:flex;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:3px solid #1a56db}
 .header h1{color:#1a56db;font-size:20px}
@@ -2077,20 +2077,20 @@ function TabFoglioLavoro({ appuntamentoId, statoAppuntamento, veicolo, veicoloKm
 .firma-box{text-align:center;width:30%}.firma-box .line{border-bottom:1px solid #333;height:35px;margin-bottom:5px}
 .firma-box p{font-size:10px;color:#666}
 @media print{body{padding:15px}}</style></head><body>
-<div class="header"><h1>${officina?.nome || 'OfficinAI'}</h1><div style="text-align:right"><strong>SCHEDA DI LAVORO</strong><br>${new Date().toLocaleDateString('it-IT')}</div></div>
+<div class="header"><h1>${escapeHtml(officina?.nome || 'OfficinAI')}</h1><div style="text-align:right"><strong>SCHEDA DI LAVORO</strong><br>${new Date().toLocaleDateString('it-IT')}</div></div>
 <div class="info-grid">
-<div class="info-box"><label>Marca</label><p>${veicolo?.marca || '—'}</p></div>
-<div class="info-box"><label>Modello</label><p>${veicolo?.modello || '—'}</p></div>
+<div class="info-box"><label>Marca</label><p>${escapeHtml(veicolo?.marca || '—')}</p></div>
+<div class="info-box"><label>Modello</label><p>${escapeHtml(veicolo?.modello || '—')}</p></div>
 <div class="info-box"><label>Chilometri</label><p>${veicoloKm?.toLocaleString('it-IT') || '—'}</p></div>
-<div class="info-box"><label>Telefono</label><p>${clienteTel || '—'}</p></div>
+<div class="info-box"><label>Telefono</label><p>${escapeHtml(clienteTel || '—')}</p></div>
 </div>
-<div class="section"><h2>Lavorazioni tipiche</h2><div class="checklist">${LAVORAZIONI_TIPICHE.map((v) => `<div class="check"><span class="box">${lavorazioniTipiche.includes(v) ? '✓' : ''}</span>${v}</div>`).join('')}</div></div>
-${lavorazioniDaEseguire ? `<div class="section"><h2>Lavorazioni da eseguire</h2><p>${lavorazioniDaEseguire.replace(/\n/g, '<br>')}</p></div>` : ''}
-${difetti.length > 0 ? `<div class="section"><h2>Difetti riscontrati</h2>${difetti.map((d) => `<p>• ${d.descrizione || '—'} (${d.gravita})${d.risolto ? ' — risolto' : ''}</p>`).join('')}</div>` : ''}
+<div class="section"><h2>Lavorazioni tipiche</h2><div class="checklist">${LAVORAZIONI_TIPICHE.map((v) => `<div class="check"><span class="box">${lavorazioniTipiche.includes(v) ? '✓' : ''}</span>${escapeHtml(v)}</div>`).join('')}</div></div>
+${lavorazioniDaEseguire ? `<div class="section"><h2>Lavorazioni da eseguire</h2><p>${escapeHtml(lavorazioniDaEseguire).replace(/\n/g, '<br>')}</p></div>` : ''}
+${difetti.length > 0 ? `<div class="section"><h2>Difetti riscontrati</h2>${difetti.map((d) => `<p>• ${escapeHtml(d.descrizione || '—')} (${escapeHtml(d.gravita)})${d.risolto ? ' — risolto' : ''}</p>`).join('')}</div>` : ''}
 <div class="firme">
-<div class="firma-box"><div class="line"></div><p>Nome cliente${clienteNome ? `<br><strong>${clienteNome}</strong>` : ''}</p></div>
-<div class="firma-box"><div class="line"></div><p>Operaio${nomeOperaio ? `<br><strong>${nomeOperaio}</strong>` : ''}</p></div>
-<div class="firma-box"><div class="line"></div><p>Firma${firma ? `<br><strong>${firma}</strong>` : ''}</p></div>
+<div class="firma-box"><div class="line"></div><p>Nome cliente${clienteNome ? `<br><strong>${escapeHtml(clienteNome)}</strong>` : ''}</p></div>
+<div class="firma-box"><div class="line"></div><p>Operaio${nomeOperaio ? `<br><strong>${escapeHtml(nomeOperaio)}</strong>` : ''}</p></div>
+<div class="firma-box"><div class="line"></div><p>Firma${firma ? `<br><strong>${escapeHtml(firma)}</strong>` : ''}</p></div>
 </div>
 </body></html>`;
     const w = window.open('', '_blank');

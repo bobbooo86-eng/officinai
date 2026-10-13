@@ -59,3 +59,21 @@ export function fmtDurata(ms: number): string {
   const s = sec % 60;
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
+
+// Usato ovunque un testo (nome cliente, problema segnalato, descrizione
+// riga...) finisce dentro una stringa HTML costruita a mano per
+// stampa/PDF/condivisione (PDFExport, PreventiviPage, AppointmentDetail,
+// InvoicePage): quei testi arrivano anche da clienti non autenticati come
+// staff (es. il campo "problema" della prenotazione online), quindi vanno
+// sempre passati da qui prima di essere interpolati, o un cliente potrebbe
+// far girare script nel contesto dell'app quando lo staff apre/stampa quel
+// documento.
+export function escapeHtml(value: unknown): string {
+  const s = value == null ? '' : String(value);
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}

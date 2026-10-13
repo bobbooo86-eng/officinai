@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { Button, Card, Badge } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { fmtEuro } from '@/lib/format';
-import { useAuthStore } from '@/stores/authStore';
 import type { Officina } from '@/types/database';
 
 // ============================================

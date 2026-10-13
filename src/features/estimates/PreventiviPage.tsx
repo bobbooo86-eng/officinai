@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Card, Badge, Button, Loader } from '@/components/ui';
+import { Card, Badge, Loader } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { toWhatsAppNumber } from '@/lib/whatsapp';
-import { fmtEuro } from '@/lib/format';
+import { fmtEuro, escapeHtml } from '@/lib/format';
 import { useAuthStore } from '@/stores/authStore';
 import { generaDatiVeicolo, lookupTargaEsterna, DB_AUTO, type DatiVeicolo } from '@/lib/targaLookup';
 import type { Veicolo, Cliente, Appuntamento } from '@/types/database';
@@ -566,7 +566,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
   const buildHtmlStampa = async (): Promise<string> => {
     const accent = await extractLogoColor(officina?.logo_url);
     const logoBlock = officina?.logo_url
-      ? `<img src="${officina.logo_url}" alt="Logo" style="width:44px;height:44px;border-radius:10px;object-fit:cover;margin-right:12px;" />`
+      ? `<img src="${escapeHtml(officina.logo_url)}" alt="Logo" style="width:44px;height:44px;border-radius:10px;object-fit:cover;margin-right:12px;" />`
       : '';
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Preventivo</title>
     <style>
@@ -598,25 +598,25 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
         <div class="brand">
           ${logoBlock}
           <div>
-            <h1>${officina?.nome || 'Officina'}</h1>
-            <div style="font-size:12px;color:#555;margin-top:4px;">${officina?.indirizzo || ''}</div>
-            <div style="font-size:12px;color:#555;">${officina?.tel || ''} · ${officina?.email || ''}</div>
-            ${officina?.p_iva ? `<div style="font-size:11px;color:#888;margin-top:2px;">P.IVA: ${officina.p_iva}</div>` : ''}
+            <h1>${escapeHtml(officina?.nome || 'Officina')}</h1>
+            <div style="font-size:12px;color:#555;margin-top:4px;">${escapeHtml(officina?.indirizzo || '')}</div>
+            <div style="font-size:12px;color:#555;">${escapeHtml(officina?.tel || '')} · ${escapeHtml(officina?.email || '')}</div>
+            ${officina?.p_iva ? `<div style="font-size:11px;color:#888;margin-top:2px;">P.IVA: ${escapeHtml(officina.p_iva)}</div>` : ''}
           </div>
         </div>
         <div class="info">
           <div style="font-size:18px;font-weight:bold;color:${accent};">PREVENTIVO</div>
           <div>Data: ${new Date().toLocaleDateString('it-IT')}</div>
-          ${cliente ? `<div>Cliente: ${cliente.nome}</div>` : ''}
-          ${cliente?.tel ? `<div>Tel: ${cliente.tel}</div>` : ''}
+          ${cliente ? `<div>Cliente: ${escapeHtml(cliente.nome)}</div>` : ''}
+          ${cliente?.tel ? `<div>Tel: ${escapeHtml(cliente.tel)}</div>` : ''}
         </div>
       </div>
 
       <div class="section">
         <h3>Veicolo</h3>
         <div class="veicolo-box">
-          <strong>${vMarca} ${vModello}</strong>${vTarga && vTarga !== 'MANUALE' ? ` — Targa: <strong>${vTarga}</strong>` : ''}<br>
-          Anno: ${vAnno} · Km: ${vKm > 0 ? vKm.toLocaleString() : 'N/D'} · Carburante: ${vCarburante}${datiEsterni ? `${datiEsterni.cilindrata ? ` · Cilindrata: ${datiEsterni.cilindrata}` : ''} · Potenza: ${datiEsterni.potenzaKw} kW (${datiEsterni.potenzaCv} CV) · ${datiEsterni.euroClasse}` : ''}
+          <strong>${escapeHtml(vMarca)} ${escapeHtml(vModello)}</strong>${vTarga && vTarga !== 'MANUALE' ? ` — Targa: <strong>${escapeHtml(vTarga)}</strong>` : ''}<br>
+          Anno: ${vAnno} · Km: ${vKm > 0 ? vKm.toLocaleString() : 'N/D'} · Carburante: ${escapeHtml(vCarburante)}${datiEsterni ? `${datiEsterni.cilindrata ? ` · Cilindrata: ${escapeHtml(datiEsterni.cilindrata)}` : ''} · Potenza: ${datiEsterni.potenzaKw} kW (${datiEsterni.potenzaCv} CV) · ${escapeHtml(datiEsterni.euroClasse)}` : ''}
           · Segmento: ${getSegmentoLabel(segmento)} (${fmtEuro(prezzoOra)}/ora)
         </div>
       </div>
@@ -631,7 +631,7 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
             ${righe.map(r => `
               <tr>
                 <td><span class="tipo-badge ${r.tipo === 'manodopera' ? 'tipo-mano' : 'tipo-ric'}">${r.tipo === 'manodopera' ? 'Manodopera' : 'Ricambio'}</span></td>
-                <td>${r.desc}</td>
+                <td>${escapeHtml(r.desc)}</td>
                 <td class="text-right">${r.qta}</td>
                 <td class="text-right">${fmtEuro(r.prezzo)}</td>
                 <td class="text-right"><strong>${fmtEuro(r.qta * r.prezzo)}</strong></td>
@@ -651,13 +651,13 @@ function PreventivoBuilder({ onBack }: { onBack: () => void }) {
         </table>
       </div>
 
-      ${fermoMacchina ? `<div class="fermo"><strong>Fermo macchina:</strong> il veicolo dovrà rimanere in officina per ${fermoMacchina}</div>` : ''}
-      ${note ? `<div class="note"><strong>Note:</strong> ${note}</div>` : ''}
+      ${fermoMacchina ? `<div class="fermo"><strong>Fermo macchina:</strong> il veicolo dovrà rimanere in officina per ${escapeHtml(fermoMacchina)}</div>` : ''}
+      ${note ? `<div class="note"><strong>Note:</strong> ${escapeHtml(note)}</div>` : ''}
 
       <div class="footer">
         Preventivo valido 30 giorni dalla data di emissione. I prezzi dei ricambi possono variare in base alla disponibilita.<br>
         Importo IVA esclusa: l'IVA verrà applicata in fattura.<br>
-        Generato con OfficinAI · ${officina?.nome || ''}
+        Generato con OfficinAI · ${escapeHtml(officina?.nome || '')}
       </div>
     </body></html>`;
   };
