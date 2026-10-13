@@ -579,7 +579,14 @@ function ModalPagamento({ acconti, onConferma, onAnnulla }: {
   const [fornitoreRicambi, setFornitoreRicambi] = useState<'' | 'autoricambi' | 'monti'>('');
   const [note, setNote] = useState('');
 
+  // Il totale serve sempre, anche su "Non pagato": e' il valore del lavoro
+  // svolto, da cui dipende il guadagno netto mostrato in Incassi officina —
+  // un lavoro consegnato senza incasso resta comunque un lavoro fatto, e
+  // senza questo numero il suo margine sparirebbe dalle statistiche.
+  const totaleValido = parseFloat(importoTotale) > 0;
+
   const conferma = () => {
+    if (!totaleValido) return;
     // "Pagato completo" mostra un solo campo (il totale): l'incassato deve
     // coincidere con quello, altrimenti restava vuoto/a zero e riaprendo la
     // modifica (matita in Cassa) bisognava reinserirlo da capo.
@@ -648,7 +655,7 @@ function ModalPagamento({ acconti, onConferma, onAnnulla }: {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                {statoPag === 'pagato' ? 'Totale incassato (€)' : 'Totale da pagare (€)'}
+                {statoPag === 'pagato' ? 'Totale incassato (€) *' : statoPag === 'non_pagato' ? 'Valore del lavoro (€) *' : 'Totale da pagare (€) *'}
               </label>
               <input
                 type="number"
@@ -657,6 +664,11 @@ function ModalPagamento({ acconti, onConferma, onAnnulla }: {
                 placeholder="es. 350"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              {statoPag === 'non_pagato' && (
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Serve anche se non incassi nulla ora: e' il valore del lavoro svolto, da cui dipende il guadagno netto in Incassi officina.
+                </p>
+              )}
             </div>
             {statoPag === 'acconto' && (
               <div>
@@ -741,7 +753,8 @@ function ModalPagamento({ acconti, onConferma, onAnnulla }: {
           </button>
           <button
             onClick={conferma}
-            className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 cursor-pointer transition-colors"
+            disabled={!totaleValido}
+            className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
           >
             Conferma consegna
           </button>
