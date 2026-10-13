@@ -1360,7 +1360,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                             {m.spese_lavorazione != null && (
                               <label
                                 onClick={(e) => e.stopPropagation()}
-                                className={`flex items-center gap-1.5 truncate cursor-pointer ${m.spese_lavorazione_conta !== false ? 'text-red-500' : 'text-gray-400'}`}
+                                className={`flex items-center gap-1.5 text-[11px] truncate cursor-pointer ${m.spese_lavorazione_conta !== false ? 'text-red-500' : 'text-gray-400'}`}
                               >
                                 <input
                                   type="checkbox"
