@@ -15,7 +15,7 @@ import { dayKey } from '@/lib/format';
 import { SEGNO, TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento, spesaMovimento, spesaRicambi } from './movimentiTotali';
 import type { Movimento, MovimentoTipo, MetodoPagamento, Utente, Appuntamento } from '@/types/database';
 
-type CassaTab = 'tutti' | 'incasso_extra' | 'da_incassare' | 'spesa_officina' | 'spesa_titolare' | 'spesa_affitto' | 'spesa_autoricambi' | 'spesa_monti' | 'dipendenti' | 'spesa_revisione_gianni' | 'spesa_centraline_daniele';
+type CassaTab = 'tutti' | 'incasso_extra' | 'da_incassare' | 'consegna_auto' | 'spesa_officina' | 'spesa_titolare' | 'spesa_affitto' | 'spesa_autoricambi' | 'spesa_monti' | 'dipendenti' | 'spesa_revisione_gianni' | 'spesa_centraline_daniele';
 
 interface TipoConfig {
   id: MovimentoTipo;
@@ -586,9 +586,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
 
   const filteredByTab = useMemo(() => {
     if (tab === 'tutti') return movimenti;
-    // "Da incassare" riguarda solo le consegne auto con resto da pagare,
+    // "Da incassare" e "Consegna auto/moto" riguardano solo le consegne,
     // mai i movimenti manuali (che non hanno un concetto di acconto).
-    if (tab === 'da_incassare') return [];
+    if (tab === 'da_incassare' || tab === 'consegna_auto') return [];
     if (tab === 'dipendenti') {
       return movimenti.filter((m) => m.tipo === 'anticipo_dipendente' || m.tipo === 'spesa_dipendente');
     }
@@ -652,9 +652,9 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   }, [periodo, riferimento, rangeCustom]);
 
   // Gli incassi auto sono incassi: compaiono solo nei tab dove un incasso
-  // avrebbe senso (Tutti / Incassi / Da incassare), non dentro Officina/
-  // Titolare/Dipendenti.
-  const mostraIncassiAuto = tab === 'tutti' || tab === 'incasso_extra' || tab === 'da_incassare';
+  // avrebbe senso (Tutti / Incassi / Da incassare / Consegna auto-moto), non
+  // dentro Officina/Titolare/Dipendenti.
+  const mostraIncassiAuto = tab === 'tutti' || tab === 'incasso_extra' || tab === 'da_incassare' || tab === 'consegna_auto';
 
   // Con una ricerca attiva si cerca su tutto lo storico (per targa/nome),
   // non solo nel periodo selezionato: altrimenti un veicolo fuori dal
@@ -1194,6 +1194,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
           { id: 'tutti', label: 'Tutti', icon: '📒' },
           { id: 'incasso_extra', label: 'Incassi', icon: '💵' },
           { id: 'da_incassare', label: 'Da incassare', icon: '⏳' },
+          { id: 'consegna_auto', label: 'Consegna auto/moto', icon: '🚗' },
           { id: 'spesa_officina', label: 'Officina', icon: '🧾' },
           { id: 'spesa_titolare', label: 'Titolare', icon: '👔' },
           { id: 'spesa_affitto', label: 'Affitto', icon: '🏠' },
@@ -1228,9 +1229,11 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
               ? 'Nessun risultato per la ricerca'
               : tab === 'da_incassare'
               ? 'Niente da incassare: tutto saldato'
+              : tab === 'consegna_auto'
+              ? 'Nessuna consegna auto/moto in questo periodo'
               : 'Nessun movimento in questo periodo'}
           </div>
-          {!search.trim() && tab !== 'da_incassare' && (
+          {!search.trim() && tab !== 'da_incassare' && tab !== 'consegna_auto' && (
             <div className="text-xs text-gray-400 mt-1">Clicca "+ Nuovo movimento" per iniziare</div>
           )}
         </Card>
