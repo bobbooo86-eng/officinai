@@ -9,6 +9,13 @@ import type { Cliente, Veicolo } from '@/types/database';
 
 type View = 'list' | 'add' | 'detail' | 'addVeicolo' | 'editVeicolo' | 'storicoVeicolo';
 
+// Nell'elenco serve anche sapere che auto ha ciascun cliente (marca/modello
+// e targa), non solo il nome: una semplice select('*') non porta i veicoli
+// collegati, serve il join esplicito.
+interface ClienteConVeicoli extends Cliente {
+  veicoli?: Pick<Veicolo, 'marca' | 'modello' | 'targa'>[];
+}
+
 /** Colore/etichetta di una scadenza in base a quanto manca: scaduta (rosso),
  * entro un mese (ambra, coerente con l'anticipo delle notifiche in Home),
  * oltre (grigio, solo informativo). */
@@ -26,7 +33,7 @@ function statoScadenza(dataStr?: string): { label: string; color: string; bg: st
 
 export function CustomersPage({ initialClienteId, resetSignal, apriNuovoCliente, onApriNuovoClienteHandled }: { initialClienteId?: string; resetSignal?: number; apriNuovoCliente?: number; onApriNuovoClienteHandled?: () => void } = {}) {
   const { officina } = useAuthStore();
-  const [clienti, setClienti] = useState<Cliente[]>([]);
+  const [clienti, setClienti] = useState<ClienteConVeicoli[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [view, setView] = useState<View>('list');
@@ -65,10 +72,10 @@ export function CustomersPage({ initialClienteId, resetSignal, apriNuovoCliente,
     if (!officina) { setLoading(false); return; }
     const { data } = await supabase
       .from('clienti')
-      .select('*')
+      .select('*, veicoli(marca,modello,targa)')
       .eq('officina_id', officina.id)
       .order('nome');
-    setClienti(data || []);
+    setClienti((data as ClienteConVeicoli[]) || []);
     setLoading(false);
     return data;
   };
@@ -161,11 +168,17 @@ export function CustomersPage({ initialClienteId, resetSignal, apriNuovoCliente,
   const attivi = clienti.filter((c) => c.attivo !== false);
   const archiviati = clienti.filter((c) => c.attivo === false);
   const listaBase = mostraArchiviati ? archiviati : attivi;
-  const filtered = listaBase.filter((c) =>
-    c.nome.toLowerCase().includes(search.toLowerCase()) ||
-    c.email?.toLowerCase().includes(search.toLowerCase()) ||
-    c.tel?.includes(search)
-  );
+  const filtered = listaBase.filter((c) => {
+    const q = search.toLowerCase();
+    return (
+      c.nome.toLowerCase().includes(q) ||
+      c.email?.toLowerCase().includes(q) ||
+      c.tel?.includes(search) ||
+      (c.veicoli || []).some((v) =>
+        v.targa?.toLowerCase().includes(q) || v.marca?.toLowerCase().includes(q) || v.modello?.toLowerCase().includes(q)
+      )
+    );
+  });
 
   const ripristinaCliente = async (c: Cliente, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -197,7 +210,7 @@ export function CustomersPage({ initialClienteId, resetSignal, apriNuovoCliente,
 
       <input
         type="text"
-        placeholder="Cerca per nome, email o telefono..."
+        placeholder="Cerca per nome, email, telefono o targa..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="w-full px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -226,11 +239,18 @@ export function CustomersPage({ initialClienteId, resetSignal, apriNuovoCliente,
               onClick={() => { setSelectedCliente(c); setView('detail'); }}
             >
               <div className="flex items-center justify-between">
-                <div>
+                <div className="min-w-0">
                   <div className="font-medium text-sm text-gray-900">{c.nome}</div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-gray-400 truncate">
                     {c.email}{c.tel ? ` · ${c.tel}` : ''}
                   </div>
+                  {(c.veicoli || []).length > 0 && (
+                    <div className="text-xs text-gray-500 truncate">
+                      🚗 {[c.veicoli![0].marca, c.veicoli![0].modello].filter(Boolean).join(' ')}
+                      {c.veicoli![0].targa ? ` — ${c.veicoli![0].targa}` : ''}
+                      {c.veicoli!.length > 1 ? ` +${c.veicoli!.length - 1} altr${c.veicoli!.length - 1 === 1 ? 'o' : 'i'}` : ''}
+                    </div>
+                  )}
                 </div>
                 {mostraArchiviati ? (
                   <div className="flex items-center gap-1">
