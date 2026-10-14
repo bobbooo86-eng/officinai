@@ -8,14 +8,6 @@ import { dataIncasso, valoreLavoro, usePeriodoNavigabile, SelettorePeriodoNaviga
 import { incassoMovimento, spesaMovimento, TIPI_CON_SPESE_LAVORAZIONE } from '@/features/cassa/movimentiTotali';
 import type { Appuntamento, Preventivo, Recensione, Movimento, Utente } from '@/types/database';
 
-// Solo i campi che servono per "Fatturato vs non fatturato": la tabella
-// fatture ha anche righe/IVA/cliente, non utili qui.
-interface FatturaMinima {
-  id: string;
-  data_emissione: string;
-  subtotale: number;
-}
-
 // Nomi da cercare ovunque compaiano — nel campo "operaio" della consegna,
 // nella descrizione/nota di un movimento, o gia' attribuiti dal tipo
 // stesso (Revisione Gianni, Centraline Daniele).
@@ -34,7 +26,6 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
   const [recensioni, setRecensioni] = useState<Recensione[]>([]);
   const [movimenti, setMovimenti] = useState<Movimento[]>([]);
   const [dipendenti, setDipendenti] = useState<Utente[]>([]);
-  const [fatture, setFatture] = useState<FatturaMinima[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<'7d' | '30d' | '90d' | 'anno'>('30d');
   // Periodo del report per collaboratore: giorno/settimana/mese/anno,
@@ -44,7 +35,9 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
   // di una settimana e le spese di un'altra senza che si influenzino.
   const navCollab = usePeriodoNavigabile('settimana');
   const navSpese = usePeriodoNavigabile('settimana');
-  const navFatturato = usePeriodoNavigabile('mese');
+  // Granularita' del grafico "Andamento guadagno netto": settimana per
+  // settimana o mese per mese, per monitorare il trend dell'officina.
+  const [granularitaAndamento, setGranularitaAndamento] = useState<'settimana' | 'mese'>('settimana');
   // Collaboratore i cui lavori/spese sono espansi (un solo elenco alla volta per finestra).
   const [collabEspanso, setCollabEspanso] = useState<string | null>(null);
   const [speseEspanse, setSpeseEspanse] = useState<string | null>(null);
@@ -52,7 +45,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
   useEffect(() => {
     if (!officina) return;
     const fetch = async () => {
-      const [{ data: apps }, { data: prev }, { data: rec }, { data: mov }, { data: dip }, { data: fat }] = await Promise.all([
+      const [{ data: apps }, { data: prev }, { data: rec }, { data: mov }, { data: dip }] = await Promise.all([
         supabase
           .from('appuntamenti')
           .select('*')
@@ -77,17 +70,12 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
           .from('utenti')
           .select('*')
           .eq('officina_id', officina.id),
-        supabase
-          .from('fatture')
-          .select('id, data_emissione, subtotale')
-          .eq('officina_id', officina.id),
       ]);
       setAppuntamenti(apps || []);
       setPreventivi(prev || []);
       setRecensioni(rec || []);
       setMovimenti(mov || []);
       setDipendenti(dip || []);
-      setFatture((fat as FatturaMinima[]) || []);
       setLoading(false);
     };
     fetch();
@@ -275,37 +263,66 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
     });
   }, [movimenti, persone, navSpese.inRangeSelezionato]);
 
-  // Quanto delle lavorazioni svolte (consegne auto + Revisione Gianni/
-  // Centraline Daniele, stesso criterio di Incassi officina: sempre il
-  // valore pieno, pagato o no) e' finito davvero in una fattura emessa nello
-  // stesso periodo. E' una stima per confronto fra i due totali del
-  // periodo, non un collegamento diretto lavoro-per-fattura (una fattura
-  // puo' raggruppare piu' lavori, o un lavoro puo' non avercene mai una).
-  const fatturatoStats = useMemo(() => {
-    const consegneInPeriodo = appuntamenti.filter(
-      (a) => a.stato === 'consegnato' && a.pagamento && navFatturato.inRangeSelezionato(dataIncasso(a))
-    );
-    const movimentiInPeriodo = movimenti.filter(
-      (m) => TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo) && m.stato !== 'in_lavorazione' && navFatturato.inRangeSelezionato(dataMovimento(m))
-    );
-    const totaleLavorazioni =
-      consegneInPeriodo.reduce((s, a) => s + valoreLavoro(a), 0) +
-      movimentiInPeriodo.reduce((s, m) => s + incassoMovimento(m), 0);
+  // Andamento del guadagno netto nel tempo (tutto insieme come incasso,
+  // niente distinzione fatturato/non fatturato): un blocco per ciascuna
+  // delle ultime settimane o mesi, stesso criterio di Incassi officina
+  // (sempre il valore pieno del lavoro, pagato o no, meno costo
+  // ricambi/lavorazione), per vedere a colpo d'occhio se l'officina sta
+  // crescendo o calando periodo su periodo.
+  const andamento = useMemo(() => {
+    const nBlocchi = granularitaAndamento === 'settimana' ? 8 : 6;
+    const oggi = new Date();
+    const blocchi: { label: string; inizio: Date; fine: Date }[] = [];
 
-    const fattureInPeriodo = fatture.filter((f) => navFatturato.inRangeSelezionato(new Date(f.data_emissione)));
-    // Confrontato con il subtotale (IVA esclusa), non il totale: il valore
-    // delle lavorazioni qui sopra e' sempre IVA esclusa.
-    const totaleFatturato = fattureInPeriodo.reduce((s, f) => s + (f.subtotale || 0), 0);
-    const nonFatturato = Math.max(0, totaleLavorazioni - totaleFatturato);
+    if (granularitaAndamento === 'settimana') {
+      const inizioSettimanaCorrente = new Date(oggi);
+      const giornoSettimana = (inizioSettimanaCorrente.getDay() + 6) % 7; // 0 = lunedi
+      inizioSettimanaCorrente.setDate(inizioSettimanaCorrente.getDate() - giornoSettimana);
+      inizioSettimanaCorrente.setHours(0, 0, 0, 0);
+      for (let i = nBlocchi - 1; i >= 0; i--) {
+        const inizio = new Date(inizioSettimanaCorrente);
+        inizio.setDate(inizio.getDate() - i * 7);
+        const fine = new Date(inizio);
+        fine.setDate(fine.getDate() + 7);
+        blocchi.push({ label: inizio.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }), inizio, fine });
+      }
+    } else {
+      for (let i = nBlocchi - 1; i >= 0; i--) {
+        const inizio = new Date(oggi.getFullYear(), oggi.getMonth() - i, 1);
+        const fine = new Date(oggi.getFullYear(), oggi.getMonth() - i + 1, 1);
+        blocchi.push({ label: inizio.toLocaleDateString('it-IT', { month: 'short' }), inizio, fine });
+      }
+    }
+
+    const valori = blocchi.map(({ inizio, fine }) => {
+      const consegne = appuntamenti.filter(
+        (a) => a.stato === 'consegnato' && a.pagamento && dataIncasso(a) >= inizio && dataIncasso(a) < fine
+      );
+      const lavorazioni = movimenti.filter(
+        (m) => TIPI_CON_SPESE_LAVORAZIONE.includes(m.tipo) && m.stato !== 'in_lavorazione' && dataMovimento(m) >= inizio && dataMovimento(m) < fine
+      );
+      const lordo = consegne.reduce((s, a) => s + valoreLavoro(a), 0) + lavorazioni.reduce((s, m) => s + incassoMovimento(m), 0);
+      const costo = consegne.reduce((s, a) => s + (Number(a.pagamento?.costo_ricambi) || 0), 0) + lavorazioni.reduce((s, m) => s + (Number(m.spese_lavorazione) || 0), 0);
+      return lordo - costo;
+    });
+
+    const max = Math.max(...valori.map((v) => Math.abs(v)), 1);
+    const totale = valori.reduce((s, v) => s + v, 0);
+    const media = totale / nBlocchi;
+    const ultimo = valori[valori.length - 1];
+    const precedente = valori[valori.length - 2];
+    // Variazione % fra l'ultimo blocco e il precedente, per dare subito un
+    // verso al trend (cresce/cala) senza dover leggere tutti i numeri.
+    const variazionePct = precedente !== 0 ? ((ultimo - precedente) / Math.abs(precedente)) * 100 : null;
 
     return {
-      totaleLavorazioni,
-      totaleFatturato: Math.min(totaleFatturato, totaleLavorazioni),
-      nonFatturato,
-      numFatture: fattureInPeriodo.length,
-      numLavorazioni: consegneInPeriodo.length + movimentiInPeriodo.length,
+      serie: blocchi.map((b, i) => ({ ...b, netto: valori[i] })),
+      max,
+      totale,
+      media,
+      variazionePct,
     };
-  }, [appuntamenti, movimenti, fatture, navFatturato.inRangeSelezionato]);
+  }, [appuntamenti, movimenti, granularitaAndamento]);
 
   const exportCSV = () => {
     const days = periodo === '7d' ? 7 : periodo === '30d' ? 30 : periodo === '90d' ? 90 : 365;
@@ -398,41 +415,65 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
         </div>
       </Card>
 
-      {/* Fatturato vs non fatturato */}
+      {/* Andamento guadagno netto: tutto insieme come incasso, nessuna
+          distinzione fatturato/non fatturato, solo il trend nel tempo. */}
       <Card className="!p-4">
-        <h3 className="text-xs font-semibold text-gray-500 mb-3">FATTURATO VS NON FATTURATO</h3>
-        <SelettorePeriodoNavigabile nav={navFatturato} />
-        <div className="text-center mb-3">
-          <div className="text-lg font-bold text-gray-900">{fmtEuro(fatturatoStats.totaleLavorazioni)}</div>
-          <div className="text-[10px] text-gray-400">
-            Totale lavorazioni nel periodo ({fatturatoStats.numLavorazioni}) · {fatturatoStats.numFatture} fattur{fatturatoStats.numFatture === 1 ? 'a' : 'e'} emess{fatturatoStats.numFatture === 1 ? 'a' : 'e'}
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-semibold text-gray-500">ANDAMENTO GUADAGNO NETTO</h3>
+          <div className="flex gap-1 bg-gray-100 p-0.5 rounded-lg">
+            {(['settimana', 'mese'] as const).map((g) => (
+              <button
+                key={g}
+                onClick={() => setGranularitaAndamento(g)}
+                className={`px-2 py-1 rounded-md text-[10px] font-medium cursor-pointer ${
+                  granularitaAndamento === g ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'
+                }`}
+              >
+                {g === 'settimana' ? 'Settimane' : 'Mesi'}
+              </button>
+            ))}
           </div>
         </div>
-        {fatturatoStats.totaleLavorazioni === 0 ? (
-          <div className="text-center text-xs text-gray-400 py-2">Nessuna lavorazione in questo periodo</div>
-        ) : (
-          <div className="space-y-2">
-            {([
-              { label: '🧾 Fatturato', valore: fatturatoStats.totaleFatturato, colore: '#3b82f6' },
-              { label: '📋 Non fatturato', valore: fatturatoStats.nonFatturato, colore: '#f59e0b' },
-            ] as const).map(({ label, valore, colore }) => {
-              const pct = (valore / fatturatoStats.totaleLavorazioni) * 100;
-              return (
-                <div key={label}>
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-xs text-gray-700">{label}</span>
-                    <span className="text-xs font-semibold text-gray-900">{fmtEuro(valore)} ({pct.toFixed(0)}%)</span>
-                  </div>
-                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: colore }} />
-                  </div>
-                </div>
-              );
-            })}
+
+        <div className="flex items-end gap-1.5 h-24 mb-1">
+          {andamento.serie.map((b, i) => {
+            const h = Math.max(4, (Math.abs(b.netto) / andamento.max) * 100);
+            return (
+              <div key={i} className="flex-1 flex flex-col items-center justify-end h-full" title={`${b.label}: ${fmtEuro(b.netto)}`}>
+                <div
+                  className={`w-full rounded-t-sm transition-all ${b.netto >= 0 ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-400 hover:bg-red-500'}`}
+                  style={{ height: `${h}%` }}
+                />
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex gap-1.5 mb-3">
+          {andamento.serie.map((b, i) => (
+            <div key={i} className="flex-1 text-center text-[9px] text-gray-400 truncate">{b.label}</div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-gray-100">
+          <div>
+            <div className="text-sm font-bold text-gray-900">{fmtEuro(andamento.totale)}</div>
+            <div className="text-[10px] text-gray-400">Totale periodo</div>
           </div>
-        )}
+          <div>
+            <div className="text-sm font-bold text-gray-900">{fmtEuro(andamento.media)}</div>
+            <div className="text-[10px] text-gray-400">Media per {granularitaAndamento === 'settimana' ? 'settimana' : 'mese'}</div>
+          </div>
+          <div>
+            <div className={`text-sm font-bold ${
+              andamento.variazionePct === null ? 'text-gray-400' : andamento.variazionePct >= 0 ? 'text-emerald-600' : 'text-red-600'
+            }`}>
+              {andamento.variazionePct === null ? '—' : `${andamento.variazionePct >= 0 ? '▲' : '▼'} ${Math.abs(andamento.variazionePct).toFixed(0)}%`}
+            </div>
+            <div className="text-[10px] text-gray-400">vs {granularitaAndamento === 'settimana' ? 'settimana' : 'mese'} prima</div>
+          </div>
+        </div>
         <div className="text-[10px] text-gray-400 mt-2">
-          Lavorazioni svolte (consegne auto + Revisione Gianni/Centraline Daniele) nel periodo, a confronto con quanto e' stato messo in fattura nello stesso periodo. E' una stima per il confronto fra i due totali, non un collegamento diretto lavoro per lavoro.
+          Guadagno netto (lavorazioni svolte meno costo ricambi/lavorazione) delle ultime {andamento.serie.length} {granularitaAndamento === 'settimana' ? 'settimane' : 'mesi'}, contato tutto insieme come incasso a prescindere da quando/se viene davvero pagato — stesso criterio di Incassi officina.
         </div>
       </Card>
 
