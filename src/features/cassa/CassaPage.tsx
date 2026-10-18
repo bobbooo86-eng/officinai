@@ -1318,6 +1318,18 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                           {resto > 0 && (
                             <div className="text-[11px] text-amber-600 truncate">Ancora da incassare: {fmtEuro(resto)}</div>
                           )}
+                          {/* Ricambi comprati prima della consegna finale, mentre l'auto
+                              era ancora in lavorazione (promemoria sull'appuntamento). */}
+                          {app.ricambi_acquistati && app.ricambi_acquistati.length > 0 && (
+                            <div className="text-[11px] text-gray-400 mt-0.5 space-y-0.5">
+                              {app.ricambi_acquistati.map((r, i) => (
+                                <div key={i} className="truncate">
+                                  🔧 {fmtEuro(r.importo)} il {new Date(r.data_acquisto).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                  {r.descrizione ? ` — ${r.descrizione}` : ''}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div className="text-right shrink-0">
                           <div className="text-sm font-bold text-emerald-600">

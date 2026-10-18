@@ -1051,6 +1051,18 @@ export function IncassiOfficina({ officinaId }: { officinaId?: string }) {
                         {p.fornitore_pagato_da_cliente ? `pagati dal cliente a ${p.fornitore_ricambi === 'monti' ? 'Monti' : 'Autoricambi'} (non incassato)` : `non pagati dal cliente a ${p.fornitore_ricambi === 'monti' ? 'Monti' : 'Autoricambi'}`}
                       </label>
                     )}
+                    {/* Ricambi comprati prima della consegna finale, mentre l'auto
+                        era ancora in lavorazione (promemoria sull'appuntamento). */}
+                    {a.ricambi_acquistati && a.ricambi_acquistati.length > 0 && (
+                      <div className="mt-0.5 space-y-0.5 text-gray-400">
+                        {a.ricambi_acquistati.map((r, i) => (
+                          <div key={i} className="truncate">
+                            🔧 {fmtEuro(r.importo)} il {new Date(r.data_acquisto).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            {r.descrizione ? ` — ${r.descrizione}` : ''}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {!inEdit && (
                     <button
