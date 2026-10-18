@@ -956,6 +956,18 @@ function TabStato({ app }: { app: Appuntamento }) {
   const [showAccontoModal, setShowAccontoModal] = useState(false);
   const [showRicambioModal, setShowRicambioModal] = useState(false);
   const [erroreAzione, setErroreAzione] = useState('');
+  // Modifica inline di un acconto/ricambio gia' registrato (indice nella
+  // rispettiva lista; null = nessuno in modifica).
+  const [editingAccontoIdx, setEditingAccontoIdx] = useState<number | null>(null);
+  const [editAccontoImporto, setEditAccontoImporto] = useState('');
+  const [editAccontoData, setEditAccontoData] = useState('');
+  const [editAccontoNota, setEditAccontoNota] = useState('');
+  const [salvandoAcconto, setSalvandoAcconto] = useState(false);
+  const [editingRicambioIdx, setEditingRicambioIdx] = useState<number | null>(null);
+  const [editRicambioImporto, setEditRicambioImporto] = useState('');
+  const [editRicambioData, setEditRicambioData] = useState('');
+  const [editRicambioDescrizione, setEditRicambioDescrizione] = useState('');
+  const [salvandoRicambio, setSalvandoRicambio] = useState(false);
 
   // Auto-send email on status change
   const notificaCliente = (nuovoStato: string) => {
@@ -1067,6 +1079,106 @@ function TabStato({ app }: { app: Appuntamento }) {
       .eq('id', app.id);
     if (appErr) return { error: appErr.message };
     return { error: null };
+  };
+
+  // Modifica/elimina un acconto registrato prima della consegna: tiene
+  // allineato anche il movimento "incasso_extra" collegato (se c'e'), cosi'
+  // non resta disallineato dal numero mostrato in Cassa.
+  const modificaAcconto = async (i: number, importo: number, data: string, nota: string) => {
+    const acconti = [...(app.acconti || [])];
+    const esistente = acconti[i];
+    if (!esistente) return { error: 'Acconto non trovato' };
+    if (esistente.movimento_id) {
+      const { error } = await supabase.from('movimenti').update({ importo, data, note: nota || null }).eq('id', esistente.movimento_id);
+      if (error) return { error: error.message };
+    }
+    acconti[i] = { ...esistente, importo, data_acconto: data, nota: nota || undefined };
+    const { error: appErr } = await supabase.from('appuntamenti').update({ acconti }).eq('id', app.id);
+    if (appErr) return { error: appErr.message };
+    return { error: null };
+  };
+
+  const eliminaAcconto = async (i: number) => {
+    const acconti = [...(app.acconti || [])];
+    const esistente = acconti[i];
+    if (!esistente || !confirm('Eliminare questo acconto? Verra\' tolto anche il movimento in Cassa collegato.')) return;
+    if (esistente.movimento_id) {
+      const { error } = await supabase.from('movimenti').delete().eq('id', esistente.movimento_id);
+      if (error) { alert('Acconto non eliminato: ' + error.message); return; }
+    }
+    acconti.splice(i, 1);
+    const { error: appErr } = await supabase.from('appuntamenti').update({ acconti }).eq('id', app.id);
+    if (appErr) { alert('Acconto non eliminato: ' + appErr.message); return; }
+  };
+
+  // Stesso meccanismo per un ricambio acquistato: tiene allineato il
+  // movimento "spesa_officina" collegato.
+  const modificaRicambioAcquistato = async (i: number, importo: number, data: string, descrizione: string) => {
+    const ricambi = [...(app.ricambi_acquistati || [])];
+    const esistente = ricambi[i];
+    if (!esistente) return { error: 'Ricambio non trovato' };
+    if (esistente.movimento_id) {
+      const clienteNome = app.clienti?.nome || 'Cliente';
+      const targa = app.veicoli?.targa ? ` — ${app.veicoli.targa}` : '';
+      const { error } = await supabase.from('movimenti').update({
+        importo, data,
+        descrizione: `Ricambi — ${clienteNome}${targa}${descrizione ? ` (${descrizione})` : ''}`,
+      }).eq('id', esistente.movimento_id);
+      if (error) return { error: error.message };
+    }
+    ricambi[i] = { ...esistente, importo, data_acquisto: data, descrizione: descrizione || undefined };
+    const { error: appErr } = await supabase.from('appuntamenti').update({ ricambi_acquistati: ricambi }).eq('id', app.id);
+    if (appErr) return { error: appErr.message };
+    return { error: null };
+  };
+
+  const eliminaRicambioAcquistato = async (i: number) => {
+    const ricambi = [...(app.ricambi_acquistati || [])];
+    const esistente = ricambi[i];
+    if (!esistente || !confirm('Eliminare questo ricambio? Verra\' tolto anche il movimento in Cassa collegato.')) return;
+    if (esistente.movimento_id) {
+      const { error } = await supabase.from('movimenti').delete().eq('id', esistente.movimento_id);
+      if (error) { alert('Ricambio non eliminato: ' + error.message); return; }
+    }
+    ricambi.splice(i, 1);
+    const { error: appErr } = await supabase.from('appuntamenti').update({ ricambi_acquistati: ricambi }).eq('id', app.id);
+    if (appErr) { alert('Ricambio non eliminato: ' + appErr.message); return; }
+  };
+
+  const apriModificaAcconto = (i: number) => {
+    const a = app.acconti![i];
+    setEditingAccontoIdx(i);
+    setEditAccontoImporto(String(a.importo));
+    setEditAccontoData(a.data_acconto);
+    setEditAccontoNota(a.nota || '');
+  };
+
+  const salvaModificaAcconto = async (i: number) => {
+    const importo = parseFloat((editAccontoImporto || '').replace(',', '.'));
+    if (!Number.isFinite(importo) || importo <= 0) return;
+    setSalvandoAcconto(true);
+    const { error } = await modificaAcconto(i, importo, editAccontoData, editAccontoNota.trim());
+    setSalvandoAcconto(false);
+    if (error) { alert('Acconto non salvato: ' + error); return; }
+    setEditingAccontoIdx(null);
+  };
+
+  const apriModificaRicambio = (i: number) => {
+    const r = app.ricambi_acquistati![i];
+    setEditingRicambioIdx(i);
+    setEditRicambioImporto(String(r.importo));
+    setEditRicambioData(r.data_acquisto);
+    setEditRicambioDescrizione(r.descrizione || '');
+  };
+
+  const salvaModificaRicambio = async (i: number) => {
+    const importo = parseFloat((editRicambioImporto || '').replace(',', '.'));
+    if (!Number.isFinite(importo) || importo <= 0) return;
+    setSalvandoRicambio(true);
+    const { error } = await modificaRicambioAcquistato(i, importo, editRicambioData, editRicambioDescrizione.trim());
+    setSalvandoRicambio(false);
+    if (error) { alert('Ricambio non salvato: ' + error); return; }
+    setEditingRicambioIdx(null);
   };
 
   const notifyClienteInApp = async (titolo: string, messaggio: string) => {
@@ -1387,13 +1499,49 @@ function TabStato({ app }: { app: Appuntamento }) {
           <div className="text-sm font-bold text-amber-800">
             💛 Acconti ricevuti: {fmtEuro(app.acconti.reduce((s, a) => s + Number(a.importo), 0))}
           </div>
-          <div className="text-xs text-amber-700 mt-0.5 space-y-0.5">
-            {app.acconti.map((a, i) => (
-              <div key={i}>
-                {fmtEuro(a.importo)} il {format(parseISO(a.data_acconto), 'dd/MM/yyyy', { locale: itLocale })}
-                {a.nota ? ` — ${a.nota}` : ''}
-              </div>
-            ))}
+          <div className="text-xs text-amber-700 mt-0.5 space-y-1">
+            {app.acconti.map((a, i) =>
+              editingAccontoIdx === i ? (
+                <div key={i} className="bg-white rounded-lg p-2 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number" step="0.01" min={0} value={editAccontoImporto}
+                      onChange={(e) => setEditAccontoImporto(e.target.value)}
+                      className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <input
+                      type="date" value={editAccontoData}
+                      onChange={(e) => setEditAccontoData(e.target.value)}
+                      className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <input
+                    type="text" placeholder="Nota (opzionale)" value={editAccontoNota}
+                    onChange={(e) => setEditAccontoNota(e.target.value)}
+                    className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <div className="flex gap-1.5">
+                    <button onClick={() => salvaModificaAcconto(i)} disabled={salvandoAcconto} className="flex-1 py-1 rounded-lg bg-amber-600 text-white text-[11px] font-semibold hover:bg-amber-700 disabled:opacity-50 cursor-pointer">
+                      {salvandoAcconto ? 'Salvataggio...' : 'Salva'}
+                    </button>
+                    <button onClick={() => setEditingAccontoIdx(null)} disabled={salvandoAcconto} className="px-2.5 py-1 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 cursor-pointer">
+                      Annulla
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div key={i} className="flex items-center justify-between gap-2">
+                  <span>
+                    {fmtEuro(a.importo)} il {format(parseISO(a.data_acconto), 'dd/MM/yyyy', { locale: itLocale })}
+                    {a.nota ? ` — ${a.nota}` : ''}
+                  </span>
+                  <span className="flex gap-1 shrink-0">
+                    <button onClick={() => apriModificaAcconto(i)} className="cursor-pointer hover:opacity-70" title="Modifica">✏️</button>
+                    <button onClick={() => eliminaAcconto(i)} className="cursor-pointer hover:opacity-70" title="Elimina">🗑️</button>
+                  </span>
+                </div>
+              )
+            )}
           </div>
         </div>
       )}
@@ -1404,13 +1552,49 @@ function TabStato({ app }: { app: Appuntamento }) {
           <div className="text-sm font-bold text-orange-800">
             🔧 Ricambi acquistati: {fmtEuro(app.ricambi_acquistati.reduce((s, r) => s + Number(r.importo), 0))}
           </div>
-          <div className="text-xs text-orange-700 mt-0.5 space-y-0.5">
-            {app.ricambi_acquistati.map((r, i) => (
-              <div key={i}>
-                {fmtEuro(r.importo)} il {format(parseISO(r.data_acquisto), 'dd/MM/yyyy', { locale: itLocale })}
-                {r.descrizione ? ` — ${r.descrizione}` : ''}
-              </div>
-            ))}
+          <div className="text-xs text-orange-700 mt-0.5 space-y-1">
+            {app.ricambi_acquistati.map((r, i) =>
+              editingRicambioIdx === i ? (
+                <div key={i} className="bg-white rounded-lg p-2 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number" step="0.01" min={0} value={editRicambioImporto}
+                      onChange={(e) => setEditRicambioImporto(e.target.value)}
+                      className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                    <input
+                      type="date" value={editRicambioData}
+                      onChange={(e) => setEditRicambioData(e.target.value)}
+                      className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                  <input
+                    type="text" placeholder="Descrizione (opzionale)" value={editRicambioDescrizione}
+                    onChange={(e) => setEditRicambioDescrizione(e.target.value)}
+                    className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                  <div className="flex gap-1.5">
+                    <button onClick={() => salvaModificaRicambio(i)} disabled={salvandoRicambio} className="flex-1 py-1 rounded-lg bg-orange-600 text-white text-[11px] font-semibold hover:bg-orange-700 disabled:opacity-50 cursor-pointer">
+                      {salvandoRicambio ? 'Salvataggio...' : 'Salva'}
+                    </button>
+                    <button onClick={() => setEditingRicambioIdx(null)} disabled={salvandoRicambio} className="px-2.5 py-1 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 cursor-pointer">
+                      Annulla
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div key={i} className="flex items-center justify-between gap-2">
+                  <span>
+                    {fmtEuro(r.importo)} il {format(parseISO(r.data_acquisto), 'dd/MM/yyyy', { locale: itLocale })}
+                    {r.descrizione ? ` — ${r.descrizione}` : ''}
+                  </span>
+                  <span className="flex gap-1 shrink-0">
+                    <button onClick={() => apriModificaRicambio(i)} className="cursor-pointer hover:opacity-70" title="Modifica">✏️</button>
+                    <button onClick={() => eliminaRicambioAcquistato(i)} className="cursor-pointer hover:opacity-70" title="Elimina">🗑️</button>
+                  </span>
+                </div>
+              )
+            )}
           </div>
         </div>
       )}
