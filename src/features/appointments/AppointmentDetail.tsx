@@ -17,7 +17,7 @@ import { format, parseISO } from 'date-fns';
 import { it as itLocale } from 'date-fns/locale';
 import { AccettazioneVeicolo } from './AccettazioneVeicolo';
 import { StoricoVeicolo } from './StoricoVeicolo';
-import { restoDaIncassare } from '@/features/cassa/IncassiOfficina';
+import { restoDaIncassare, usePagamentoEditor, PagamentoEditFields } from '@/features/cassa/IncassiOfficina';
 import { VoiceButton } from '@/components/VoiceInput';
 import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, Difetto, PagamentoInfo, PagamentoStato, Acconto, RicambioAcquistato } from '@/types/database';
 
@@ -956,6 +956,11 @@ function TabStato({ app }: { app: Appuntamento }) {
   const [showAccontoModal, setShowAccontoModal] = useState(false);
   const [showRicambioModal, setShowRicambioModal] = useState(false);
   const [erroreAzione, setErroreAzione] = useState('');
+  // Stesso editor di pagamento gia' usato in Cassa/Incassi officina: da qui
+  // si puo' aggiornare acconto/totale/ricambi anche subito dopo aver
+  // cliccato un avviso "da incassare" sulla Home, senza dover passare da
+  // Cassa per trovare di nuovo quella stessa consegna.
+  const editorPagamento = usePagamentoEditor();
   // Modifica inline di un acconto/ricambio gia' registrato (indice nella
   // rispettiva lista; null = nessuno in modifica).
   const [editingAccontoIdx, setEditingAccontoIdx] = useState<number | null>(null);
@@ -1626,33 +1631,45 @@ function TabStato({ app }: { app: Appuntamento }) {
           app.pagamento.stato === 'acconto' ? 'bg-amber-50 border-amber-300' :
           'bg-red-50 border-red-300'
         }`}>
-          <div className="flex items-center gap-2">
-            <span className="text-lg">
-              {app.pagamento.stato === 'pagato' ? '✅' : app.pagamento.stato === 'acconto' ? '💛' : '🔴'}
-            </span>
-            <div>
-              <div className={`text-sm font-bold ${
-                app.pagamento.stato === 'pagato' ? 'text-emerald-800' :
-                app.pagamento.stato === 'acconto' ? 'text-amber-800' : 'text-red-800'
-              }`}>
-                {app.pagamento.stato === 'pagato' ? 'Pagato completo' :
-                 app.pagamento.stato === 'acconto' ? 'Pagato parzialmente' : 'Non pagato'}
-              </div>
-              {app.pagamento.importo_totale != null && (
-                <div className="text-xs text-gray-600">
-                  Totale: €{app.pagamento.importo_totale.toFixed(2)}
-                  {app.pagamento.stato === 'acconto' && app.pagamento.importo_pagato != null && (
-                    <> — Acconto: €{app.pagamento.importo_pagato.toFixed(2)}
-                      {restoDaIncassare(app) > 0 && (
-                        <> — <span className="font-semibold text-red-600">Resto: €{restoDaIncassare(app).toFixed(2)}</span></>
-                      )}
-                    </>
-                  )}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">
+                {app.pagamento.stato === 'pagato' ? '✅' : app.pagamento.stato === 'acconto' ? '💛' : '🔴'}
+              </span>
+              <div>
+                <div className={`text-sm font-bold ${
+                  app.pagamento.stato === 'pagato' ? 'text-emerald-800' :
+                  app.pagamento.stato === 'acconto' ? 'text-amber-800' : 'text-red-800'
+                }`}>
+                  {app.pagamento.stato === 'pagato' ? 'Pagato completo' :
+                   app.pagamento.stato === 'acconto' ? 'Pagato parzialmente' : 'Non pagato'}
                 </div>
-              )}
-              {app.pagamento.note && <div className="text-xs text-gray-500 mt-0.5">{app.pagamento.note}</div>}
+                {app.pagamento.importo_totale != null && (
+                  <div className="text-xs text-gray-600">
+                    Totale: €{app.pagamento.importo_totale.toFixed(2)}
+                    {app.pagamento.stato === 'acconto' && app.pagamento.importo_pagato != null && (
+                      <> — Acconto: €{app.pagamento.importo_pagato.toFixed(2)}
+                        {restoDaIncassare(app) > 0 && (
+                          <> — <span className="font-semibold text-red-600">Resto: €{restoDaIncassare(app).toFixed(2)}</span></>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+                {app.pagamento.note && <div className="text-xs text-gray-500 mt-0.5">{app.pagamento.note}</div>}
+              </div>
             </div>
+            {editorPagamento.editingId !== app.id && (
+              <button
+                onClick={() => editorPagamento.apri(app)}
+                className="text-gray-400 hover:text-emerald-600 cursor-pointer shrink-0 px-1"
+                title="Modifica acconto e costo ricambi"
+              >
+                ✏️
+              </button>
+            )}
           </div>
+          {editorPagamento.editingId === app.id && <PagamentoEditFields editor={editorPagamento} appuntamento={app} />}
         </div>
       )}
 
