@@ -1537,7 +1537,7 @@ function TabStato({ app }: { app: Appuntamento }) {
               ) : (
                 <div key={i} className="flex items-center justify-between gap-2">
                   <span>
-                    {fmtEuro(a.importo)} il {format(parseISO(a.data_acconto), 'dd/MM/yyyy', { locale: itLocale })}
+                    {fmtEuro(a.importo)} il {format(parseISO(a.data_acconto), 'dd/MM/yy', { locale: itLocale })}
                     {a.nota ? ` — ${a.nota}` : ''}
                   </span>
                   <span className="flex gap-1 shrink-0">
@@ -1590,7 +1590,7 @@ function TabStato({ app }: { app: Appuntamento }) {
               ) : (
                 <div key={i} className="flex items-center justify-between gap-2">
                   <span>
-                    {fmtEuro(r.importo)} il {format(parseISO(r.data_acquisto), 'dd/MM/yyyy', { locale: itLocale })}
+                    {fmtEuro(r.importo)} il {format(parseISO(r.data_acquisto), 'dd/MM/yy', { locale: itLocale })}
                     {r.descrizione ? ` — ${r.descrizione}` : ''}
                   </span>
                   <span className="flex gap-1 shrink-0">
