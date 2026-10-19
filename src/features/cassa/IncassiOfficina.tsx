@@ -3,7 +3,7 @@ import { Card } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { TIPI_CON_SPESE_LAVORAZIONE, incassoMovimento } from './movimentiTotali';
 import { DateField } from '@/components/DateField';
-import { dayKey } from '@/lib/format';
+import { dayKey, todayKey } from '@/lib/format';
 import type { Appuntamento, Movimento } from '@/types/database';
 
 // Formato "YYYY-MM-DD" in ora locale per l'input date: con toISOString()
@@ -78,8 +78,46 @@ export function usePagamentoEditor(onSalvato?: (id: string) => void) {
       data_consegna: nuovaDataConsegna,
       stato: saldato ? ('pagato' as const) : nuovoPagato > 0 ? ('acconto' as const) : ('non_pagato' as const),
     };
+
+    // Se l'incassato e' aumentato rispetto a prima di aprire la matita, e'
+    // un pagamento arrivato solo ora (es. il cliente salda il resto di un
+    // acconto preso la settimana scorsa): va registrato come movimento
+    // datato oggi, non mescolato in silenzio nel giorno della consegna —
+    // altrimenti su Cassa non si vedrebbe mai che oggi e' arrivato altro.
+    // Stesso meccanismo (e stessa formula di incassato()) gia' usato per
+    // gli acconti presi prima della consegna finale.
+    const vecchioPagato = a.pagamento.stato === 'pagato'
+      ? (a.pagamento.importo_pagato ?? a.pagamento.importo_totale ?? 0)
+      : (a.pagamento.importo_pagato ?? 0);
+    const delta = nuovoPagato - vecchioPagato;
+    let nuoviAcconti = a.acconti || [];
+    if (delta > 0.004) {
+      const clienteNome = a.clienti?.nome || 'Cliente';
+      const targa = a.veicoli?.targa ? ` — ${a.veicoli.targa}` : '';
+      const oggi = todayKey();
+      const { data: movimento, error: movErr } = await supabase
+        .from('movimenti')
+        .insert({
+          officina_id: a.officina_id,
+          tipo: 'incasso_extra',
+          importo: delta,
+          descrizione: `Saldo — ${clienteNome}${targa}`,
+          metodo_pagamento: 'contanti',
+          data: oggi,
+          dipendente_id: null,
+          created_by: null,
+          note: null,
+          spese_lavorazione: null,
+        })
+        .select()
+        .single();
+      if (!movErr && movimento) {
+        nuoviAcconti = [...nuoviAcconti, { data_acconto: oggi, importo: delta, movimento_id: movimento.id }];
+      }
+    }
+
     setSalvando(a.id);
-    const { error } = await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento }).eq('id', a.id);
+    const { error } = await supabase.from('appuntamenti').update({ pagamento: nuovoPagamento, acconti: nuoviAcconti }).eq('id', a.id);
     setSalvando(null);
     if (error) { alert('Modifica non salvata: ' + error.message); return; }
     setEditingId(null);
