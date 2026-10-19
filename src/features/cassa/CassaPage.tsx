@@ -8,7 +8,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { VoiceButton } from '@/components/VoiceInput';
-import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, totaleIncassatoVisualizzato, restoDaIncassare, usePagamentoEditor, PagamentoEditFields, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
+import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, totaleIncassatoVisualizzato, restoDaIncassare, usePagamentoEditor, PagamentoEditFields, useAccontoEditor, AccontoEditFields, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
 import { FornitoriRicambi } from './FornitoriRicambi';
 import { DateField } from '@/components/DateField';
 import { dayKey } from '@/lib/format';
@@ -106,6 +106,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
   // Modifica acconto/totale/ricambi/operaio direttamente da qui, stesso
   // pannello di Incassi officina: prima si poteva solo da quella sezione.
   const editorAuto = usePagamentoEditor();
+  const editorAcconto = useAccontoEditor();
 
   // Spunta rapida sulla riga stessa, senza apire la matita: il costo
   // ricambi e' spesso solo informativo (pagato a blocchi al ricambista),
@@ -1262,6 +1263,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                     const resto = restoDaIncassare(app);
                     const ricambi = app.pagamento?.costo_ricambi || 0;
                     const inEdit = editorAuto.editingId === app.id;
+                    const accontoInEditIdx = (app.acconti || []).findIndex((_, i) => editorAcconto.editingKey === editorAcconto.chiave(app, i));
                     return (
                     <div key={`auto-${app.id}`} className="py-2 px-1 group">
                       <div className="flex items-center gap-3">
@@ -1339,8 +1341,10 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                               presi prima, o il resto saldato dopo): ognuno col suo importo
                               e la sua data, cosi' si vede da quando viene quel totale. */}
                           {(app.acconti || []).map((acc, i) => (
-                            <div key={i} className="text-[10px] text-emerald-600">
-                              +{fmtEuro(acc.importo)} il {new Date(acc.data_acconto + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                            <div key={i} className="flex items-center justify-end gap-1 text-[10px] text-emerald-600">
+                              <span>+{fmtEuro(acc.importo)} il {new Date(acc.data_acconto + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}</span>
+                              <button onClick={() => editorAcconto.apri(app, i)} className="text-gray-400 hover:text-emerald-600 cursor-pointer" title="Modifica">✏️</button>
+                              <button onClick={() => editorAcconto.elimina(app, i)} className="text-gray-400 hover:text-red-600 cursor-pointer" title="Elimina">🗑️</button>
                             </div>
                           ))}
                         </div>
@@ -1355,6 +1359,7 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                         )}
                       </div>
                       {inEdit && <PagamentoEditFields editor={editorAuto} appuntamento={app} />}
+                      {accontoInEditIdx >= 0 && <AccontoEditFields editor={editorAcconto} appuntamento={app} index={accontoInEditIdx} />}
                     </div>
                     );
                   })}

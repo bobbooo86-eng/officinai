@@ -17,7 +17,7 @@ import { format, parseISO } from 'date-fns';
 import { it as itLocale } from 'date-fns/locale';
 import { AccettazioneVeicolo } from './AccettazioneVeicolo';
 import { StoricoVeicolo } from './StoricoVeicolo';
-import { restoDaIncassare, usePagamentoEditor, PagamentoEditFields } from '@/features/cassa/IncassiOfficina';
+import { restoDaIncassare, usePagamentoEditor, PagamentoEditFields, useAccontoEditor, AccontoEditFields } from '@/features/cassa/IncassiOfficina';
 import { VoiceButton } from '@/components/VoiceInput';
 import type { Appuntamento, Preventivo, PreventivoRiga, FoglioLavoro, Difetto, PagamentoInfo, PagamentoStato, Acconto, RicambioAcquistato } from '@/types/database';
 
@@ -961,13 +961,11 @@ function TabStato({ app }: { app: Appuntamento }) {
   // cliccato un avviso "da incassare" sulla Home, senza dover passare da
   // Cassa per trovare di nuovo quella stessa consegna.
   const editorPagamento = usePagamentoEditor();
-  // Modifica inline di un acconto/ricambio gia' registrato (indice nella
-  // rispettiva lista; null = nessuno in modifica).
-  const [editingAccontoIdx, setEditingAccontoIdx] = useState<number | null>(null);
-  const [editAccontoImporto, setEditAccontoImporto] = useState('');
-  const [editAccontoData, setEditAccontoData] = useState('');
-  const [editAccontoNota, setEditAccontoNota] = useState('');
-  const [salvandoAcconto, setSalvandoAcconto] = useState(false);
+  // Stesso editor di acconti gia' usato in Cassa (Movimenti): un acconto
+  // modificato/eliminato da qui o da li' e' la stessa identica cosa.
+  const editorAcconto = useAccontoEditor();
+  // Modifica inline di un ricambio acquistato gia' registrato (indice nella
+  // lista; null = nessuno in modifica).
   const [editingRicambioIdx, setEditingRicambioIdx] = useState<number | null>(null);
   const [editRicambioImporto, setEditRicambioImporto] = useState('');
   const [editRicambioData, setEditRicambioData] = useState('');
@@ -1086,36 +1084,6 @@ function TabStato({ app }: { app: Appuntamento }) {
     return { error: null };
   };
 
-  // Modifica/elimina un acconto registrato prima della consegna: tiene
-  // allineato anche il movimento "incasso_extra" collegato (se c'e'), cosi'
-  // non resta disallineato dal numero mostrato in Cassa.
-  const modificaAcconto = async (i: number, importo: number, data: string, nota: string) => {
-    const acconti = [...(app.acconti || [])];
-    const esistente = acconti[i];
-    if (!esistente) return { error: 'Acconto non trovato' };
-    if (esistente.movimento_id) {
-      const { error } = await supabase.from('movimenti').update({ importo, data, note: nota || null }).eq('id', esistente.movimento_id);
-      if (error) return { error: error.message };
-    }
-    acconti[i] = { ...esistente, importo, data_acconto: data, nota: nota || undefined };
-    const { error: appErr } = await supabase.from('appuntamenti').update({ acconti }).eq('id', app.id);
-    if (appErr) return { error: appErr.message };
-    return { error: null };
-  };
-
-  const eliminaAcconto = async (i: number) => {
-    const acconti = [...(app.acconti || [])];
-    const esistente = acconti[i];
-    if (!esistente || !confirm('Eliminare questo acconto? Verra\' tolto anche il movimento in Cassa collegato.')) return;
-    if (esistente.movimento_id) {
-      const { error } = await supabase.from('movimenti').delete().eq('id', esistente.movimento_id);
-      if (error) { alert('Acconto non eliminato: ' + error.message); return; }
-    }
-    acconti.splice(i, 1);
-    const { error: appErr } = await supabase.from('appuntamenti').update({ acconti }).eq('id', app.id);
-    if (appErr) { alert('Acconto non eliminato: ' + appErr.message); return; }
-  };
-
   // Stesso meccanismo per un ricambio acquistato: tiene allineato il
   // movimento "spesa_officina" collegato.
   const modificaRicambioAcquistato = async (i: number, importo: number, data: string, descrizione: string) => {
@@ -1148,24 +1116,6 @@ function TabStato({ app }: { app: Appuntamento }) {
     ricambi.splice(i, 1);
     const { error: appErr } = await supabase.from('appuntamenti').update({ ricambi_acquistati: ricambi }).eq('id', app.id);
     if (appErr) { alert('Ricambio non eliminato: ' + appErr.message); return; }
-  };
-
-  const apriModificaAcconto = (i: number) => {
-    const a = app.acconti![i];
-    setEditingAccontoIdx(i);
-    setEditAccontoImporto(String(a.importo));
-    setEditAccontoData(a.data_acconto);
-    setEditAccontoNota(a.nota || '');
-  };
-
-  const salvaModificaAcconto = async (i: number) => {
-    const importo = parseFloat((editAccontoImporto || '').replace(',', '.'));
-    if (!Number.isFinite(importo) || importo <= 0) return;
-    setSalvandoAcconto(true);
-    const { error } = await modificaAcconto(i, importo, editAccontoData, editAccontoNota.trim());
-    setSalvandoAcconto(false);
-    if (error) { alert('Acconto non salvato: ' + error); return; }
-    setEditingAccontoIdx(null);
   };
 
   const apriModificaRicambio = (i: number) => {
@@ -1506,34 +1456,8 @@ function TabStato({ app }: { app: Appuntamento }) {
           </div>
           <div className="text-xs text-amber-700 mt-0.5 space-y-1">
             {app.acconti.map((a, i) =>
-              editingAccontoIdx === i ? (
-                <div key={i} className="bg-white rounded-lg p-2 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number" step="0.01" min={0} value={editAccontoImporto}
-                      onChange={(e) => setEditAccontoImporto(e.target.value)}
-                      className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                    <input
-                      type="date" value={editAccontoData}
-                      onChange={(e) => setEditAccontoData(e.target.value)}
-                      className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-                  <input
-                    type="text" placeholder="Nota (opzionale)" value={editAccontoNota}
-                    onChange={(e) => setEditAccontoNota(e.target.value)}
-                    className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                  <div className="flex gap-1.5">
-                    <button onClick={() => salvaModificaAcconto(i)} disabled={salvandoAcconto} className="flex-1 py-1 rounded-lg bg-amber-600 text-white text-[11px] font-semibold hover:bg-amber-700 disabled:opacity-50 cursor-pointer">
-                      {salvandoAcconto ? 'Salvataggio...' : 'Salva'}
-                    </button>
-                    <button onClick={() => setEditingAccontoIdx(null)} disabled={salvandoAcconto} className="px-2.5 py-1 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 cursor-pointer">
-                      Annulla
-                    </button>
-                  </div>
-                </div>
+              editorAcconto.editingKey === editorAcconto.chiave(app, i) ? (
+                <AccontoEditFields key={i} editor={editorAcconto} appuntamento={app} index={i} />
               ) : (
                 <div key={i} className="flex items-center justify-between gap-2">
                   <span>
@@ -1541,8 +1465,8 @@ function TabStato({ app }: { app: Appuntamento }) {
                     {a.nota ? ` — ${a.nota}` : ''}
                   </span>
                   <span className="flex gap-1 shrink-0">
-                    <button onClick={() => apriModificaAcconto(i)} className="cursor-pointer hover:opacity-70" title="Modifica">✏️</button>
-                    <button onClick={() => eliminaAcconto(i)} className="cursor-pointer hover:opacity-70" title="Elimina">🗑️</button>
+                    <button onClick={() => editorAcconto.apri(app, i)} className="cursor-pointer hover:opacity-70" title="Modifica">✏️</button>
+                    <button onClick={() => editorAcconto.elimina(app, i)} className="cursor-pointer hover:opacity-70" title="Elimina">🗑️</button>
                   </span>
                 </div>
               )

@@ -229,6 +229,102 @@ export function PagamentoEditFields({ editor, appuntamento }: { editor: Pagament
   );
 }
 
+/** Stato e azioni per modificare/eliminare un acconto gia' registrato su una
+ * consegna (uno dei suoi a.acconti[i]): tiene allineato anche il movimento
+ * "incasso_extra" collegato (se c'e'), cosi' Cassa non resta disallineata.
+ * Estratto qui (invece che nella scheda appuntamento) per poterlo riusare
+ * ovunque compaia un acconto: scheda appuntamento, Movimenti, Incassi officina. */
+export function useAccontoEditor(onSalvato?: (appuntamentoId: string) => void) {
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editImporto, setEditImporto] = useState('');
+  const [editData, setEditData] = useState('');
+  const [editNota, setEditNota] = useState('');
+  const [salvando, setSalvando] = useState<string | null>(null);
+
+  const chiave = (a: Appuntamento, i: number) => `${a.id}:${i}`;
+
+  const apri = (a: Appuntamento, i: number) => {
+    const acc = (a.acconti || [])[i];
+    if (!acc) return;
+    setEditingKey(chiave(a, i));
+    setEditImporto(String(acc.importo));
+    setEditData(acc.data_acconto);
+    setEditNota(acc.nota || '');
+  };
+
+  const annulla = () => setEditingKey(null);
+
+  const salva = async (a: Appuntamento, i: number) => {
+    const acconti = [...(a.acconti || [])];
+    const esistente = acconti[i];
+    if (!esistente) return;
+    const importo = parseFloat(editImporto) || 0;
+    if (!Number.isFinite(importo) || importo <= 0) return;
+    setSalvando(chiave(a, i));
+    if (esistente.movimento_id) {
+      const { error } = await supabase.from('movimenti').update({ importo, data: editData, note: editNota.trim() || null }).eq('id', esistente.movimento_id);
+      if (error) { setSalvando(null); alert('Acconto non salvato: ' + error.message); return; }
+    }
+    acconti[i] = { ...esistente, importo, data_acconto: editData, nota: editNota.trim() || undefined };
+    const { error: appErr } = await supabase.from('appuntamenti').update({ acconti }).eq('id', a.id);
+    setSalvando(null);
+    if (appErr) { alert('Acconto non salvato: ' + appErr.message); return; }
+    setEditingKey(null);
+    onSalvato?.(a.id);
+  };
+
+  const elimina = async (a: Appuntamento, i: number) => {
+    const acconti = [...(a.acconti || [])];
+    const esistente = acconti[i];
+    if (!esistente || !confirm('Eliminare questo acconto? Verra\' tolto anche il movimento in Cassa collegato.')) return;
+    if (esistente.movimento_id) {
+      const { error } = await supabase.from('movimenti').delete().eq('id', esistente.movimento_id);
+      if (error) { alert('Acconto non eliminato: ' + error.message); return; }
+    }
+    acconti.splice(i, 1);
+    const { error: appErr } = await supabase.from('appuntamenti').update({ acconti }).eq('id', a.id);
+    if (appErr) { alert('Acconto non eliminato: ' + appErr.message); return; }
+    onSalvato?.(a.id);
+  };
+
+  return { editingKey, editImporto, setEditImporto, editData, setEditData, editNota, setEditNota, salvando, apri, annulla, salva, elimina, chiave };
+}
+export type AccontoEditor = ReturnType<typeof useAccontoEditor>;
+
+/** Campi del pannello di modifica di un acconto, riusabile ovunque serva. */
+export function AccontoEditFields({ editor, appuntamento, index }: { editor: AccontoEditor; appuntamento: Appuntamento; index: number }) {
+  const key = editor.chiave(appuntamento, index);
+  return (
+    <div className="bg-white rounded-lg p-2 space-y-1.5 border border-gray-200">
+      <div className="flex items-center gap-1.5">
+        <input
+          type="number" step="0.01" min={0} value={editor.editImporto}
+          onChange={(e) => editor.setEditImporto(e.target.value)}
+          className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+        <input
+          type="date" value={editor.editData}
+          onChange={(e) => editor.setEditData(e.target.value)}
+          className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+      <input
+        type="text" placeholder="Nota (opzionale)" value={editor.editNota}
+        onChange={(e) => editor.setEditNota(e.target.value)}
+        className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+      />
+      <div className="flex gap-1.5">
+        <button onClick={() => editor.salva(appuntamento, index)} disabled={editor.salvando === key} className="flex-1 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer">
+          {editor.salvando === key ? 'Salvataggio...' : 'Salva'}
+        </button>
+        <button onClick={editor.annulla} disabled={editor.salvando === key} className="px-2.5 py-1 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50 cursor-pointer">
+          Annulla
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Stato e azioni per modificare una Revisione (Gianni)/Centraline (Daniele)
  * direttamente da qui, senza dover passare da Movimenti (CassaPage): solo i
  * campi utili per una correzione veloce (descrizione, cliente, importo,
