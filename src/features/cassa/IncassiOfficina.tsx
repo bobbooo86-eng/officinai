@@ -410,11 +410,23 @@ export function incassato(a: Appuntamento): number {
   const p = a.pagamento;
   if (!p) return 0;
   const accontiPrecedenti = (a.acconti || []).reduce((s, acc) => s + Number(acc.importo), 0);
-  const base = p.fornitore_pagato_da_cliente ? (p.stato === 'acconto' ? (p.importo_pagato || 0) : 0)
+  return Math.max(0, totaleIncassatoVisualizzato(a) - accontiPrecedenti);
+}
+
+/** Quanto ha pagato in tutto il cliente per questo veicolo fino ad ora,
+ * acconti compresi — a differenza di incassato() non toglie gli acconti
+ * presi in giorni diversi: e' il numero "a vista" da mostrare in bella
+ * vista sulla card di una consegna (es. 300€ anche se 150€ di quei soldi
+ * sono arrivati prima o dopo la consegna stessa, su un giorno diverso),
+ * non quello usato per sommare i totali di giornata/periodo senza
+ * contare due volte la stessa cifra (per quello serve incassato()). */
+export function totaleIncassatoVisualizzato(a: Appuntamento): number {
+  const p = a.pagamento;
+  if (!p) return 0;
+  return p.fornitore_pagato_da_cliente ? (p.stato === 'acconto' ? (p.importo_pagato || 0) : 0)
     : p.stato === 'pagato' ? (p.importo_totale || 0)
     : p.stato === 'acconto' ? (p.importo_pagato || 0)
     : 0;
-  return Math.max(0, base - accontiPrecedenti);
 }
 
 /** Valore del lavoro fatturato al cliente, incassato o no: il guadagno

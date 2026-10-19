@@ -8,7 +8,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { VoiceButton } from '@/components/VoiceInput';
-import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, restoDaIncassare, usePagamentoEditor, PagamentoEditFields, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
+import { IncassiOfficina, dataIncasso, incassato as incassatoAuto, totaleIncassatoVisualizzato, restoDaIncassare, usePagamentoEditor, PagamentoEditFields, inPeriodo, PERIODI, type Periodo } from './IncassiOfficina';
 import { FornitoriRicambi } from './FornitoriRicambi';
 import { DateField } from '@/components/DateField';
 import { dayKey } from '@/lib/format';
@@ -1333,8 +1333,16 @@ export function CassaPage({ initialOpen, onOpenHandled, resetSignal }: CassaPage
                         </div>
                         <div className="text-right shrink-0">
                           <div className="text-sm font-bold text-emerald-600">
-                            +{fmtEuro(incassatoAuto(app))}
+                            +{fmtEuro(totaleIncassatoVisualizzato(app))}
                           </div>
+                          {/* Versamenti arrivati in giorni diversi dalla consegna (acconti
+                              presi prima, o il resto saldato dopo): ognuno col suo importo
+                              e la sua data, cosi' si vede da quando viene quel totale. */}
+                          {(app.acconti || []).map((acc, i) => (
+                            <div key={i} className="text-[10px] text-emerald-600">
+                              +{fmtEuro(acc.importo)} il {new Date(acc.data_acconto + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                            </div>
+                          ))}
                         </div>
                         {!inEdit && (
                           <button
