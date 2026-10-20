@@ -47,6 +47,10 @@ export interface Officina {
   // Saldo di partenza per ciascun fornitore di ricambi, per far iniziare il
   // conto fornitori da un debito/credito gia' esistente invece che da zero.
   saldi_fornitori_ricambi?: { autoricambi?: number; monti?: number } | null;
+  // Voci aggiunte dall'officina stessa alle "Lavorazioni tipiche" a
+  // crocetta della scheda di lavoro (es. "Controllo livelli"), in aggiunta
+  // a quelle gia' fisse nell'app: riusate su ogni scheda di ogni veicolo.
+  lavorazioni_tipiche_custom?: string[];
   piano: string;
   created_at?: string;
 }

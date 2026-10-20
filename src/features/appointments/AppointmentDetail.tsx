@@ -2020,13 +2020,18 @@ const LAVORAZIONI_TIPICHE = [
 ];
 
 function TabFoglioLavoro({ appuntamentoId, statoAppuntamento, veicolo, veicoloKm, clienteNome, clienteTel }: { appuntamentoId: string; statoAppuntamento: string; veicolo?: { marca: string; modello: string; targa?: string }; veicoloKm?: number; clienteNome?: string; clienteTel?: string }) {
-  const { utente, officina } = useAuthStore();
+  const { utente, officina, updateOfficina } = useAuthStore();
   const [foglio, setFoglio] = useState<FoglioLavoro | null>(null);
   const [difetti, setDifetti] = useState<Difetto[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
 
   const [lavorazioniTipiche, setLavorazioniTipiche] = useState<string[]>([]);
+  // Voci aggiunte dall'officina stessa (es. "Controllo livelli"), in piu'
+  // rispetto a quelle fisse: salvate sull'officina, valide per ogni scheda.
+  const [nuovaVoceCustom, setNuovaVoceCustom] = useState('');
+  const [mostraAggiungiVoce, setMostraAggiungiVoce] = useState(false);
+  const [salvandoVoceCustom, setSalvandoVoceCustom] = useState(false);
   const [lavorazioniDaEseguire, setLavorazioniDaEseguire] = useState('');
   const [nomeOperaio, setNomeOperaio] = useState('');
   const [firma, setFirma] = useState('');
@@ -2116,6 +2121,42 @@ function TabFoglioLavoro({ appuntamentoId, statoAppuntamento, veicolo, veicoloKm
     if (error) showToast('Lavorazione non salvata: ' + error.message);
   };
 
+  const vociCustom = officina?.lavorazioni_tipiche_custom || [];
+  const vociDisponibili = [...LAVORAZIONI_TIPICHE, ...vociCustom];
+
+  // Aggiunge una nuova voce personalizzata (es. "Controllo livelli") alle
+  // lavorazioni tipiche dell'officina, valida da ora in poi su ogni scheda
+  // di ogni veicolo, e la spunta subito su questa.
+  const aggiungiVoceCustom = async () => {
+    const label = nuovaVoceCustom.trim();
+    if (!label || !officina) return;
+    if (vociDisponibili.some((v) => v.toLowerCase() === label.toLowerCase())) {
+      setNuovaVoceCustom('');
+      setMostraAggiungiVoce(false);
+      if (!lavorazioniTipiche.includes(label)) toggleLavorazione(label);
+      return;
+    }
+    setSalvandoVoceCustom(true);
+    const nuoveVociCustom = [...vociCustom, label];
+    const { error } = await supabase.from('officine').update({ lavorazioni_tipiche_custom: nuoveVociCustom }).eq('id', officina.id);
+    setSalvandoVoceCustom(false);
+    if (error) { showToast('Voce non salvata: ' + error.message); return; }
+    updateOfficina({ lavorazioni_tipiche_custom: nuoveVociCustom });
+    setNuovaVoceCustom('');
+    setMostraAggiungiVoce(false);
+    toggleLavorazione(label);
+  };
+
+  const rimuoviVoceCustom = async (voce: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!officina) return;
+    if (!confirm(`Togliere "${voce}" dalle lavorazioni tipiche per le prossime schede? Resta spuntata qui se gia' selezionata.`)) return;
+    const nuoveVociCustom = vociCustom.filter((v) => v !== voce);
+    const { error } = await supabase.from('officine').update({ lavorazioni_tipiche_custom: nuoveVociCustom }).eq('id', officina.id);
+    if (error) { showToast('Non rimossa: ' + error.message); return; }
+    updateOfficina({ lavorazioni_tipiche_custom: nuoveVociCustom });
+  };
+
   const salvaLavorazioniDaEseguire = async () => {
     if (!foglio) return;
     const { error } = await supabase.from('foglio_lavoro').update({ lavorazioni_da_eseguire: lavorazioniDaEseguire || null }).eq('id', foglio.id);
@@ -2192,18 +2233,18 @@ function TabFoglioLavoro({ appuntamentoId, statoAppuntamento, veicolo, veicoloKm
     if (!foglio) return;
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Scheda di lavoro — ${escapeHtml(officina?.nome || 'OfficinAI')}</title>
 <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;padding:30px;color:#333;font-size:13px}
-.header{display:flex;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:3px solid #1a56db}
-.header h1{color:#1a56db;font-size:20px}
-.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
-.info-box{background:#f8f9fa;border-radius:8px;padding:10px}.info-box label{font-size:10px;color:#9ca3af;text-transform:uppercase}.info-box p{font-weight:600;margin-top:2px}
-.section{margin-bottom:18px}.section h2{font-size:13px;color:#1a56db;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd}
-.checklist{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.check{display:flex;align-items:center;gap:6px;font-size:12px}
-.box{width:14px;height:14px;border:2px solid #333;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
-.firme{margin-top:30px;display:flex;justify-content:space-between}
-.firma-box{text-align:center;width:30%}.firma-box .line{border-bottom:1px solid #333;height:35px;margin-bottom:5px}
+.header{display:flex;justify-content:space-between;margin-bottom:14px;padding-bottom:8px;border-bottom:3px solid #1a56db}
+.header h1{color:#1a56db;font-size:18px}
+.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.info-box{background:#f8f9fa;border-radius:8px;padding:7px}.info-box label{font-size:9px;color:#9ca3af;text-transform:uppercase}.info-box p{font-weight:600;margin-top:2px;font-size:12px}
+.section{margin-bottom:12px}.section h2{font-size:12px;color:#1a56db;margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid #ddd}
+.checklist{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.check{display:flex;align-items:center;gap:5px;font-size:11px}
+.box{width:12px;height:12px;border:2px solid #333;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+.firme{margin-top:20px;display:flex;justify-content:space-between}
+.firma-box{text-align:center;width:30%}.firma-box .line{border-bottom:1px solid #333;height:30px;margin-bottom:5px}
 .firma-box p{font-size:10px;color:#666}
-@media print{body{padding:15px}}</style></head><body>
+@media print{body{padding:12px}}</style></head><body>
 <div class="header"><h1>${escapeHtml(officina?.nome || 'OfficinAI')}</h1><div style="text-align:right"><strong>SCHEDA DI LAVORO</strong><br>${new Date().toLocaleDateString('it-IT')}</div></div>
 <div class="info-grid">
 <div class="info-box"><label>Marca</label><p>${escapeHtml(veicolo?.marca || '—')}</p></div>
@@ -2211,7 +2252,7 @@ function TabFoglioLavoro({ appuntamentoId, statoAppuntamento, veicolo, veicoloKm
 <div class="info-box"><label>Chilometri</label><p>${veicoloKm?.toLocaleString('it-IT') || '—'}</p></div>
 <div class="info-box"><label>Telefono</label><p>${escapeHtml(clienteTel || '—')}</p></div>
 </div>
-<div class="section"><h2>Lavorazioni tipiche</h2><div class="checklist">${LAVORAZIONI_TIPICHE.map((v) => `<div class="check"><span class="box">${lavorazioniTipiche.includes(v) ? '✓' : ''}</span>${escapeHtml(v)}</div>`).join('')}</div></div>
+${lavorazioniTipiche.length > 0 ? `<div class="section"><h2>Lavorazioni eseguite</h2><div class="checklist">${lavorazioniTipiche.map((v) => `<div class="check"><span class="box">✓</span>${escapeHtml(v)}</div>`).join('')}</div></div>` : ''}
 ${lavorazioniDaEseguire ? `<div class="section"><h2>Lavorazioni da eseguire</h2><p>${escapeHtml(lavorazioniDaEseguire).replace(/\n/g, '<br>')}</p></div>` : ''}
 ${difetti.length > 0 ? `<div class="section"><h2>Difetti riscontrati</h2>${difetti.map((d) => `<p>• ${escapeHtml(d.descrizione || '—')} (${escapeHtml(d.gravita)})${d.risolto ? ' — risolto' : ''}</p>`).join('')}</div>` : ''}
 <div class="firme">
@@ -2277,25 +2318,69 @@ ${difetti.length > 0 ? `<div class="section"><h2>Difetti riscontrati</h2>${difet
       <Card className="!p-3 space-y-2">
         <h3 className="text-sm font-semibold text-gray-900">Lavorazioni tipiche</h3>
         <div className="grid grid-cols-2 gap-2">
-          {LAVORAZIONI_TIPICHE.map((voce) => {
+          {vociDisponibili.map((voce) => {
             const checked = lavorazioniTipiche.includes(voce);
+            const isCustom = vociCustom.includes(voce);
             return (
               <button
                 key={voce}
                 onClick={() => toggleLavorazione(voce)}
                 disabled={isChiuso}
-                className={`flex items-center gap-2 p-2 rounded-lg border-2 text-left transition-colors cursor-pointer disabled:opacity-60 ${
+                className={`flex items-center justify-between gap-2 p-2 rounded-lg border-2 text-left transition-colors cursor-pointer disabled:opacity-60 ${
                   checked ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <span className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300'}`}>
-                  {checked && <span className="text-xs">✓</span>}
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300'}`}>
+                    {checked && <span className="text-xs">✓</span>}
+                  </span>
+                  <span className="text-xs font-medium text-gray-800 truncate">{voce}</span>
                 </span>
-                <span className="text-xs font-medium text-gray-800">{voce}</span>
+                {isCustom && !isChiuso && (
+                  <span
+                    onClick={(e) => rimuoviVoceCustom(voce, e)}
+                    className="text-gray-300 hover:text-red-500 cursor-pointer text-xs px-1 shrink-0"
+                    title="Togli questa voce personalizzata dalle prossime schede"
+                  >
+                    ✕
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
+        {!isChiuso && (
+          mostraAggiungiVoce ? (
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                type="text"
+                value={nuovaVoceCustom}
+                onChange={(e) => setNuovaVoceCustom(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') aggiungiVoceCustom(); }}
+                placeholder="Es. Controllo livelli"
+                autoFocus
+                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={aggiungiVoceCustom}
+                disabled={salvandoVoceCustom || !nuovaVoceCustom.trim()}
+                className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+              >
+                {salvandoVoceCustom ? '...' : 'Aggiungi'}
+              </button>
+              <button
+                onClick={() => { setMostraAggiungiVoce(false); setNuovaVoceCustom(''); }}
+                className="px-2.5 py-2 rounded-lg border border-gray-200 text-gray-600 text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setMostraAggiungiVoce(true)} className="text-xs text-blue-600 hover:underline cursor-pointer">
+              + Aggiungi voce personalizzata
+            </button>
+          )
+        )}
       </Card>
 
       {/* Lavorazioni da eseguire */}
