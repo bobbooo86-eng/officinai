@@ -143,13 +143,28 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
   // toglie sempre dal guadagno (margine vero), a prescindere da chi e
   // quando paga il fornitore — a differenza di "spesa" in Cassa, che
   // conta solo i ricambi pagati subito dall'officina.
+  // Un dipendente appena aggiunto in Impostazioni deve comparire qui da
+  // solo, senza bisogno di una modifica al codice: si prende il primo nome
+  // di ciascun dipendente registrato (il campo "operaio" di solito riporta
+  // solo quello, es. "DANIELE") e lo si aggiunge se non gia' coperto da
+  // uno dei nomi fissi (Gianni/Daniele hanno un trattamento speciale sui
+  // movimenti Revisione/Centraline, anche se registrati come utenti).
+  const nomiCollaboratori = useMemo(() => {
+    const base: string[] = [...COLLABORATORI];
+    dipendenti.forEach((d) => {
+      const primoNome = d.nome.trim().split(/\s+/)[0];
+      if (primoNome && !base.some((n) => menziona(d.nome, n))) base.push(primoNome);
+    });
+    return base;
+  }, [dipendenti]);
+
   const collaboratori = useMemo(() => {
     const consegnati = appuntamenti.filter(
       (a) => a.stato === 'consegnato' && a.pagamento && navCollab.inRangeSelezionato(dataIncasso(a))
     );
     const movimentiInPeriodo = movimenti.filter((m) => navCollab.inRangeSelezionato(dataMovimento(m)));
 
-    return COLLABORATORI.map((nome) => {
+    return nomiCollaboratori.map((nome) => {
       let incassi = 0;
       let spese = 0;
       const dettagli: { id: string; data: Date; label: string; sub: string; targa?: string; clienteId?: string; incasso: number; spesa: number; totaleLavoro?: number; costoRicambiTotale?: number }[] = [];
@@ -162,7 +177,7 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
         // lavoro si divide in parti uguali fra chi e' citato, invece di
         // contare l'intero importo per ciascuno (altrimenti un lavoro da
         // 300€ risulterebbe 300€ per Gianni E 300€ per Daniele).
-        const citati = COLLABORATORI.filter((n) => menziona(operaioText, n));
+        const citati = nomiCollaboratori.filter((n) => menziona(operaioText, n));
         const quota = citati.length > 1 ? 1 / citati.length : 1;
         const incasso = valoreLavoro(a) * quota;
         const spesa = (Number(a.pagamento?.costo_ricambi) || 0) * quota;
@@ -211,25 +226,21 @@ export function AnalyticsPage({ onNavigateToCliente }: { onNavigateToCliente?: (
       dettagli.sort((x, y) => y.data.getTime() - x.data.getTime());
       return { nome, incassi, spese, netto: incassi - spese, lavori: dettagli.length, dettagli };
     });
-  }, [appuntamenti, movimenti, navCollab.inRangeSelezionato]);
+  }, [appuntamenti, movimenti, nomiCollaboratori, navCollab.inRangeSelezionato]);
 
   // Spese per collaboratore: qui invece il contrario — tutte le spese
   // (titolare, dipendente, anticipi...) prese dalla cassa e assegnate a
   // lui, scelte dal menu a tendina (dipendente_id) o scritte nella
   // descrizione/nota. Esclusi i movimenti Revisione Gianni/Centraline
   // Daniele, che sono gia' contati (come lavorazione) nella finestra
-  // "Guadagno". A differenza di "Guadagno" (solo i 4 collaboratori che
-  // fanno lavorazioni), qui l'elenco e' TUTTI i dipendenti/titolari
-  // registrati nell'officina — chiunque abbia una spesa assegnata deve
-  // trovare un posto dove conteggiarla — piu' gli eventuali collaboratori
-  // esterni (Gianni/Daniele) non registrati come utenti.
-  const persone = useMemo(() => {
-    const elenco: { key: string; nome: string; utenteId?: string }[] = dipendenti.map((d) => ({ key: d.id, nome: d.nome, utenteId: d.id }));
-    COLLABORATORI.forEach((nome) => {
-      if (!elenco.some((p) => menziona(p.nome, nome))) elenco.push({ key: nome, nome });
-    });
-    return elenco;
-  }, [dipendenti]);
+  // "Guadagno". Solo i dipendenti/titolari davvero registrati
+  // nell'officina: un collaboratore esterno come Gianni/Antonello non ha
+  // un dipendente_id da scegliere nel menu a tendina, quindi non ha mai
+  // niente da mostrare qui.
+  const persone = useMemo(
+    () => dipendenti.map((d) => ({ key: d.id, nome: d.nome, utenteId: d.id })),
+    [dipendenti]
+  );
 
   const spesePerCollaboratore = useMemo(() => {
     const movimentiInPeriodo = movimenti.filter(
