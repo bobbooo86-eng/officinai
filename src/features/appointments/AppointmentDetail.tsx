@@ -609,8 +609,8 @@ function ModalPagamento({ acconti, onConferma, onAnnulla }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto space-y-4 p-5 animate-fade-in">
+    <div className="fixed inset-0 bg-black/50 z-50 overflow-y-auto flex items-start sm:items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm space-y-4 p-5 my-8 sm:my-0 animate-fade-in">
         <div className="text-center">
           <div className="text-3xl mb-1">🏁</div>
           <h3 className="text-base font-bold text-gray-900">Consegna auto</h3>
@@ -789,8 +789,8 @@ function ModalAcconto({ onSalva, onAnnulla }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto space-y-4 p-5 animate-fade-in">
+    <div className="fixed inset-0 bg-black/50 z-50 overflow-y-auto flex items-start sm:items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm space-y-4 p-5 my-8 sm:my-0 animate-fade-in">
         <div className="text-center">
           <div className="text-3xl mb-1">💛</div>
           <h3 className="text-base font-bold text-gray-900">Registra acconto</h3>
@@ -878,8 +878,8 @@ function ModalRicambioAcquistato({ onSalva, onAnnulla }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto space-y-4 p-5 animate-fade-in">
+    <div className="fixed inset-0 bg-black/50 z-50 overflow-y-auto flex items-start sm:items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm space-y-4 p-5 my-8 sm:my-0 animate-fade-in">
         <div className="text-center">
           <div className="text-3xl mb-1">🔧</div>
           <h3 className="text-base font-bold text-gray-900">Ricambi acquistati</h3>
