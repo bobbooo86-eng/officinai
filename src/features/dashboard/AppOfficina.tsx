@@ -10,6 +10,7 @@ import { PageSkeleton } from '@/components/ui/PageSkeleton';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { stampaSchedaVuota } from '@/features/appointments/schedaVuota';
 import type { Appuntamento, MovimentoTipo } from '@/types/database';
 
 const AnalyticsPage = lazy(() => import('./AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
@@ -321,6 +322,19 @@ export function AppOfficina() {
       {activeTab === 'altro' && !subPage && (
         <div className="p-4 space-y-3">
           <h2 className="text-lg font-bold text-gray-900">Altro</h2>
+          <button
+            onClick={() => stampaSchedaVuota(officina)}
+            className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-xl">🖨️</div>
+            <div className="text-left">
+              <div className="font-semibold text-sm text-gray-900">Scheda vuota da stampare</div>
+              <div className="text-xs text-gray-500">Accettazione + lavoro insieme, da compilare a mano</div>
+            </div>
+            <svg className="w-5 h-5 text-gray-400 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
           <button
             onClick={() => setSubPage('guida')}
             className="w-full flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border-2 border-blue-200 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
