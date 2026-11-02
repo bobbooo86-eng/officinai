@@ -1,4 +1,5 @@
 import { escapeHtml } from '@/lib/format';
+import { extractLogoColor } from '@/features/estimates/PDFExport';
 import type { Officina } from '@/types/database';
 
 // Stesse voci di LAVORAZIONI_TIPICHE in AppointmentDetail.tsx: duplicate qui
@@ -21,11 +22,16 @@ const LAVORAZIONI_TIPICHE = [
  * Modulo cartaceo vuoto (accettazione + scheda lavoro insieme) da
  * stampare e compilare a mano al banco, per quando non conviene usare il
  * tablet (es. cliente di passaggio, officina piena). Nessun dato gia'
- * scritto: solo righe bianche su cui scrivere, stesso stile grafico degli
- * altri moduli stampabili dell'app.
+ * scritto: solo righe bianche su cui scrivere. Colore ricavato dal logo
+ * dell'officina (stesso meccanismo di preventivi/fatture, extractLogoColor
+ * in PDFExport.tsx), non piu' un blu fisso uguale per tutti.
  */
-export function buildSchedaVuotaHtml(officina?: Officina | null): string {
+export function buildSchedaVuotaHtml(officina?: Officina | null, accentColor?: string): string {
+  const accent = accentColor || '#1a56db';
   const riga = (larghezza = '1fr') => `<span class="riga" style="flex:${larghezza}"></span>`;
+  const logoBlock = officina?.logo_url
+    ? `<img src="${escapeHtml(officina.logo_url)}" alt="Logo" style="width:46px;height:46px;border-radius:10px;object-fit:cover;margin-right:12px;" />`
+    : '';
   return `
 <!DOCTYPE html>
 <html>
@@ -35,13 +41,14 @@ export function buildSchedaVuotaHtml(officina?: Officina | null): string {
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',Arial,sans-serif;padding:34px;color:#222;font-size:13.5px}
-.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;padding-bottom:8px;border-bottom:3px solid #1a56db}
-.header h1{color:#1a56db;font-size:17px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;padding-bottom:8px;border-bottom:3px solid ${accent}}
+.header-left{display:flex;align-items:center}
+.header h1{color:${accent};font-size:17px}
 .header p{color:#666;font-size:10.5px}
 .titolo{text-align:right}
-.titolo strong{font-size:14px;color:#1a56db}
+.titolo strong{font-size:14px;color:${accent}}
 .section{margin-bottom:16px}
-.section h2{font-size:11.5px;color:#1a56db;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid #ddd}
+.section h2{font-size:11.5px;color:${accent};text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid #ddd}
 .campi{display:flex;flex-wrap:wrap;gap:8px 20px}
 .campo{display:flex;align-items:baseline;gap:6px;flex:1 1 auto}
 .campo label{color:#888;white-space:nowrap;font-size:11px}
@@ -66,10 +73,13 @@ table.difetti .gravita{white-space:nowrap}
 <body>
 
 <div class="header">
-  <div>
-    <h1>${escapeHtml(officina?.nome || 'OfficinAI')}</h1>
-    <p>${escapeHtml(officina?.indirizzo || '')}</p>
-    <p>Tel: ${escapeHtml(officina?.tel || '')}${officina?.email ? ` · Email: ${escapeHtml(officina.email)}` : ''}</p>
+  <div class="header-left">
+    ${logoBlock}
+    <div>
+      <h1>${escapeHtml(officina?.nome || 'OfficinAI')}</h1>
+      <p>${escapeHtml(officina?.indirizzo || '')}</p>
+      <p>Tel: ${escapeHtml(officina?.tel || '')}${officina?.email ? ` · Email: ${escapeHtml(officina.email)}` : ''}</p>
+    </div>
   </div>
   <div class="titolo">
     <strong>SCHEDA DI ACCETTAZIONE<br>E LAVORO</strong><br>
@@ -144,9 +154,11 @@ table.difetti .gravita{white-space:nowrap}
 </html>`;
 }
 
-/** Apre il modulo vuoto in una nuova finestra, pronto per la stampa. */
-export function stampaSchedaVuota(officina?: Officina | null): void {
-  const html = buildSchedaVuotaHtml(officina);
+/** Apre il modulo vuoto in una nuova finestra, pronto per la stampa, con il
+ * colore ricavato dal logo dell'officina. */
+export async function stampaSchedaVuota(officina?: Officina | null): Promise<void> {
+  const accent = await extractLogoColor(officina?.logo_url);
+  const html = buildSchedaVuotaHtml(officina, accent);
   const w = window.open('', '_blank');
   if (w) {
     w.document.write(html);
