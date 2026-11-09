@@ -122,3 +122,9 @@ jobs:
           verifica "SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name, ordinal_position;"
           echo "== Funzioni in public (qualsiasi nome, non solo quelle previste) =="
           verifica "SELECT proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' ORDER BY proname;"
+
+          # --- Terzo giro: colonne esatte delle tabelle coinvolte nella
+          # auto-registrazione (officina/cliente/staff), per scrivere le
+          # policy anon corrette senza indovinare. ---
+          echo "== Colonne clienti/veicoli/utenti/officine/abbonamenti =="
+          verifica "SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('clienti','veicoli','utenti','officine','abbonamenti') ORDER BY table_name, ordinal_position;"
