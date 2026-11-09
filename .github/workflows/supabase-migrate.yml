@@ -108,13 +108,17 @@ jobs:
           echo "== Colonna clienti.attivo =="
           verifica "SELECT column_name FROM information_schema.columns WHERE table_name = 'clienti' AND column_name = 'attivo';"
 
-          # --- Diagnostica RLS (solo lettura, per capire lo stato VERO del
-          # database prima di scrivere una migrazione che la riattivi) ---
-          echo "== RLS per tabella (public) =="
-          verifica "SELECT tablename, rowsecurity, forcerowsecurity FROM pg_tables WHERE schemaname='public' ORDER BY tablename;"
-          echo "== Policy esistenti (public) =="
-          verifica "SELECT tablename, policyname, cmd, roles FROM pg_policies WHERE schemaname='public' ORDER BY tablename, policyname;"
-          echo "== Funzioni helper RLS presenti? =="
-          verifica "SELECT proname FROM pg_proc WHERE proname IN ('get_user_officina_id','get_client_id','get_client_officina_id');"
-          echo "== Elenco tabelle public =="
-          verifica "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename;"
+          # --- Diagnostica RLS, secondo giro: la prima ha rivelato uno
+          # schema molto diverso da quello tracciato nelle migrazioni (nuove
+          # tabelle mai viste: accettazioni, schede_lavoro, inviti_staff,
+          # notifiche_scadenze_inviate, whatsapp_inviati, contatti_landing;
+          # nessuna funzione helper RLS presente). Serve il dettaglio vero
+          # prima di scrivere qualsiasi migrazione. ---
+          echo "== RLS attiva per tabella (public) =="
+          verifica "SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname='public' ORDER BY tablename;"
+          echo "== Dettaglio policy esistenti (qual/with_check) =="
+          verifica "SELECT tablename, policyname, cmd, roles, qual, with_check FROM pg_policies WHERE schemaname='public' ORDER BY tablename, policyname;"
+          echo "== Colonne di tutte le tabelle public =="
+          verifica "SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name, ordinal_position;"
+          echo "== Funzioni in public (qualsiasi nome, non solo quelle previste) =="
+          verifica "SELECT proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' ORDER BY proname;"
