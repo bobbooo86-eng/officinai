@@ -129,9 +129,6 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
         .from('utenti')
         .insert({
           officina_id: officina.id,
-          // Collega la riga all'utente Auth: le policy RLS lo usano per
-          // riconoscere lo staff anche se in futuro cambia indirizzo email.
-          auth_id: userId,
           nome: `${nome} ${cognome}`,
           email: email,
           tel: telefono,
