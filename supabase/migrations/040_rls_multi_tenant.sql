@@ -320,6 +320,7 @@ CREATE POLICY messaggi_cliente_insert ON messaggi FOR INSERT TO authenticated
 DROP POLICY IF EXISTS accettazioni_staff_insert ON accettazioni;
 DROP POLICY IF EXISTS accettazioni_staff_select ON accettazioni;
 DROP POLICY IF EXISTS accettazioni_staff_update ON accettazioni;
+DROP POLICY IF EXISTS accettazioni_staff ON accettazioni;
 
 ALTER TABLE accettazioni ENABLE ROW LEVEL SECURITY;
 
@@ -453,6 +454,7 @@ DROP POLICY IF EXISTS scansioni_obd_staff_select ON scansioni_obd;
 DROP POLICY IF EXISTS scansioni_obd_staff_update ON scansioni_obd;
 DROP POLICY IF EXISTS scansioni_obd_cliente_select ON scansioni_obd;
 DROP POLICY IF EXISTS scansioni_obd_cliente_insert ON scansioni_obd;
+DROP POLICY IF EXISTS scansioni_obd_staff ON scansioni_obd;
 
 CREATE POLICY scansioni_obd_staff ON scansioni_obd FOR ALL TO authenticated
   USING (officina_id IN (SELECT officina_id FROM utenti WHERE email = auth.jwt()->>'email'))
@@ -469,6 +471,7 @@ CREATE POLICY scansioni_obd_cliente_insert ON scansioni_obd FOR INSERT TO authen
 -- ("TO public USING true"), equivalente a nessun isolamento.
 -- ------------------------------------------------------------
 DROP POLICY IF EXISTS notifiche_wa_all ON notifiche_wa;
+DROP POLICY IF EXISTS notifiche_wa_staff ON notifiche_wa;
 CREATE POLICY notifiche_wa_staff ON notifiche_wa FOR ALL TO authenticated
   USING (officina_id IN (SELECT officina_id FROM utenti WHERE email = auth.jwt()->>'email'))
   WITH CHECK (officina_id IN (SELECT officina_id FROM utenti WHERE email = auth.jwt()->>'email'));
