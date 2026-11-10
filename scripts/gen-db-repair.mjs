@@ -35,6 +35,7 @@ const SOURCES = [
   'supabase/migrations/039_officine_lavorazioni_tipiche_custom.sql',
   'supabase/migrations/040_rls_multi_tenant.sql',
   'supabase/migrations/041_rls_utenti_fix_emergenza.sql',
+  'supabase/migrations/042_abbonamenti_pagamenti.sql',
 ];
 const TARGET = 'src/lib/dbRepairSql.ts';
 

@@ -11,6 +11,7 @@ import { AppCliente } from '@/features/customer/AppCliente';
 import { RegisterClientePage } from '@/features/auth/RegisterClientePage';
 import { JoinOfficinaPage } from '@/features/auth/JoinOfficinaPage';
 import { OnboardingWizard } from '@/features/onboarding/OnboardingWizard';
+import { AbbonamentoGate } from '@/features/billing/AbbonamentoGate';
 import { Loader } from '@/components/ui';
 
 type Page = 'landing' | 'login' | 'register' | 'register-cliente' | 'join-officina' | 'choose-register';
@@ -73,7 +74,11 @@ export default function App() {
       if (needsOnboarding) {
         return <OnboardingWizard onComplete={handleOnboardingComplete} />;
       }
-      return <AppOfficina />;
+      return (
+        <AbbonamentoGate>
+          <AppOfficina />
+        </AbbonamentoGate>
+      );
     }
 
     if (userType === 'cliente') {

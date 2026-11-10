@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { LegalModal } from '@/features/legal/LegalModal';
 
 interface JoinOfficinaPageProps {
   onGoLogin: () => void;
@@ -36,6 +37,7 @@ export function JoinOfficinaPage({ onGoLogin, onGoBack }: JoinOfficinaPageProps)
   const [selectedOfficinaId, setSelectedOfficinaId] = useState<string>('');
 
   const [accettaTermini, setAccettaTermini] = useState(false);
+  const [legalSection, setLegalSection] = useState<'termini' | 'privacy' | null>(null);
 
   useEffect(() => {
     const fetchOfficine = async () => {
@@ -361,8 +363,10 @@ export function JoinOfficinaPage({ onGoLogin, onGoBack }: JoinOfficinaPageProps)
               className="mt-1 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
             <span className="text-xs text-gray-600 dark:text-gray-400">
-              Accetto i <a href="#" className="text-blue-600 underline">Termini</a> e la{' '}
-              <a href="#" className="text-blue-600 underline">Privacy Policy</a>.
+              Accetto i{' '}
+              <button type="button" onClick={(e) => { e.preventDefault(); setLegalSection('termini'); }} className="text-blue-600 underline cursor-pointer">Termini</button>
+              {' '}e la{' '}
+              <button type="button" onClick={(e) => { e.preventDefault(); setLegalSection('privacy'); }} className="text-blue-600 underline cursor-pointer">Privacy Policy</button>.
             </span>
           </label>
 
@@ -395,6 +399,7 @@ export function JoinOfficinaPage({ onGoLogin, onGoBack }: JoinOfficinaPageProps)
           </div>
         </div>
       </div>
+      {legalSection && <LegalModal section={legalSection} onClose={() => setLegalSection(null)} />}
     </div>
   );
 }

@@ -267,12 +267,25 @@ Deno.serve(async (req: Request) => {
 });
 
 // ---------------------------------------------------------------------------
-// Derive plan name from Stripe price ID
+// Derive plan name from Stripe price ID.
+//
+// Gli ID prezzo di Stripe (es. price_1TLLm2LkrUabbK8j...) non contengono
+// mai la parola "starter"/"professional"/"enterprise": un controllo con
+// .includes() su quelle parole non scatta mai, e chi comprava "starter"
+// riceveva comunque "professional" per il fallback. L'unico modo
+// affidabile è questa mappa esplicita, che deve restare identica a
+// STRIPE_PRICES in src/lib/stripe.ts — quando si passa dalle chiavi di
+// test a quelle vere, questa mappa va aggiornata con i nuovi ID prezzo.
 // ---------------------------------------------------------------------------
+const PREZZO_A_PIANO: Record<string, string> = {
+  'price_1TLLm2LkrUabbK8jrYyWmu0t': 'starter', // starter mensile
+  'price_1TLLm4LkrUabbK8j7G3IdJ3W': 'starter', // starter annuale
+  'price_1TLLm6LkrUabbK8j91fGRRot': 'professional', // professional mensile
+  'price_1TLLmwLkrUabbK8jOPaebqYn': 'professional', // professional annuale
+  'price_1TLLmzLkrUabbK8jgFEP2kOt': 'enterprise', // enterprise mensile
+  'price_1TLLn0LkrUabbK8jy6yJnUCM': 'enterprise', // enterprise annuale
+};
+
 function derivePianoFromPriceId(priceId: string): string {
-  if (priceId.includes('enterprise')) return 'enterprise';
-  if (priceId.includes('professional')) return 'professional';
-  if (priceId.includes('starter')) return 'starter';
-  // Fallback — keep current plan
-  return 'professional';
+  return PREZZO_A_PIANO[priceId] ?? 'professional';
 }

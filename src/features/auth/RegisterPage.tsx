@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { getProvinceList, getComuniByProvincia } from '@/lib/provinceItaliane';
 import { useHistoryState } from '@/lib/useHistoryState';
+import { LegalModal } from '@/features/legal/LegalModal';
 
 interface RegisterPageProps {
   onGoLogin: () => void;
@@ -49,6 +50,7 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
 
   // Step 4: Conferma
   const [accettaTermini, setAccettaTermini] = useState(false);
+  const [legalSection, setLegalSection] = useState<'termini' | 'privacy' | null>(null);
 
   const validateStep1 = () => {
     if (!email.includes('@')) return 'Inserisci un\'email valida';
@@ -412,8 +414,11 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
                   className="mt-1 w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
-                  Accetto i <a href="#" className="text-blue-600 underline">Termini e Condizioni</a> e la{' '}
-                  <a href="#" className="text-blue-600 underline">Privacy Policy</a> di OfficinAI.
+                  Accetto i{' '}
+                  <button type="button" onClick={(e) => { e.preventDefault(); setLegalSection('termini'); }} className="text-blue-600 underline cursor-pointer">Termini e Condizioni</button>
+                  {' '}e la{' '}
+                  <button type="button" onClick={(e) => { e.preventDefault(); setLegalSection('privacy'); }} className="text-blue-600 underline cursor-pointer">Privacy Policy</button>
+                  {' '}di OfficinAI.
                   Confermo che i dati inseriti sono corretti.
                 </span>
               </label>
@@ -460,6 +465,7 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
           </button>
         </div>
       </div>
+      {legalSection && <LegalModal section={legalSection} onClose={() => setLegalSection(null)} />}
     </div>
   );
 }

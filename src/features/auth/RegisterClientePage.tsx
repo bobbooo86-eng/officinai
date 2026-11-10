@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useHistoryState } from '@/lib/useHistoryState';
+import { LegalModal } from '@/features/legal/LegalModal';
 
 interface RegisterClientePageProps {
   onGoLogin: () => void;
@@ -41,6 +42,7 @@ export function RegisterClientePage({ onGoLogin }: RegisterClientePageProps) {
   const [selectedOfficina, setSelectedOfficina] = useState<OfficinaResult | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [accettaTermini, setAccettaTermini] = useState(false);
+  const [legalSection, setLegalSection] = useState<'termini' | 'privacy' | null>(null);
 
   // Search officine
   useEffect(() => {
@@ -347,7 +349,11 @@ export function RegisterClientePage({ onGoLogin }: RegisterClientePageProps) {
                   className="mt-1 w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                 />
                 <span className="text-xs text-gray-500 dark:text-gray-400">
-                  Accetto i <span className="text-emerald-600 underline">Termini di Servizio</span> e la <span className="text-emerald-600 underline">Privacy Policy</span> di OfficinAI
+                  Accetto i{' '}
+                  <button type="button" onClick={(e) => { e.preventDefault(); setLegalSection('termini'); }} className="text-emerald-600 underline cursor-pointer">Termini di Servizio</button>
+                  {' '}e la{' '}
+                  <button type="button" onClick={(e) => { e.preventDefault(); setLegalSection('privacy'); }} className="text-emerald-600 underline cursor-pointer">Privacy Policy</button>
+                  {' '}di OfficinAI
                 </span>
               </label>
             </div>
@@ -397,6 +403,7 @@ export function RegisterClientePage({ onGoLogin }: RegisterClientePageProps) {
           </button>
         </div>
       </div>
+      {legalSection && <LegalModal section={legalSection} onClose={() => setLegalSection(null)} />}
     </div>
   );
 }
