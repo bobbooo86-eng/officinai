@@ -53,6 +53,7 @@ export interface Officina {
   lavorazioni_tipiche_custom?: string[];
   piano: string;
   created_at?: string;
+  note_admin?: string | null;
 }
 
 export interface Utente {
