@@ -128,3 +128,11 @@ jobs:
           # policy anon corrette senza indovinare. ---
           echo "== Colonne clienti/veicoli/utenti/officine/abbonamenti =="
           verifica "SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('clienti','veicoli','utenti','officine','abbonamenti') ORDER BY table_name, ordinal_position;"
+
+          # --- Diagnostica configurazione Auth (conferma email, SMTP),
+          # sola lettura: serve prima di decidere se/come attivare la
+          # richiesta di conferma email senza rompere il login esistente. ---
+          echo "== Configurazione Auth (conferma email / SMTP) =="
+          curl -sS -X GET "https://api.supabase.com/v1/projects/${PROJECT_REF}/config/auth" \
+            -H "Authorization: Bearer ${TOKEN}"
+          echo
