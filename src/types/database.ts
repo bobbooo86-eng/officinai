@@ -64,6 +64,7 @@ export interface Utente {
   ruolo: UserRole;
   attivo: boolean;
   created_at?: string;
+  is_admin?: boolean;
 }
 
 export interface Cliente {

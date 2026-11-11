@@ -21,6 +21,7 @@ const SettingsPage = lazy(() => import('./SettingsPage').then(m => ({ default: m
 const OBDScansPage = lazy(() => import('./OBDScansPage').then(m => ({ default: m.OBDScansPage })));
 const GuidaPage = lazy(() => import('@/features/guide/GuidaPage').then(m => ({ default: m.GuidaPage })));
 const CassaPage = lazy(() => import('@/features/cassa/CassaPage').then(m => ({ default: m.CassaPage })));
+const AdminPage = lazy(() => import('@/features/admin/AdminPage').then(m => ({ default: m.AdminPage })));
 
 const PreventiviPage = lazy(() => import('@/features/estimates/PreventiviPage').then(m => ({ default: m.PreventiviPage })));
 
@@ -38,12 +39,12 @@ const TABS = [
 ];
 
 export function AppOfficina() {
-  const { officina } = useAuthStore();
+  const { officina, utente } = useAuthStore();
   const [activeTab, setActiveTab] = useHistoryState('officina-tab', 'home', (v) =>
     TABS.some((t) => t.id === v)
   );
   const [selectedApp, setSelectedApp] = useState<Appuntamento | null>(null);
-  const [subPage, setSubPage] = useState<'abbonamento' | 'impostazioni' | 'guida' | null>(null);
+  const [subPage, setSubPage] = useState<'abbonamento' | 'impostazioni' | 'guida' | 'admin' | null>(null);
   const [agendaFiltro, setAgendaFiltro] = useState<string | undefined>(undefined);
   const [agendaView, setAgendaView] = useState<'calendario' | 'lista'>('calendario');
   const [showNewApp, setShowNewApp] = useState(false);
@@ -348,6 +349,21 @@ export function AppOfficina() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
+          {utente?.is_admin && (
+            <button
+              onClick={() => setSubPage('admin')}
+              className="w-full flex items-center gap-4 p-4 bg-gradient-to-r from-gray-900 to-gray-700 rounded-2xl hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xl">🔒</div>
+              <div className="text-left">
+                <div className="font-semibold text-sm text-white">Pannello amministratore</div>
+                <div className="text-xs text-gray-300">Tutte le officine registrate</div>
+              </div>
+              <svg className="w-5 h-5 text-gray-400 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
           <button
             onClick={() => setSubPage('abbonamento')}
             className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
@@ -374,6 +390,17 @@ export function AppOfficina() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
+        </div>
+      )}
+      {activeTab === 'altro' && subPage === 'admin' && (
+        <div>
+          <button
+            onClick={() => setSubPage(null)}
+            className="flex items-center gap-1 px-4 pt-4 text-sm text-blue-600 hover:underline cursor-pointer"
+          >
+            ← Indietro
+          </button>
+          <Suspense fallback={<PageSkeleton />}><AdminPage /></Suspense>
         </div>
       )}
       {activeTab === 'altro' && subPage === 'abbonamento' && (
