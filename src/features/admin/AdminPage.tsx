@@ -11,6 +11,7 @@ interface OfficinaRiga {
   provincia: string | null;
   created_at: string;
   note_admin: string | null;
+  archiviata: boolean;
 }
 
 type Piano = 'starter' | 'professional' | 'enterprise';
@@ -70,9 +71,23 @@ interface DettaglioProps {
   abbonamento: AbbonamentoRiga | null;
   onClose: () => void;
   onAggiornato: (officinaId: string, abb: AbbonamentoRiga | null, note: string | null) => void;
+  onArchiviata: (officinaId: string, archiviata: boolean) => void;
 }
 
-function DettaglioOfficina({ officina, abbonamento, onClose, onAggiornato }: DettaglioProps) {
+function DettaglioOfficina({ officina, abbonamento, onClose, onAggiornato, onArchiviata }: DettaglioProps) {
+  const [salvandoArchivio, setSalvandoArchivio] = useState(false);
+
+  const toggleArchivio = async () => {
+    const nuovoValore = !officina.archiviata;
+    setSalvandoArchivio(true);
+    const { error } = await supabase.from('officine').update({ archiviata: nuovoValore }).eq('id', officina.id);
+    setSalvandoArchivio(false);
+    if (!error) {
+      onArchiviata(officina.id, nuovoValore);
+      onClose();
+    }
+  };
+
   const [titolare, setTitolare] = useState<{ nome: string; email: string; tel: string } | null | undefined>(undefined);
   const [nClienti, setNClienti] = useState<number | null>(null);
   const [nAppuntamenti, setNAppuntamenti] = useState<number | null>(null);
@@ -256,6 +271,19 @@ function DettaglioOfficina({ officina, abbonamento, onClose, onAggiornato }: Det
             {salvandoNota ? 'Salvataggio...' : 'Salva nota'}
           </Button>
         </div>
+
+        {/* Archiviazione: come per i clienti, non e' una cancellazione
+            vera (i dati dell'officina — appuntamenti, fatture, movimenti —
+            restano), solo nascosta dall'elenco e ripristinabile. */}
+        <div className="pt-2 border-t border-gray-100">
+          <button
+            onClick={toggleArchivio}
+            disabled={salvandoArchivio}
+            className="w-full py-2.5 text-sm font-semibold text-gray-500 hover:text-red-600 cursor-pointer disabled:opacity-50"
+          >
+            {salvandoArchivio ? 'Salvataggio...' : officina.archiviata ? '↩️ Ripristina officina' : '🗑️ Archivia officina'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -269,12 +297,13 @@ export function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [ricerca, setRicerca] = useState('');
   const [selezionata, setSelezionata] = useState<OfficinaRiga | null>(null);
+  const [mostraArchiviate, setMostraArchiviate] = useState(false);
 
   const ricarica = async () => {
     const [{ data: off }, { data: abb }] = await Promise.all([
       supabase
         .from('officine')
-        .select('id, nome, email, tel, comune, provincia, created_at, note_admin')
+        .select('id, nome, email, tel, comune, provincia, created_at, note_admin, archiviata')
         .order('created_at', { ascending: false }),
       supabase.from('abbonamenti').select('officina_id, piano, stato, data_inizio, data_fine'),
     ]);
@@ -296,7 +325,9 @@ export function AdminPage() {
     );
   }
 
-  const filtrate = officine.filter((o) => {
+  const attive = officine.filter((o) => mostraArchiviate || !o.archiviata);
+
+  const filtrate = attive.filter((o) => {
     const s = ricerca.trim().toLowerCase();
     if (!s) return true;
     return (
@@ -306,15 +337,16 @@ export function AdminPage() {
     );
   });
 
-  const inProva = officine.filter((o) => abbonamenti[o.id]?.stato === 'trial').length;
-  const paganti = officine.filter((o) => abbonamenti[o.id]?.stato === 'attivo').length;
-  const inScadenza = officine.filter((o) => {
+  const nonArchiviate = officine.filter((o) => !o.archiviata);
+  const inProva = nonArchiviate.filter((o) => abbonamenti[o.id]?.stato === 'trial').length;
+  const paganti = nonArchiviate.filter((o) => abbonamenti[o.id]?.stato === 'attivo').length;
+  const inScadenza = nonArchiviate.filter((o) => {
     const a = abbonamenti[o.id];
     if (a?.stato !== 'trial') return false;
     const g = giorniRimasti(a.data_fine);
     return g !== null && g <= 7 && g >= 0;
   }).length;
-  const mrrStimato = officine.reduce((tot, o) => {
+  const mrrStimato = nonArchiviate.reduce((tot, o) => {
     const a = abbonamenti[o.id];
     if (a?.stato !== 'attivo') return tot;
     return tot + (PREZZO_MENSILE[a.piano] || 0);
@@ -339,7 +371,7 @@ export function AdminPage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="!p-3 text-center">
-          <div className="text-2xl font-extrabold text-gray-900">{officine.length}</div>
+          <div className="text-2xl font-extrabold text-gray-900">{nonArchiviate.length}</div>
           <div className="text-xs text-gray-500">Officine totali</div>
         </Card>
         <Card className="!p-3 text-center">
@@ -369,6 +401,10 @@ export function AdminPage() {
         placeholder="Cerca per nome, email o città..."
         className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
       />
+      <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer -mt-2">
+        <input type="checkbox" checked={mostraArchiviate} onChange={(e) => setMostraArchiviate(e.target.checked)} />
+        Mostra anche le officine archiviate
+      </label>
 
       <div className="space-y-3">
         {ordinate.length === 0 ? (
@@ -379,10 +415,10 @@ export function AdminPage() {
             const badge = statoBadge(abb?.stato);
             const giorni = abb?.stato === 'trial' ? giorniRimasti(abb.data_fine) : null;
             return (
-              <Card key={o.id} className="!p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelezionata(o)}>
+              <Card key={o.id} className={`!p-4 cursor-pointer hover:shadow-md transition-shadow ${o.archiviata ? 'opacity-50' : ''}`} onClick={() => setSelezionata(o)}>
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div>
-                    <div className="font-bold text-gray-900">{o.nome}</div>
+                    <div className="font-bold text-gray-900">{o.nome} {o.archiviata && <span className="text-xs font-normal text-gray-400">(archiviata)</span>}</div>
                     <div className="text-xs text-gray-500">{o.comune ? `${o.comune} (${o.provincia || ''})` : 'Città non indicata'}</div>
                   </div>
                   <Badge color={badge.color} bg={badge.bg}>{badge.label}</Badge>
@@ -411,6 +447,9 @@ export function AdminPage() {
           onAggiornato={(officinaId, abb, note) => {
             if (abb) setAbbonamenti((prev) => ({ ...prev, [officinaId]: abb }));
             if (note !== null) setOfficine((prev) => prev.map((o) => (o.id === officinaId ? { ...o, note_admin: note } : o)));
+          }}
+          onArchiviata={(officinaId, archiviata) => {
+            setOfficine((prev) => prev.map((o) => (o.id === officinaId ? { ...o, archiviata } : o)));
           }}
         />
       )}

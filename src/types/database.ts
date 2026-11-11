@@ -54,6 +54,7 @@ export interface Officina {
   piano: string;
   created_at?: string;
   note_admin?: string | null;
+  archiviata?: boolean;
 }
 
 export interface Utente {
