@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { LegalModal } from '@/features/legal/LegalModal';
+import { sendWelcomeEmail } from '@/lib/email';
 
 interface RegisterClientePageProps {
   onGoLogin: () => void;
@@ -143,6 +144,9 @@ export function RegisterClientePage({ onGoLogin }: RegisterClientePageProps) {
       supabase.functions.invoke('notify-registration', {
         body: { tipo: 'cliente', nome: `${nome} ${cognome}`, email, telefono },
       }).catch(() => {});
+
+      // Email di benvenuto al cliente
+      sendWelcomeEmail(email, nome, selectedOfficina.nome).catch(() => {});
 
       setSuccess(true);
 

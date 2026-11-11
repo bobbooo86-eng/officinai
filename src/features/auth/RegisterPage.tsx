@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { getProvinceList, getComuniByProvincia } from '@/lib/provinceItaliane';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { LegalModal } from '@/features/legal/LegalModal';
+import { sendWelcomeEmail } from '@/lib/email';
 
 interface RegisterPageProps {
   onGoLogin: () => void;
@@ -152,12 +153,15 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
         data_fine: trialEnd.toISOString(),
         stripe_subscription_id: null,
       });
-      if (subErr) console.warn('Trial subscription not created (table may not exist):', subErr.message);
+      if (subErr) console.warn('Errore nella creazione dell\'abbonamento trial:', subErr.message);
 
       // Notify admin of new registration
       supabase.functions.invoke('notify-registration', {
         body: { tipo: 'officina', nome: `${nome} ${cognome}`, email, telefono, officina: nomeOfficina, citta },
       }).catch(() => {});
+
+      // Email di benvenuto al titolare
+      sendWelcomeEmail(email, nome, nomeOfficina).catch(() => {});
 
       setSuccess(true);
 
