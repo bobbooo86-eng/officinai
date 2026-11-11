@@ -8,7 +8,7 @@ interface LegalModalProps {
 // carta). Il testo e' scritto in buona fede per coprire i punti minimi
 // (titolare del trattamento, dati raccolti, Stripe come sub-responsabile,
 // diritti dell'interessato, recesso) ma non sostituisce una consulenza.
-const TITOLARE = 'OfficinAI';
+const TITOLARE = 'Daniele Bencivenga';
 const EMAIL_CONTATTO = 'supporto@myofficinai.it';
 
 function TerminiContent() {
