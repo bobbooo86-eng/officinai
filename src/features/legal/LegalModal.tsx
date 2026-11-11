@@ -28,7 +28,7 @@ function TerminiContent() {
       </p>
       <h3 className="font-bold text-gray-900 dark:text-white mt-5 mb-2">3. Prova gratuita e abbonamento</h3>
       <p>
-        La registrazione include 14 giorni di prova gratuita. Al termine della prova, per
+        La registrazione include 2 mesi di prova gratuita. Al termine della prova, per
         continuare a usare il servizio è necessario sottoscrivere un piano a pagamento. I prezzi
         e le caratteristiche dei piani sono indicati nella pagina Abbonamento dell'app. I
         pagamenti sono gestiti da Stripe; l'abbonamento si rinnova automaticamente a meno di

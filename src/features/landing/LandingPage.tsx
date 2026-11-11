@@ -191,7 +191,7 @@ const faqs = [
     a: 'Sì. Puoi emettere fatture elettroniche con codice SDI direttamente da OfficinAI, senza software aggiuntivi. Tutto conforme alla normativa italiana.',
   },
   {
-    q: 'Cosa succede dopo i 14 giorni di prova?',
+    q: 'Cosa succede dopo i 2 mesi di prova?',
     a: 'Se vuoi continuare, scegli un piano e inserisci i dati di pagamento. Se non vuoi proseguire, i tuoi dati vengono cancellati in sicurezza — nessun addebito automatico.',
   },
   {
@@ -630,7 +630,7 @@ export function LandingPage({ onEnter, onLogin }: LandingPageProps) {
                 onClick={onEnter}
                 className="group px-8 py-4 bg-blue-600 text-white font-bold text-lg rounded-2xl hover:bg-blue-700 active:scale-95 transition-all shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 cursor-pointer"
               >
-                Inizia gratis — 14 giorni
+                Inizia gratis — 2 mesi
                 <span className="ml-2 group-hover:translate-x-1 inline-block transition-transform">→</span>
               </button>
               <button
@@ -1118,7 +1118,7 @@ export function LandingPage({ onEnter, onLogin }: LandingPageProps) {
               Prezzi chiari. Zero sorprese.
             </h2>
             <p className="mt-4 text-lg text-gray-500 dark:text-gray-400">
-              14 giorni gratis su tutti i piani. Cancelli quando vuoi.
+              2 mesi gratis su tutti i piani. Cancelli quando vuoi.
             </p>
             {/* Annual toggle */}
             <div className="mt-8 inline-flex items-center gap-3 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
@@ -1191,7 +1191,7 @@ export function LandingPage({ onEnter, onLogin }: LandingPageProps) {
                         : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-600/20'
                     }`}
                   >
-                    Inizia 14 giorni gratis →
+                    Inizia 2 mesi gratis →
                   </button>
                 </div>
               </AnimatedSection>
@@ -1467,7 +1467,7 @@ export function LandingPage({ onEnter, onLogin }: LandingPageProps) {
                 onClick={onEnter}
                 className="px-10 py-4 bg-white text-blue-700 font-extrabold text-lg rounded-2xl hover:bg-blue-50 active:scale-95 transition-all shadow-xl cursor-pointer"
               >
-                Inizia gratis — 14 giorni →
+                Inizia gratis — 2 mesi →
               </button>
               <button
                 onClick={onEnter}
@@ -1477,7 +1477,7 @@ export function LandingPage({ onEnter, onLogin }: LandingPageProps) {
               </button>
             </div>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-sm text-blue-200/70">
-              <span>✓ 14 giorni gratis</span>
+              <span>✓ 2 mesi gratis</span>
               <span>✓ Nessuna carta richiesta</span>
               <span>✓ Setup in 2 minuti</span>
               <span>✓ Cancella quando vuoi</span>

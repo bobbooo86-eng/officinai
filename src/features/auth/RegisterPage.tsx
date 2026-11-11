@@ -140,9 +140,9 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
 
       if (userErr) throw new Error('Errore nella creazione dell\'utente: ' + userErr.message);
 
-      // 4. Create trial subscription (14 days)
+      // 4. Create trial subscription (2 months)
       const trialEnd = new Date();
-      trialEnd.setDate(trialEnd.getDate() + 14);
+      trialEnd.setMonth(trialEnd.getMonth() + 2);
 
       const { error: subErr } = await supabase.from('abbonamenti').insert({
         officina_id: officina.id,
@@ -181,7 +181,7 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
           <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-3">Registrazione completata!</h1>
           <p className="text-gray-500 dark:text-gray-400 mb-2">Benvenuto in OfficinAI, {nome}!</p>
           <p className="text-gray-500 dark:text-gray-400 mb-8">
-            Hai <strong className="text-blue-600">14 giorni gratuiti</strong> per provare tutte le funzionalità.
+            Hai <strong className="text-blue-600">2 mesi gratuiti</strong> per provare tutte le funzionalità.
             Nessun addebito automatico.
           </p>
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-2xl p-6 mb-6">
@@ -204,7 +204,7 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
             <span className="text-2xl">🔧</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Registrati su OfficinAI</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">14 giorni gratis · Nessuna carta richiesta</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">2 mesi gratis · Nessuna carta richiesta</p>
         </div>
 
         {/* Progress steps */}
@@ -401,8 +401,8 @@ export function RegisterPage({ onGoLogin }: RegisterPageProps) {
                 </div>
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-xl p-4">
                   <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Il tuo piano</div>
-                  <div className="text-sm text-gray-900 dark:text-white font-bold">🎁 14 giorni gratuiti — Piano Professional</div>
-                  <div className="text-xs text-gray-500 mt-1">Nessun addebito. Dopo 14 giorni scegli il piano che preferisci o cancella gratis.</div>
+                  <div className="text-sm text-gray-900 dark:text-white font-bold">🎁 2 mesi gratuiti — Piano Professional</div>
+                  <div className="text-xs text-gray-500 mt-1">Nessun addebito. Dopo 2 mesi scegli il piano che preferisci o cancella gratis.</div>
                 </div>
               </div>
 
