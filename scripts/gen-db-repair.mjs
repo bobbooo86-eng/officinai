@@ -39,6 +39,7 @@ const SOURCES = [
   'supabase/migrations/043_pannello_admin.sql',
   'supabase/migrations/044_admin_gestione_officine.sql',
   'supabase/migrations/045_officine_archiviazione.sql',
+  'supabase/migrations/046_elimina_officina_definitivamente.sql',
 ];
 const TARGET = 'src/lib/dbRepairSql.ts';
 

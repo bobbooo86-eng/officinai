@@ -72,10 +72,14 @@ interface DettaglioProps {
   onClose: () => void;
   onAggiornato: (officinaId: string, abb: AbbonamentoRiga | null, note: string | null) => void;
   onArchiviata: (officinaId: string, archiviata: boolean) => void;
+  onEliminata: (officinaId: string) => void;
 }
 
-function DettaglioOfficina({ officina, abbonamento, onClose, onAggiornato, onArchiviata }: DettaglioProps) {
+function DettaglioOfficina({ officina, abbonamento, onClose, onAggiornato, onArchiviata, onEliminata }: DettaglioProps) {
   const [salvandoArchivio, setSalvandoArchivio] = useState(false);
+  const [confermaNome, setConfermaNome] = useState('');
+  const [eliminando, setEliminando] = useState(false);
+  const [erroreEliminazione, setErroreEliminazione] = useState<string | null>(null);
 
   const toggleArchivio = async () => {
     const nuovoValore = !officina.archiviata;
@@ -86,6 +90,20 @@ function DettaglioOfficina({ officina, abbonamento, onClose, onAggiornato, onArc
       onArchiviata(officina.id, nuovoValore);
       onClose();
     }
+  };
+
+  const eliminaDefinitivamente = async () => {
+    if (confermaNome.trim() !== officina.nome.trim()) return;
+    setEliminando(true);
+    setErroreEliminazione(null);
+    const { error } = await supabase.rpc('elimina_officina_definitivamente', { p_officina_id: officina.id });
+    setEliminando(false);
+    if (error) {
+      setErroreEliminazione(error.message);
+      return;
+    }
+    onEliminata(officina.id);
+    onClose();
   };
 
   const [titolare, setTitolare] = useState<{ nome: string; email: string; tel: string } | null | undefined>(undefined);
@@ -284,6 +302,31 @@ function DettaglioOfficina({ officina, abbonamento, onClose, onAggiornato, onArc
             {salvandoArchivio ? 'Salvataggio...' : officina.archiviata ? '↩️ Ripristina officina' : '🗑️ Archivia officina'}
           </button>
         </div>
+
+        {/* Eliminazione vera, solo da archiviata: non reversibile. */}
+        {officina.archiviata && (
+          <div className="border border-red-200 bg-red-50 rounded-2xl p-4 space-y-2">
+            <div className="text-xs font-bold text-red-700 uppercase tracking-wide">Zona pericolosa</div>
+            <p className="text-xs text-red-700">
+              Elimina per sempre tutti i dati di "{officina.nome}" (appuntamenti, clienti, fatture, movimenti...).
+              Non si può annullare. Per confermare scrivi esattamente il nome dell'officina qui sotto.
+            </p>
+            <Input
+              value={confermaNome}
+              onChange={(e) => setConfermaNome(e.target.value)}
+              placeholder={officina.nome}
+            />
+            <Button
+              variant="danger"
+              fullWidth
+              onClick={eliminaDefinitivamente}
+              disabled={eliminando || confermaNome.trim() !== officina.nome.trim()}
+            >
+              {eliminando ? 'Eliminazione in corso...' : 'Elimina definitivamente'}
+            </Button>
+            {erroreEliminazione && <p className="text-xs text-red-700">{erroreEliminazione}</p>}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -450,6 +493,9 @@ export function AdminPage() {
           }}
           onArchiviata={(officinaId, archiviata) => {
             setOfficine((prev) => prev.map((o) => (o.id === officinaId ? { ...o, archiviata } : o)));
+          }}
+          onEliminata={(officinaId) => {
+            setOfficine((prev) => prev.filter((o) => o.id !== officinaId));
           }}
         />
       )}
