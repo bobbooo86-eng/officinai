@@ -128,3 +128,14 @@ jobs:
           # policy anon corrette senza indovinare. ---
           echo "== Colonne clienti/veicoli/utenti/officine/abbonamenti =="
           verifica "SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('clienti','veicoli','utenti','officine','abbonamenti') ORDER BY table_name, ordinal_position;"
+
+          # --- Diagnostica log Auth (email di conferma), sola lettura:
+          # nessun dato sensibile nella risposta (solo eventi di log),
+          # a differenza del precedente tentativo su /config/auth. ---
+          echo "== Log Auth recenti (ultime 24h) =="
+          curl -sS -G "https://api.supabase.com/v1/projects/${PROJECT_REF}/analytics/endpoints/logs.all" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            --data-urlencode "sql=select timestamp, event_message from auth_logs order by timestamp desc limit 50" \
+            --data-urlencode "iso_timestamp_start=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)" \
+            --data-urlencode "iso_timestamp_end=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo
